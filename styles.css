@@ -195,6 +195,7 @@ body {
 }
 
 /* ---- Sidebar ---- */
+/* Desktop-first: sidebar alltid synlig på store skjermer */
 .sidebar {
   width: var(--sidebar-w);
   background: var(--white);
@@ -206,12 +207,26 @@ body {
   bottom: 0;
   overflow-y: auto;
   z-index: 50;
-  display: none;
+  display: block; /* synlig som standard */
 }
-@media (min-width: 768px) {
-  .sidebar { display: block; }
-  .bottom-nav { display: none; }
-  .content-area { margin-left: var(--sidebar-w); padding-bottom: 40px; }
+
+/* Bottom nav skjult som standard (desktop) */
+.bottom-nav { display: none; }
+
+/* Content area: alltid med sidebar-margin på desktop */
+.content-area {
+  margin-left: var(--sidebar-w);
+  padding-bottom: 40px;
+}
+
+/* Mobil: skjul sidebar, vis bunnmeny */
+@media (max-width: 767px) {
+  .sidebar { display: none; }
+  .bottom-nav { display: flex; }
+  .content-area {
+    margin-left: 0;
+    padding-bottom: calc(var(--bottom-nav-h) + 16px);
+  }
 }
 
 .sidebar-nav { list-style: none; }
@@ -240,18 +255,19 @@ body {
 /* ---- Content area ---- */
 .content-area {
   flex: 1;
-  padding: 24px 20px;
-  padding-bottom: calc(var(--bottom-nav-h) + 16px);
+  padding: 32px 32px 40px;
   min-height: 0;
   max-width: 1100px;
+  width: 100%;
 }
-@media (min-width: 768px) {
-  .content-area { padding: 32px 32px 40px; }
+@media (max-width: 767px) {
+  .content-area { padding: 20px 16px; }
 }
 
 /* ---- Views ---- */
 .view { display: none; }
-.view.active { display: block; }
+.view.active { display: block; animation: fadeIn .15s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 .view-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -445,10 +461,14 @@ body {
 }
 
 .empty-state {
-  text-align: center; padding: 40px 20px;
+  text-align: center; padding: 48px 24px;
   color: var(--text-2); font-size: .9rem;
+  background: var(--white); border-radius: var(--radius);
+  border: 2px dashed var(--border);
 }
-.empty-state svg { stroke: var(--text-3); margin-bottom: 10px; }
+.empty-state svg { stroke: var(--text-3); margin-bottom: 12px; display: block; margin-left: auto; margin-right: auto; }
+.empty-state p { margin-bottom: 16px; color: var(--text-2); }
+.empty-state strong { display: block; font-size: 1rem; color: var(--text); margin-bottom: 6px; }
 
 /* ---- Notifications ---- */
 .notifications-list { display: flex; flex-direction: column; gap: 2px; }

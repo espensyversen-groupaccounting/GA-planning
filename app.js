@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.3';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -148,7 +148,10 @@ function showView(name) {
   document.querySelectorAll('.bottom-btn').forEach(b => b.classList.toggle('active', b.dataset.view === name));
 
   const view = document.getElementById(`view-${name}`);
-  if (view) view.classList.add('active');
+  if (view) {
+    view.classList.remove('hidden'); // fjern hidden-klasse om den fins
+    view.classList.add('active');
+  }
 
   if (name === 'dashboard')     renderDashboard();
   if (name === 'tasks')         renderTasksList();
@@ -318,7 +321,7 @@ function renderDashboard() {
 function renderCompactList(containerId, tasks, emptyMsg) {
   const el = document.getElementById(containerId);
   if (!tasks.length) {
-    el.innerHTML = `<div class="empty-state"><p>${emptyMsg}</p></div>`;
+    el.innerHTML = `<div class="empty-state" style="padding:24px;border:1px dashed var(--border)"><p style="margin:0;font-size:.85rem">${emptyMsg}</p></div>`;
     return;
   }
   el.innerHTML = tasks.map(t => taskCardHtml(t, true)).join('');
@@ -419,10 +422,22 @@ function renderTasksList() {
 
   const el = document.getElementById('tasks-list');
   if (!tasks.length) {
-    el.innerHTML = `<div class="empty-state">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      <p>Ingen oppgaver funnet</p>
-    </div>`;
+    const hasFilters = document.getElementById('filter-status').value ||
+                       document.getElementById('filter-priority').value ||
+                       document.getElementById('filter-assignee').value ||
+                       document.getElementById('task-search').value;
+    el.innerHTML = hasFilters
+      ? `<div class="empty-state">
+           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+           <strong>Ingen treff</strong>
+           <p>Ingen oppgaver matcher filteret ditt. Prøv å endre søk eller filter.</p>
+         </div>`
+      : `<div class="empty-state">
+           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+           <strong>Ingen oppgaver ennå</strong>
+           <p>Kom i gang ved å opprette den første oppgaven for teamet.</p>
+           ${canEdit() ? `<button class="btn btn-primary" onclick="openTaskModal()">+ Opprett første oppgave</button>` : ''}
+         </div>`;
     return;
   }
   el.innerHTML = tasks.map(t => taskCardHtml(t, false)).join('');
