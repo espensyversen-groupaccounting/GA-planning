@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;

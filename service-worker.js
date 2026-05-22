@@ -1,7 +1,7 @@
 // ============================================================
 // VERSJON – Bump denne ved hver deploy for å tvinge oppdatering
 // ============================================================
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 const CACHE_NAME  = `strawberry-plan-v${APP_VERSION}`;
 
 const ASSETS = [
@@ -12,6 +12,9 @@ const ASSETS = [
   './firestore.js',
   './firebase-config.js',
   './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
+  './icon-180.png',
   './Strawberry_Logotype_Primary_Black_RGB.png',
   './Strawberry_Logotype_Primary_White_RGB.png'
 ];
