@@ -2,6 +2,13 @@
 // APP.JS – Strawberry Planleggingsapp
 // ============================================================
 
+// Versjon – må matche APP_VERSION i service-worker.js
+const APP_VERSION = '1.0.1';
+
+// Service Worker oppdateringsstatus
+let swRegistration  = null;
+let swUpdateWaiting = false;
+
 const state = {
   user: null,
   profile: null,
@@ -820,6 +827,11 @@ async function handleAddComment() {
 // ============================================================
 
 function renderAdmin() {
+  // Oppdater versjon-UI
+  const verEl = document.getElementById('app-version-display');
+  if (verEl) verEl.textContent = `v${APP_VERSION}`;
+  updateAdminUpdateUI();
+
   const el = document.getElementById('users-list');
   if (!state.users.length) {
     el.innerHTML = '<p style="color:var(--text-2);font-size:.875rem">Ingen brukere ennå</p>';
@@ -893,13 +905,78 @@ async function handleRemoveUser(uid, email) {
 }
 
 // ============================================================
+// APP-OPPDATERING
+// ============================================================
+
+async function handleUpdateApp() {
+  const btn = document.getElementById('btn-update-app');
+  if (btn) { btn.disabled = true; btn.textContent = 'Oppdaterer…'; }
+
+  try {
+    if (swRegistration && swRegistration.waiting) {
+      // Aktivér ventende service worker → controllerchange → reload
+      swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    } else {
+      // Ingen ventende SW: tøm cache manuelt og last på nytt
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      if (swRegistration) await swRegistration.update().catch(() => {});
+      window.location.reload(true);
+    }
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Oppdater app'; }
+    showToast('Feil ved oppdatering. Prøv å laste siden på nytt manuelt.', 'error');
+  }
+}
+
+function updateAdminUpdateUI() {
+  const badge = document.getElementById('update-available-badge');
+  const btn   = document.getElementById('btn-update-app');
+  if (badge) badge.classList.toggle('hidden', !swUpdateWaiting);
+  if (btn && swUpdateWaiting) {
+    btn.classList.add('btn-primary');
+    btn.classList.remove('btn-secondary');
+  }
+}
+
+// ============================================================
 // EVENT LISTENERS
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Register service worker
+  // Register service worker med oppdateringsdeteksjon
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+    navigator.serviceWorker.register('./service-worker.js').then(reg => {
+      swRegistration = reg;
+
+      // Sjekk om det allerede ligger en ny SW og venter
+      if (reg.waiting) {
+        swUpdateWaiting = true;
+        updateAdminUpdateUI();
+      }
+
+      // Lytt etter nye versjoner
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            swUpdateWaiting = true;
+            updateAdminUpdateUI();
+            showToast('Ny versjon tilgjengelig! Gå til Administrasjon for å oppdatere.', 'info');
+          }
+        });
+      });
+
+      // Sjekk for oppdateringer ved oppstart (én gang)
+      reg.update().catch(() => {});
+    }).catch(() => {});
+
+    // Når ny SW overtar kontrollen → last siden på nytt
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      window.location.reload();
+    });
   }
 
   // Login
