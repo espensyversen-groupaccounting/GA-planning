@@ -1,0 +1,25 @@
+{
+  "name": "Strawberry Planlegging",
+  "short_name": "Plan",
+  "description": "Teamplanleggingsapp for Strawberry",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "lang": "no",
+  "icons": [
+    {
+      "src": "Strawberry_Logotype_Primary_White_RGB.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "Strawberry_Logotype_Primary_White_RGB.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

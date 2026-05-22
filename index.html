@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Strawberry Plan" />
+  <title>Strawberry Planlegging</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="Strawberry_Logotype_Primary_Black_RGB.png" />
+  <link rel="apple-touch-icon" href="Strawberry_Logotype_Primary_White_RGB.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ===== LASTER ===== -->
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="loading-logo">
+      <img src="Strawberry_Logotype_Primary_White_RGB.png" alt="Strawberry" />
+    </div>
+    <div class="spinner"></div>
+  </div>
+
+  <!-- ===== INNLOGGING ===== -->
+  <div id="login-screen" class="login-screen hidden">
+    <div class="login-card">
+      <img src="Strawberry_Logotype_Primary_Black_RGB.png" alt="Strawberry" class="login-logo" />
+      <h1 class="login-title">Teamplanlegging</h1>
+      <p class="login-subtitle">Logg inn med din Strawberry Google-konto</p>
+      <button id="btn-signin" class="btn btn-signin">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+        </svg>
+        Logg inn med Google
+      </button>
+      <p id="login-error" class="login-error hidden"></p>
+    </div>
+  </div>
+
+  <!-- ===== HOVED-APP ===== -->
+  <div id="app-shell" class="app-shell hidden">
+
+    <!-- Topp-header -->
+    <header class="app-header">
+      <div class="header-left">
+        <img src="Strawberry_Logotype_Primary_White_RGB.png" alt="Strawberry" class="header-logo" />
+        <span class="header-title">Plan</span>
+      </div>
+      <div class="header-right">
+        <button id="btn-notif" class="icon-btn notif-btn" title="Varsler">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+          <span id="notif-badge" class="notif-badge hidden">0</span>
+        </button>
+        <div class="user-menu-wrap">
+          <button id="user-menu-btn" class="user-menu-btn">
+            <img id="user-avatar" class="user-avatar" src="" alt="Bruker" />
+            <span id="user-name" class="user-name-short"></span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div id="user-dropdown" class="user-dropdown hidden">
+            <div class="dropdown-info">
+              <strong id="dropdown-name"></strong>
+              <span id="dropdown-role" class="role-badge"></span>
+            </div>
+            <hr/>
+            <button id="btn-signout" class="dropdown-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Logg ut
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Layout: sidebar + innhold -->
+    <div class="main-layout">
+
+      <!-- Sidebar (desktop) -->
+      <nav class="sidebar" id="sidebar">
+        <ul class="sidebar-nav">
+          <li>
+            <button class="nav-btn active" data-view="dashboard">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              Dashboard
+            </button>
+          </li>
+          <li>
+            <button class="nav-btn" data-view="tasks">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              Oppgaver
+            </button>
+          </li>
+          <li id="nav-notifications">
+            <button class="nav-btn" data-view="notifications">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              Varsler
+              <span id="sidebar-notif-badge" class="sidebar-badge hidden">0</span>
+            </button>
+          </li>
+          <li id="nav-admin-li" class="hidden">
+            <button class="nav-btn" data-view="admin">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Administrasjon
+            </button>
+          </li>
+        </ul>
+      </nav>
+
+      <!-- Innholdsområde -->
+      <main class="content-area" id="content-area">
+
+        <!-- DASHBOARD -->
+        <div id="view-dashboard" class="view active">
+          <div class="view-header">
+            <h1 class="view-title">Dashboard</h1>
+            <button id="btn-add-task-dashboard" class="btn btn-primary hidden">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Ny oppgave
+            </button>
+          </div>
+          <div class="stats-grid" id="stats-grid"></div>
+          <div class="dashboard-sections">
+            <section class="dashboard-section">
+              <h2 class="section-title">Mine oppgaver</h2>
+              <div id="my-tasks-list" class="task-list-compact"></div>
+            </section>
+            <section class="dashboard-section">
+              <h2 class="section-title">
+                <span class="priority-dot høy"></span> Høy prioritet
+              </h2>
+              <div id="high-priority-list" class="task-list-compact"></div>
+            </section>
+          </div>
+        </div>
+
+        <!-- OPPGAVELISTE -->
+        <div id="view-tasks" class="view hidden">
+          <div class="view-header">
+            <h1 class="view-title">Oppgaver</h1>
+            <button id="btn-add-task" class="btn btn-primary hidden">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Ny oppgave
+            </button>
+          </div>
+          <div class="tasks-toolbar">
+            <div class="filter-group">
+              <select id="filter-status" class="filter-select">
+                <option value="">Alle statuser</option>
+                <option value="ikke_startet">Ikke startet</option>
+                <option value="i_gang">I gang</option>
+                <option value="fullfort">Fullført</option>
+              </select>
+              <select id="filter-priority" class="filter-select">
+                <option value="">Alle prioriteter</option>
+                <option value="høy">Høy</option>
+                <option value="medium">Medium</option>
+                <option value="lav">Lav</option>
+              </select>
+              <select id="filter-assignee" class="filter-select">
+                <option value="">Alle ansvarlige</option>
+              </select>
+            </div>
+            <div class="search-wrap">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="task-search" class="search-input" placeholder="Søk etter oppgave..." />
+            </div>
+          </div>
+          <div id="tasks-list" class="tasks-list"></div>
+        </div>
+
+        <!-- VARSLER -->
+        <div id="view-notifications" class="view hidden">
+          <div class="view-header">
+            <h1 class="view-title">Varsler</h1>
+            <button id="btn-mark-all-read" class="btn btn-secondary">Merk alle som lest</button>
+          </div>
+          <div id="notifications-list" class="notifications-list"></div>
+        </div>
+
+        <!-- ADMINISTRASJON -->
+        <div id="view-admin" class="view hidden">
+          <div class="view-header">
+            <h1 class="view-title">Administrasjon</h1>
+          </div>
+
+          <div class="admin-grid">
+            <!-- Legg til bruker -->
+            <div class="card">
+              <h2 class="card-title">Legg til bruker</h2>
+              <form id="add-user-form" class="add-user-form">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">E-postadresse</label>
+                    <input type="email" id="new-user-email" class="form-input" placeholder="navn@strawberry.no" required />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Rolle</label>
+                    <select id="new-user-role" class="form-input">
+                      <option value="medlem">Medlem</option>
+                      <option value="teamleder">Teamleder</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Legg til</button>
+              </form>
+            </div>
+
+            <!-- Brukerliste -->
+            <div class="card">
+              <h2 class="card-title">Teammedlemmer</h2>
+              <div id="users-list" class="users-list"></div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+
+    <!-- Bunnnavigasjon (mobil) -->
+    <nav class="bottom-nav">
+      <button class="bottom-btn active" data-view="dashboard">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="bottom-btn" data-view="tasks">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <span>Oppgaver</span>
+      </button>
+      <button class="bottom-btn" data-view="notifications">
+        <div class="bottom-btn-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="bottom-notif-badge" class="notif-badge hidden">0</span>
+        </div>
+        <span>Varsler</span>
+      </button>
+      <button class="bottom-btn hidden" id="bottom-admin-btn" data-view="admin">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Admin</span>
+      </button>
+    </nav>
+
+  </div><!-- /app-shell -->
+
+  <!-- ===== OPPGAVE-MODAL ===== -->
+  <div id="task-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2 id="modal-title" class="modal-title">Ny oppgave</h2>
+        <button id="modal-close" class="icon-btn modal-close-btn" aria-label="Lukk">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="modal-tabs" id="modal-tabs">
+        <button class="tab-btn active" data-tab="details">Detaljer</button>
+        <button class="tab-btn" data-tab="subtasks">
+          Deloppgaver <span id="subtasks-tab-count" class="tab-count"></span>
+        </button>
+        <button class="tab-btn" data-tab="comments">
+          Kommentarer <span id="comments-tab-count" class="tab-count"></span>
+        </button>
+      </div>
+
+      <div class="modal-body" id="modal-body">
+
+        <!-- Tab: Detaljer -->
+        <div id="tab-details" class="tab-pane active">
+          <form id="task-form" autocomplete="off">
+            <input type="hidden" id="task-id" />
+            <div class="form-group">
+              <label class="form-label" for="task-title">Tittel *</label>
+              <input type="text" id="task-title" class="form-input" placeholder="Hva skal gjøres?" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="task-description">Beskrivelse</label>
+              <textarea id="task-description" class="form-input form-textarea" placeholder="Utfyllende beskrivelse av oppgaven..." rows="3"></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="task-priority">Prioritet</label>
+                <select id="task-priority" class="form-input">
+                  <option value="høy">🔴 Høy</option>
+                  <option value="medium" selected>🟡 Medium</option>
+                  <option value="lav">⚪ Lav</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="task-status">Status</label>
+                <select id="task-status" class="form-input">
+                  <option value="ikke_startet" selected>Ikke startet</option>
+                  <option value="i_gang">I gang</option>
+                  <option value="fullfort">Fullført</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="task-assignee">Ansvarlig</label>
+              <select id="task-assignee" class="form-input">
+                <option value="">Ingen tildelt</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="task-start-date">Startdato</label>
+                <input type="date" id="task-start-date" class="form-input" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="task-due-date">Ferdigdato</label>
+                <input type="date" id="task-due-date" class="form-input" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="task-dependencies">Avhengigheter / Venter på</label>
+              <input type="text" id="task-dependencies" class="form-input" placeholder="F.eks. venter på svar fra økonomiavdelingen..." />
+            </div>
+          </form>
+        </div>
+
+        <!-- Tab: Deloppgaver -->
+        <div id="tab-subtasks" class="tab-pane hidden">
+          <div id="subtasks-list" class="subtasks-list"></div>
+          <div class="add-subtask-wrap" id="add-subtask-wrap">
+            <input type="text" id="new-subtask-input" class="form-input" placeholder="Legg til deloppgave..." />
+            <button id="btn-add-subtask" class="btn btn-secondary">Legg til</button>
+          </div>
+        </div>
+
+        <!-- Tab: Kommentarer -->
+        <div id="tab-comments" class="tab-pane hidden">
+          <div id="comments-list" class="comments-list"></div>
+          <div class="add-comment-wrap">
+            <textarea id="new-comment-input" class="form-input form-textarea" placeholder="Skriv en kommentar eller notat..." rows="3"></textarea>
+            <button id="btn-add-comment" class="btn btn-primary">Send</button>
+          </div>
+        </div>
+
+      </div><!-- /modal-body -->
+
+      <div class="modal-footer" id="modal-footer">
+        <div class="modal-footer-left">
+          <button id="btn-delete-task" class="btn btn-danger hidden">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            Slett oppgave
+          </button>
+        </div>
+        <div class="modal-footer-right">
+          <button id="btn-cancel-task" class="btn btn-secondary">Avbryt</button>
+          <button id="btn-save-task" class="btn btn-primary">Lagre</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== BEKREFTELSESDIALOG ===== -->
+  <div id="confirm-dialog" class="modal-overlay hidden">
+    <div class="confirm-container">
+      <h3 id="confirm-title">Er du sikker?</h3>
+      <p id="confirm-message"></p>
+      <div class="confirm-buttons">
+        <button id="confirm-cancel" class="btn btn-secondary">Avbryt</button>
+        <button id="confirm-ok" class="btn btn-danger">Slett</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <!-- App -->
+  <script src="firebase-config.js"></script>
+  <script src="firestore.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
