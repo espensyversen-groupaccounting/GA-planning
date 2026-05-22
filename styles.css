@@ -744,6 +744,94 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ---- Status Stepper (i modal) ---- */
+.status-stepper {
+  display: flex;
+  align-items: stretch;
+  padding: 18px 4px 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.status-step {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  background: none; border: none; cursor: pointer;
+  padding: 0 4px;
+  transition: opacity .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.status-step:disabled { cursor: default; opacity: .55; }
+.status-step:not(:disabled):hover .step-circle {
+  box-shadow: 0 0 0 4px rgba(255,90,95,.15);
+}
+
+.step-circle {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--white);
+  display: flex; align-items: center; justify-content: center;
+  transition: background .2s, border-color .2s, box-shadow .2s;
+  flex-shrink: 0;
+}
+.status-step.active .step-circle {
+  border-color: var(--coral);
+  background: var(--coral);
+}
+.status-step.past .step-circle {
+  border-color: var(--success);
+  background: var(--success);
+}
+
+.step-label {
+  font-size: .68rem; font-weight: 500;
+  color: var(--text-3);
+  white-space: nowrap;
+  transition: color .15s;
+  text-align: center;
+}
+.status-step.active .step-label { color: var(--coral); font-weight: 700; }
+.status-step.past   .step-label { color: var(--success); font-weight: 600; }
+
+/* Linje mellom stegene */
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  align-self: flex-start;
+  margin-top: 12px; /* (28px sirkel − 2px linje) / 2 */
+  transition: background .3s;
+}
+.step-line.filled { background: var(--success); }
+
+/* ---- Task check-knapp (på oppgavekort) ---- */
+.task-check-btn {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--white);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  color: transparent;
+  transition: border-color .15s, background .15s, color .15s, transform .12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.task-check-btn:hover {
+  border-color: var(--success);
+  background: #F0FDF4;
+  color: var(--success);
+  transform: scale(1.1);
+}
+.task-check-btn.checked {
+  border-color: var(--success);
+  background: var(--success);
+  color: white;
+}
+.task-card-top { align-items: center; }
+.task-card-full .task-row-top { align-items: center; }
+
 /* ---- Scrollbar ---- */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

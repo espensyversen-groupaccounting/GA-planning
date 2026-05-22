@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.0.5';
+const APP_VERSION = '1.0.6';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -336,6 +336,13 @@ function taskCardHtml(task, compact = false) {
   const dateClass = dueDateClass(task.dueDate);
   const assignee = state.users.find(u => u.id === task.assignedTo);
   const isDone = task.status === 'fullfort';
+  const canQuickChange = canEdit() || (state.user && task.assignedTo === state.user.uid);
+  const checkBtn = canQuickChange ? `
+    <button class="task-check-btn${isDone ? ' checked' : ''}"
+            onclick="quickStatusChange('${task.id}','${isDone ? 'i_gang' : 'fullfort'}',event)"
+            title="${isDone ? 'Angre fullføring' : 'Marker som fullført'}">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </button>` : '';
 
   const progressHtml = prog ? `
     <div class="subtask-progress">
@@ -361,6 +368,7 @@ function taskCardHtml(task, compact = false) {
     return `
       <div class="task-card priority-${task.priority} ${isDone ? 'done' : ''}" data-task-id="${task.id}" onclick="openTaskModal('${task.id}')">
         <div class="task-card-top">
+          ${checkBtn}
           <span class="task-card-title">${esc(task.title)}</span>
           <span class="status-badge ${task.status}">${statusLabel(task.status)}</span>
         </div>
@@ -375,6 +383,7 @@ function taskCardHtml(task, compact = false) {
   return `
     <div class="task-card-full priority-${task.priority} ${isDone ? 'done' : ''}" data-task-id="${task.id}" onclick="openTaskModal('${task.id}')">
       <div class="task-row-top">
+        ${checkBtn}
         <div class="task-title-row">
           <div class="task-title">${esc(task.title)}</div>
           ${task.description ? `<div class="task-desc">${esc(task.description)}</div>` : ''}
@@ -521,6 +530,7 @@ async function openTaskModal(taskId = null) {
     const task = state.tasks.find(t => t.id === taskId) || await getTask(taskId);
     document.getElementById('modal-title').textContent = task.title;
     fillTaskForm(task);
+    updateStatusStepper(task.status);
     updateModalButtons(task);
     renderSubtasks(task.subtasks || []);
     startCommentListener(taskId);
@@ -530,6 +540,7 @@ async function openTaskModal(taskId = null) {
     document.getElementById('task-id').value = '';
     document.getElementById('subtasks-list').innerHTML = '';
     document.getElementById('comments-list').innerHTML = '';
+    updateStatusStepper('ikke_startet');
     updateModalButtons(null);
   }
 
@@ -703,7 +714,11 @@ async function handleDeleteTask() {
 
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === `tab-${name}`));
+  document.querySelectorAll('.tab-pane').forEach(p => {
+    const isActive = p.id === `tab-${name}`;
+    p.classList.toggle('active', isActive);
+    if (isActive) p.classList.remove('hidden'); // fjern hidden-klasse som blokkerer display
+  });
 }
 
 // ============================================================
@@ -731,7 +746,7 @@ function renderSubtasks(subtasks) {
       </button>` : ''}
     </div>`).join('');
 
-  document.getElementById('add-subtask-wrap').classList.toggle('hidden', !canEdit() && !state.profile?.role === 'member');
+  document.getElementById('add-subtask-wrap').classList.toggle('hidden', !canEdit());
 }
 
 async function toggleSubtask(index, completed) {
@@ -766,6 +781,80 @@ async function removeSubtask(index) {
   const subtasks = task.subtasks.filter((_, i) => i !== index);
   await updateTask(taskId, { subtasks });
   renderSubtasks(subtasks);
+}
+
+// ============================================================
+// QUICK STATUS CHANGE
+// ============================================================
+
+// Klikk på check-sirkel direkte på oppgavekortet
+async function quickStatusChange(taskId, newStatus, event) {
+  if (event) event.stopPropagation();
+  const task = state.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  if (!canEdit() && task.assignedTo !== state.user.uid) return;
+  try {
+    await updateTask(taskId, { status: newStatus });
+    if (newStatus === 'fullfort') {
+      showToast('✓ Oppgave fullført!');
+      if (task.createdBy && task.createdBy !== state.user.uid) {
+        await createNotification(task.createdBy, {
+          type: 'status_changed', taskId, taskTitle: task.title,
+          message: `"${task.title}" er nå markert som fullført`,
+        });
+      }
+    } else {
+      showToast('Status oppdatert');
+    }
+  } catch(e) {
+    showToast('Feil ved oppdatering.', 'error');
+  }
+}
+
+// Klikk på et steg i status-stepperen inne i modal
+async function quickSetStatus(newStatus) {
+  const sel = document.getElementById('task-status');
+  if (sel) sel.value = newStatus;
+  updateStatusStepper(newStatus);
+  if (!state.activeTaskId) return; // ny oppgave: bare sett form-verdi
+
+  const task = state.tasks.find(t => t.id === state.activeTaskId);
+  if (!task) return;
+  if (!canEdit() && task.assignedTo !== state.user.uid) return;
+  try {
+    await updateTask(state.activeTaskId, { status: newStatus });
+    if (newStatus === 'fullfort') showToast('✓ Oppgave fullført!');
+    else showToast('Status oppdatert');
+  } catch(e) {
+    showToast('Feil ved statusoppdatering.', 'error');
+  }
+}
+
+// Bygg/oppdater status-stepperen øverst i modal-detaljfanen
+function updateStatusStepper(currentStatus) {
+  const stepper = document.getElementById('status-stepper');
+  if (!stepper) return;
+  const steps = [
+    { key: 'ikke_startet', label: 'Ikke startet' },
+    { key: 'i_gang',       label: 'I gang'        },
+    { key: 'fullfort',     label: 'Fullført'       },
+  ];
+  const curIdx = steps.findIndex(s => s.key === currentStatus);
+  const canChange = canEdit() || (state.activeTaskId &&
+    state.tasks.find(t => t.id === state.activeTaskId)?.assignedTo === state.user?.uid);
+
+  stepper.innerHTML = steps.map((s, i) => `
+    <button class="status-step${currentStatus === s.key ? ' active' : ''}${i < curIdx ? ' past' : ''}"
+            data-status="${s.key}"
+            onclick="quickSetStatus('${s.key}')"
+            ${!canChange ? 'disabled' : ''}>
+      <span class="step-circle">
+        ${i < curIdx ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
+      </span>
+      <span class="step-label">${s.label}</span>
+    </button>
+    ${i < steps.length - 1 ? `<div class="step-line${i < curIdx ? ' filled' : ''}"></div>` : ''}
+  `).join('');
 }
 
 // ============================================================

@@ -305,6 +305,14 @@
 
         <!-- Tab: Detaljer -->
         <div id="tab-details" class="tab-pane active">
+          <!-- Visuell status-stepper (erstatter dropdown) -->
+          <div id="status-stepper" class="status-stepper"></div>
+          <!-- Status-select skjult i DOM – synkes av updateStatusStepper() -->
+          <select id="task-status" class="hidden" aria-hidden="true">
+            <option value="ikke_startet" selected>Ikke startet</option>
+            <option value="i_gang">I gang</option>
+            <option value="fullfort">Fullført</option>
+          </select>
           <form id="task-form" autocomplete="off">
             <input type="hidden" id="task-id" />
             <div class="form-group">
@@ -322,14 +330,6 @@
                   <option value="høy">🔴 Høy</option>
                   <option value="medium" selected>🟡 Medium</option>
                   <option value="lav">⚪ Lav</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="task-status">Status</label>
-                <select id="task-status" class="form-input">
-                  <option value="ikke_startet" selected>Ikke startet</option>
-                  <option value="i_gang">I gang</option>
-                  <option value="fullfort">Fullført</option>
                 </select>
               </div>
             </div>
