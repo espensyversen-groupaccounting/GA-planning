@@ -1,11 +1,10 @@
 // ============================================================
 // VERSJON – Bump denne ved hver deploy for å tvinge oppdatering
 // ============================================================
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.0.4';
 const CACHE_NAME  = `strawberry-plan-v${APP_VERSION}`;
 
-const ASSETS = [
-  './',
+const APP_FILES = [
   './index.html',
   './styles.css',
   './app.js',
@@ -19,43 +18,61 @@ const ASSETS = [
   './Strawberry_Logotype_Primary_White_RGB.png'
 ];
 
-// Install: cache filer, men IKKE skipWaiting – vent på manuell aktivering
+// Install: cache filer OG ta over med en gang (skipWaiting)
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(APP_FILES))
+      .then(() => self.skipWaiting()) // Ta over umiddelbart – ingen venting
   );
 });
 
-// Activate: slett gamle cacher
+// Activate: slett ALLE gamle cacher og ta kontroll over alle klienter
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      ))
+      .then(() => self.clients.claim()) // Ta kontroll over åpne faner
   );
-  self.clients.claim();
 });
 
-// Motta melding fra app (f.eks. "SKIP_WAITING" fra oppdateringsknappen)
+// Motta melding fra app
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 });
 
+// Fetch: network-first for app-filer (alltid hent fersk versjon om mulig)
+// Faller tilbake på cache hvis offline
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
-  if (event.request.url.includes('firestore.googleapis.com') ||
-      event.request.url.includes('firebase') ||
-      event.request.url.includes('googleapis.com')) return;
 
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      return cached || fetch(event.request).then(response => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        return response;
-      });
-    }).catch(() => caches.match('./index.html'))
+  // Firebase/Google – aldri cache, alltid nettverk
+  if (event.request.url.includes('firestore.googleapis.com') ||
+      event.request.url.includes('identitytoolkit') ||
+      event.request.url.includes('firebase') ||
+      event.request.url.includes('googleapis.com') ||
+      event.request.url.includes('gstatic.com')) return;
+
+  // App-filer: network-first
+  const isAppFile = APP_FILES.some(f =>
+    event.request.url.endsWith(f.replace('./', '/')) ||
+    event.request.url.includes('/GA-planning/')
   );
+
+  if (isAppFile) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Oppdater cache med fersk versjon
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => caches.match(event.request)) // Offline: bruk cache
+    );
+  }
 });
