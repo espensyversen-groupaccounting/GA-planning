@@ -111,10 +111,13 @@ body {
 /* ---- Header ---- */
 .app-header {
   position: fixed; top: 0; left: 0; right: 0;
-  height: var(--header-h);
+  /* Strekk header opp i statusbar-sonen (klokke/batteri) på iPhone */
+  height: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: 20px;
+  padding-right: 16px;
   background: var(--black);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 16px 0 20px;
   z-index: 100;
   box-shadow: 0 1px 0 rgba(255,255,255,.08);
 }
@@ -190,8 +193,8 @@ body {
 /* ---- Main layout ---- */
 .main-layout {
   display: flex;
-  margin-top: var(--header-h);
-  min-height: calc(100dvh - var(--header-h));
+  margin-top: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  min-height: calc(100dvh - var(--header-h) - env(safe-area-inset-top, 0px));
 }
 
 /* ---- Sidebar ---- */
@@ -202,7 +205,7 @@ body {
   border-right: 1px solid var(--border);
   padding: 20px 0;
   position: fixed;
-  top: var(--header-h);
+  top: calc(var(--header-h) + env(safe-area-inset-top, 0px));
   left: 0;
   bottom: 0;
   overflow-y: auto;
@@ -225,7 +228,8 @@ body {
   .bottom-nav { display: flex; }
   .content-area {
     margin-left: 0;
-    padding-bottom: calc(var(--bottom-nav-h) + 16px);
+    /* Legg til safe-area slik at innhold ikke gjemmes bak home-indicator */
+    padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 16px);
   }
 }
 
@@ -538,27 +542,41 @@ body {
 /* ---- Bottom nav ---- */
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0;
-  height: var(--bottom-nav-h);
-  background: var(--white);
-  border-top: 1px solid var(--border);
-  display: flex; align-items: center;
+  /* Strekk ned i home-indicator-sonen på iPhone */
+  height: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+  /* Frosted glass – native iOS-look */
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-top: 1px solid rgba(0, 0, 0, .08);
+  display: flex; align-items: flex-start;
+  padding-top: 6px;
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
   z-index: 100;
-  padding-bottom: env(safe-area-inset-bottom);
 }
 .bottom-btn {
   flex: 1;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
   gap: 3px;
   background: none; border: none; cursor: pointer;
   color: var(--text-3); font-size: .65rem; font-weight: 500;
-  padding: 8px 4px; height: 100%;
+  /* Knappehøyde = kun synlig del (ikke home-indicator) */
+  height: calc(var(--bottom-nav-h) - 6px);
+  padding: 4px 4px 0;
   transition: color .15s;
+  -webkit-tap-highlight-color: transparent;
 }
-.bottom-btn:hover { color: var(--text); }
+.bottom-btn:active { transform: scale(.92); }
 .bottom-btn.active { color: var(--coral); }
-.bottom-btn.active svg { stroke: var(--coral); }
-.bottom-btn-icon-wrap { position: relative; display: inline-flex; }
-.bottom-btn .notif-badge { top: -2px; right: -6px; border-color: var(--white); }
+.bottom-btn.active .bottom-btn-icon-wrap svg { stroke: var(--coral); }
+/* Konsistent ikon-wrapper for alle bottom-knapper */
+.bottom-btn-icon-wrap {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+}
+.bottom-btn .notif-badge { top: -3px; right: -8px; border-color: rgba(255,255,255,.88); }
 
 /* ---- Forms ---- */
 .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 4px; }
@@ -700,7 +718,9 @@ body {
 
 /* ---- Toast ---- */
 .toast-container {
-  position: fixed; bottom: calc(var(--bottom-nav-h) + 12px); left: 50%;
+  position: fixed;
+  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 12px);
+  left: 50%;
   transform: translateX(-50%);
   display: flex; flex-direction: column; gap: 6px;
   z-index: 500; width: 100%; max-width: 360px; padding: 0 16px;
