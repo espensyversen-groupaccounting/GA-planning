@@ -212,28 +212,46 @@ auth.onAuthStateChanged(async (user) => {
     showView('dashboard');
   } catch (e) {
     console.error('Auth error:', e);
-    showToast('Det oppstod en feil ved innlogging.', 'error');
+    // Vis login-siden igjen i stedet for blank side
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('login-error').textContent = 'Det oppstod en feil. Prøv å laste siden på nytt.';
+    document.getElementById('login-error').classList.remove('hidden');
   } finally {
     hideLoading();
   }
 });
 
 function setupUI() {
-  const p = state.profile;
-  document.getElementById('user-avatar').src = p.photoURL || '';
-  document.getElementById('user-name-short').textContent = (p.displayName || '').split(' ')[0];
-  document.getElementById('dropdown-name').textContent = p.displayName || p.email;
-  const roleEl = document.getElementById('dropdown-role');
-  roleEl.textContent = roleLabel(p.role);
-  roleEl.className = `role-badge ${p.role}`;
+  // Bruk profile hvis tilgjengelig, ellers fall tilbake på Firebase auth-bruker
+  const p = state.profile || {};
+  const u = state.user || {};
+  const displayName = p.displayName || u.displayName || '';
+  const email       = p.email      || u.email      || '';
+  const photoURL    = p.photoURL   || u.photoURL   || '';
+  const role        = p.role       || 'medlem';
 
-  const showAdmin = ['admin','teamleder'].includes(p.role);
-  document.getElementById('nav-admin-li').classList.toggle('hidden', !showAdmin);
-  document.getElementById('bottom-admin-btn').classList.toggle('hidden', !showAdmin);
+  const avatarEl = document.getElementById('user-avatar');
+  if (avatarEl) avatarEl.src = photoURL;
+
+  const nameEl = document.getElementById('user-name-short');
+  if (nameEl) nameEl.textContent = displayName.split(' ')[0];
+
+  const dropdownNameEl = document.getElementById('dropdown-name');
+  if (dropdownNameEl) dropdownNameEl.textContent = displayName || email;
+
+  const roleEl = document.getElementById('dropdown-role');
+  if (roleEl) {
+    roleEl.textContent = roleLabel(role);
+    roleEl.className = `role-badge ${role}`;
+  }
+
+  const showAdmin = ['admin','teamleder'].includes(role);
+  document.getElementById('nav-admin-li')?.classList.toggle('hidden', !showAdmin);
+  document.getElementById('bottom-admin-btn')?.classList.toggle('hidden', !showAdmin);
 
   const showCreate = canEdit();
-  document.getElementById('btn-add-task').classList.toggle('hidden', !showCreate);
-  document.getElementById('btn-add-task-dashboard').classList.toggle('hidden', !showCreate);
+  document.getElementById('btn-add-task')?.classList.toggle('hidden', !showCreate);
+  document.getElementById('btn-add-task-dashboard')?.classList.toggle('hidden', !showCreate);
 }
 
 function subscribeToRealtime() {
