@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.1.5';
-const CLIENT_BUILD = 1105;
+const CLIENT_APP_VERSION = '1.1.6';
+const CLIENT_BUILD = 1106;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -143,6 +143,10 @@ async function updateCategory(categoryId, data) {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     ...writeMeta()
   });
+}
+
+async function deleteCategory(categoryId) {
+  await db.collection('categories').doc(categoryId).delete();
 }
 
 // ---- Tasks ----

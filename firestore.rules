@@ -44,7 +44,7 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.active == true;
       allow update: if isAuth() && isAdminOrTeamleder();
-      allow delete: if false;
+      allow delete: if isAuth() && isAdminOrTeamleder();
     }
 
     match /tasks/{taskId} {

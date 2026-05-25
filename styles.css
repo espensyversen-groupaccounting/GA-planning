@@ -638,6 +638,11 @@ body {
   min-width: 76px;
   justify-content: center;
 }
+.category-delete-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+}
 .category-item.inactive {
   opacity: .58;
 }

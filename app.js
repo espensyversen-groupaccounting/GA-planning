@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.1.5';
+const APP_VERSION = '1.1.6';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -1246,6 +1246,13 @@ function renderCategoriesAdmin() {
           ${!canEdit() ? 'disabled' : ''}>
           ${c.active === false ? 'Aktiver' : 'Skjul'}
         </button>
+        <button class="btn-icon-danger category-delete-btn" type="button"
+          onclick="handleDeleteCategory('${c.id}')"
+          title="Slett kategori"
+          aria-label="Slett kategori"
+          ${!canEdit() ? 'disabled' : ''}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
     </div>`).join('');
 }
@@ -1308,6 +1315,25 @@ async function handleCategoryActiveToggle(categoryId, active) {
     showToast(active ? 'Kategori aktivert' : 'Kategori skjult');
   } catch(e) {
     showToast('Feil ved oppdatering av kategori.', 'error');
+  }
+}
+
+async function handleDeleteCategory(categoryId) {
+  const category = state.categories.find(c => c.id === categoryId);
+  const name = category ? category.name : 'denne kategorien';
+  const inUse = state.tasks.some(t => t.categoryId === categoryId);
+  const warning = inUse
+    ? `Kategorien "${name}" er brukt på én eller flere oppgaver. Hvis du sletter den, vil disse oppgavene miste kategorivisningen. Er du sikker?`
+    : `Er du sikker på at du vil slette kategorien "${name}"? Dette kan ikke angres.`;
+  const confirmed = await showConfirm('Slett kategori', warning);
+  if (!confirmed) return;
+
+  try {
+    await deleteCategory(categoryId);
+    showToast('Kategori slettet');
+  } catch(e) {
+    console.error('Category delete error:', e);
+    showToast('Feil ved sletting av kategori.', 'error');
   }
 }
 
