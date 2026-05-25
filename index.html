@@ -170,6 +170,9 @@
               <select id="filter-assignee" class="filter-select">
                 <option value="">Alle ansvarlige</option>
               </select>
+              <select id="filter-category" class="filter-select">
+                <option value="">Alle kategorier</option>
+              </select>
             </div>
             <div class="search-wrap">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -243,6 +246,31 @@
             <div class="card">
               <h2 class="card-title">Teammedlemmer</h2>
               <div id="users-list" class="users-list"></div>
+            </div>
+          </div>
+
+          <div class="card category-admin-card">
+            <div class="card-header-row">
+              <h2 class="card-title">Kategorier</h2>
+              <button id="btn-toggle-categories" class="btn btn-secondary" type="button">
+                Kategorier
+              </button>
+            </div>
+            <div id="category-admin-panel" class="category-admin-panel hidden">
+              <form id="add-category-form" class="category-form">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label" for="new-category-name">Navn</label>
+                    <input type="text" id="new-category-name" class="form-input" placeholder="F.eks. Rapportering" required />
+                  </div>
+                  <div class="form-group category-color-group">
+                    <label class="form-label" for="new-category-color">Farge</label>
+                    <input type="color" id="new-category-color" class="category-color-input" value="#FF5A5F" />
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Legg til kategori</button>
+              </form>
+              <div id="categories-list" class="categories-list"></div>
             </div>
           </div>
         </div>
@@ -331,6 +359,12 @@
                   <option value="høy">🔴 Høy</option>
                   <option value="medium" selected>🟡 Medium</option>
                   <option value="lav">⚪ Lav</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="task-category">Kategori</label>
+                <select id="task-category" class="form-input">
+                  <option value="">Ingen kategori</option>
                 </select>
               </div>
             </div>

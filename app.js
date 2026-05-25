@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.0.9';
+const APP_VERSION = '1.1.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -14,6 +14,7 @@ const state = {
   profile: null,
   tasks: [],
   users: [],
+  categories: [],
   notifications: [],
   currentView: 'dashboard',
   unsubscribers: [],
@@ -87,6 +88,31 @@ function canEdit() {
 
 function isAdmin() {
   return state.profile && state.profile.role === 'admin';
+}
+
+function activeCategories() {
+  return state.categories.filter(c => c.active !== false);
+}
+
+function categoryForTask(task) {
+  if (!task || !task.categoryId) return null;
+  return state.categories.find(c => c.id === task.categoryId) || {
+    id: task.categoryId,
+    name: task.categoryName || 'Ukjent kategori',
+    color: task.categoryColor || '#9CA3AF',
+    active: true
+  };
+}
+
+function categoryChipHtml(task) {
+  const category = categoryForTask(task);
+  if (!category) return '';
+  const color = category.color || '#9CA3AF';
+  return `
+    <span class="category-chip" title="${esc(category.name)}">
+      <span class="category-chip-dot" style="background:${esc(color)}"></span>
+      <span class="category-chip-label">${esc(category.name)}</span>
+    </span>`;
 }
 
 function subtaskProgress(subtasks) {
@@ -302,6 +328,13 @@ function subscribeToRealtime() {
       populateAssigneeSelects();
       if (state.currentView === 'admin') renderAdmin();
     }),
+    subscribeToCategories(categories => {
+      state.categories = categories;
+      populateCategorySelects();
+      if (state.currentView === 'dashboard') renderDashboard();
+      if (state.currentView === 'tasks') renderTasksList();
+      if (state.currentView === 'admin') renderAdmin();
+    }),
     subscribeToNotifications(state.user.uid, notifs => {
       state.notifications = notifs;
       updateNotifBadge();
@@ -394,6 +427,7 @@ function taskCardHtml(task, compact = false) {
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       ${formatDate(task.dueDate)}${dateClass === 'overdue' ? ' · Forfalt' : dateClass === 'soon' ? ' · Snart' : ''}
     </span>` : '';
+  const categoryHtml = categoryChipHtml(task);
 
   if (compact) {
     return `
@@ -404,6 +438,7 @@ function taskCardHtml(task, compact = false) {
           <span class="status-badge ${task.status}">${statusLabel(task.status)}</span>
         </div>
         <div class="task-card-meta">
+          ${categoryHtml}
           ${assigneeHtml}
           ${dueDateHtml}
           ${undoDoneBtn}
@@ -422,6 +457,7 @@ function taskCardHtml(task, compact = false) {
         </div>
       </div>
       <div class="task-row-bottom">
+        ${categoryHtml}
         <span class="status-badge ${task.status}">${statusLabel(task.status)}</span>
         <span class="priority-badge ${task.priority}">
           <span class="priority-dot ${task.priority}"></span>
@@ -444,15 +480,18 @@ function renderTasksList() {
   const status   = document.getElementById('filter-status').value;
   const priority = document.getElementById('filter-priority').value;
   const assignee = document.getElementById('filter-assignee').value;
+  const category = document.getElementById('filter-category').value;
   const search   = (document.getElementById('task-search').value || '').toLowerCase();
 
   let tasks = [...state.tasks];
   if (status)   tasks = tasks.filter(t => t.status === status);
   if (priority) tasks = tasks.filter(t => t.priority === priority);
   if (assignee) tasks = tasks.filter(t => t.assignedTo === assignee);
+  if (category) tasks = tasks.filter(t => t.categoryId === category);
   if (search)   tasks = tasks.filter(t =>
     t.title.toLowerCase().includes(search) ||
-    (t.description || '').toLowerCase().includes(search));
+    (t.description || '').toLowerCase().includes(search) ||
+    (t.categoryName || '').toLowerCase().includes(search));
 
   // Sort: priority then date
   const pOrd = { høy:0, medium:1, lav:2 };
@@ -467,6 +506,7 @@ function renderTasksList() {
     const hasFilters = document.getElementById('filter-status').value ||
                        document.getElementById('filter-priority').value ||
                        document.getElementById('filter-assignee').value ||
+                       document.getElementById('filter-category').value ||
                        document.getElementById('task-search').value;
     el.innerHTML = hasFilters
       ? `<div class="empty-state">
@@ -497,6 +537,38 @@ function populateAssigneeSelects() {
   ].join('');
   const formEl = document.getElementById('task-assignee');
   if (formEl) formEl.innerHTML = formOpts;
+}
+
+function populateCategorySelects() {
+  const active = activeCategories();
+
+  const filterOpts = ['<option value="">Alle kategorier</option>',
+    ...state.categories.map(c => `<option value="${c.id}">${c.active === false ? 'Skjult: ' : ''}${esc(c.name)}</option>`)
+  ].join('');
+  const filterEl = document.getElementById('filter-category');
+  if (filterEl) {
+    const currentFilter = filterEl.value;
+    filterEl.innerHTML = filterOpts;
+    if (currentFilter && state.categories.some(c => c.id === currentFilter)) {
+      filterEl.value = currentFilter;
+    }
+  }
+
+  const formOpts = ['<option value="">Ingen kategori</option>',
+    ...active.map(c => `<option value="${c.id}">${esc(c.name)}</option>`)
+  ].join('');
+  const formEl = document.getElementById('task-category');
+  if (!formEl) return;
+
+  const currentValue = formEl.value;
+  formEl.innerHTML = formOpts;
+  if (currentValue && state.categories.some(c => c.id === currentValue)) {
+    if (!active.some(c => c.id === currentValue)) {
+      const current = state.categories.find(c => c.id === currentValue);
+      formEl.insertAdjacentHTML('beforeend', `<option value="${current.id}">Skjult: ${esc(current.name)}</option>`);
+    }
+    formEl.value = currentValue;
+  }
 }
 
 // ============================================================
@@ -606,6 +678,12 @@ function fillTaskForm(task) {
   document.getElementById('task-title').value = task.title || '';
   document.getElementById('task-description').value = task.description || '';
   document.getElementById('task-priority').value = task.priority || 'medium';
+  const categoryEl = document.getElementById('task-category');
+  const hasCategoryOption = categoryEl && Array.from(categoryEl.options).some(opt => opt.value === task.categoryId);
+  if (categoryEl && task.categoryId && !hasCategoryOption) {
+    categoryEl.insertAdjacentHTML('beforeend', `<option value="${esc(task.categoryId)}">Skjult: ${esc(task.categoryName || 'Ukjent kategori')}</option>`);
+  }
+  if (categoryEl) categoryEl.value = task.categoryId || '';
   document.getElementById('task-status').value = task.status || 'ikke_startet';
   document.getElementById('task-assignee').value = task.assignedTo || '';
   document.getElementById('task-dependencies').value = task.dependencies || '';
@@ -647,7 +725,7 @@ function updateModalButtons(task) {
 }
 
 function setFormReadOnly(readonly) {
-  ['task-title','task-description','task-priority','task-assignee','task-start-date','task-due-date','task-dependencies']
+  ['task-title','task-description','task-priority','task-category','task-assignee','task-start-date','task-due-date','task-dependencies']
     .forEach(id => {
       const el = document.getElementById(id);
       if (el) el.disabled = readonly;
@@ -664,6 +742,7 @@ async function handleSaveTask() {
   const title     = document.getElementById('task-title').value.trim();
   const desc      = document.getElementById('task-description').value.trim();
   const priority  = document.getElementById('task-priority').value;
+  const categoryId = document.getElementById('task-category').value;
   const status    = document.getElementById('task-status').value;
   const assigneeId = document.getElementById('task-assignee').value;
   const startStr  = document.getElementById('task-start-date').value;
@@ -671,11 +750,15 @@ async function handleSaveTask() {
   const deps      = document.getElementById('task-dependencies').value.trim();
 
   const assignee = state.users.find(u => u.id === assigneeId);
+  const category = state.categories.find(c => c.id === categoryId);
 
   const data = {
     title,
     description: desc,
     priority,
+    categoryId: categoryId || null,
+    categoryName: category ? category.name : null,
+    categoryColor: category ? category.color : null,
     status,
     assignedTo: assigneeId || null,
     assignedToName: assignee ? (assignee.displayName || assignee.email) : null,
@@ -1066,6 +1149,7 @@ function renderAdmin() {
   const el = document.getElementById('users-list');
   if (!state.users.length) {
     el.innerHTML = '<p style="color:var(--text-2);font-size:.875rem">Ingen brukere ennå</p>';
+    renderCategoriesAdmin();
     return;
   }
 
@@ -1092,6 +1176,95 @@ function renderAdmin() {
         ` : `<span class="role-badge ${u.role}">${roleLabel(u.role)}</span>`}
       </div>
     </div>`).join('');
+
+  renderCategoriesAdmin();
+}
+
+function renderCategoriesAdmin() {
+  const el = document.getElementById('categories-list');
+  if (!el) return;
+
+  if (!state.categories.length) {
+    el.innerHTML = '<p style="color:var(--text-2);font-size:.875rem">Ingen kategorier ennå</p>';
+    return;
+  }
+
+  el.innerHTML = state.categories.map(c => `
+    <div class="category-item ${c.active === false ? 'inactive' : ''}">
+      <span class="category-swatch" style="background:${esc(c.color || '#FF5A5F')}"></span>
+      <input class="category-name-input" value="${esc(c.name)}"
+        onchange="handleCategoryNameChange('${c.id}', this.value)"
+        ${!canEdit() ? 'disabled' : ''}
+        aria-label="Kategorinavn" />
+      <div class="category-actions">
+        <input type="color" class="category-list-color" value="${esc(c.color || '#FF5A5F')}"
+          onchange="handleCategoryColorChange('${c.id}', this.value)"
+          ${!canEdit() ? 'disabled' : ''}
+          aria-label="Kategorifarge" />
+        <button class="btn btn-secondary category-status-btn" type="button"
+          onclick="handleCategoryActiveToggle('${c.id}', ${c.active === false ? 'true' : 'false'})"
+          ${!canEdit() ? 'disabled' : ''}>
+          ${c.active === false ? 'Aktiver' : 'Skjul'}
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function toggleCategoryPanel() {
+  document.getElementById('category-admin-panel')?.classList.toggle('hidden');
+}
+
+async function handleAddCategory(e) {
+  e.preventDefault();
+  const nameEl = document.getElementById('new-category-name');
+  const colorEl = document.getElementById('new-category-color');
+  const name = nameEl.value.trim();
+  if (!name) return;
+
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true;
+  try {
+    await createCategory({ name, color: colorEl.value });
+    nameEl.value = '';
+    colorEl.value = '#FF5A5F';
+    showToast('Kategori lagt til');
+  } catch(e) {
+    showToast('Feil ved lagring av kategori.', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function handleCategoryNameChange(categoryId, name) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    renderCategoriesAdmin();
+    return;
+  }
+  try {
+    await updateCategory(categoryId, { name: trimmed });
+    showToast('Kategori oppdatert');
+  } catch(e) {
+    showToast('Feil ved oppdatering av kategori.', 'error');
+  }
+}
+
+async function handleCategoryColorChange(categoryId, color) {
+  try {
+    await updateCategory(categoryId, { color });
+    showToast('Kategorifarge oppdatert');
+  } catch(e) {
+    showToast('Feil ved oppdatering av farge.', 'error');
+  }
+}
+
+async function handleCategoryActiveToggle(categoryId, active) {
+  try {
+    await updateCategory(categoryId, { active });
+    showToast(active ? 'Kategori aktivert' : 'Kategori skjult');
+  } catch(e) {
+    showToast('Feil ved oppdatering av kategori.', 'error');
+  }
 }
 
 async function handleAddUser(e) {
@@ -1271,9 +1444,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Admin add user
   document.getElementById('add-user-form').addEventListener('submit', handleAddUser);
+  document.getElementById('btn-toggle-categories').addEventListener('click', toggleCategoryPanel);
+  document.getElementById('add-category-form').addEventListener('submit', handleAddCategory);
 
   // Filters + search
-  ['filter-status','filter-priority','filter-assignee'].forEach(id => {
+  ['filter-status','filter-priority','filter-assignee','filter-category'].forEach(id => {
     document.getElementById(id).addEventListener('change', renderTasksList);
   });
   document.getElementById('task-search').addEventListener('input', renderTasksList);

@@ -23,7 +23,7 @@ service cloud.firestore {
 
     function hasSupportedClientMeta() {
       return request.resource.data.clientBuild is int
-        && request.resource.data.clientBuild >= 1007
+        && request.resource.data.clientBuild >= 1100
         && request.resource.data.writeSchemaVersion == 1
         && request.resource.data.clientAppVersion is string
         && request.resource.data.clientWriteId is string;
@@ -49,7 +49,7 @@ service cloud.firestore {
 
     function currentUserHasSupportedClient() {
       return signedInUser().data.clientBuild is int
-        && signedInUser().data.clientBuild >= 1007;
+        && signedInUser().data.clientBuild >= 1100;
     }
 
     match /allowedUsers/{doc} {
@@ -68,6 +68,19 @@ service cloud.firestore {
         && (request.auth.uid == userId || isAdmin())
         && isSupportedUpdate();
       allow delete: if isAuth() && isAdmin() && currentUserHasSupportedClient();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if isAuth();
+      allow create: if isAuth()
+        && isAdminOrTeamleder()
+        && isSupportedCreate()
+        && request.resource.data.name is string
+        && request.resource.data.active == true;
+      allow update: if isAuth()
+        && isAdminOrTeamleder()
+        && isSupportedUpdate();
+      allow delete: if false;
     }
 
     match /tasks/{taskId} {

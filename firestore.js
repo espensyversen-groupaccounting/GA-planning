@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.0.9';
-const CLIENT_BUILD = 1009;
+const CLIENT_APP_VERSION = '1.1.0';
+const CLIENT_BUILD = 1100;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -111,6 +111,38 @@ async function updateUserRole(uid, role) {
 
 async function removeUser(uid) {
   await db.collection('users').doc(uid).delete();
+}
+
+// ---- Categories ----
+
+function subscribeToCategories(callback) {
+  return db.collection('categories')
+    .orderBy('sortOrder', 'asc')
+    .onSnapshot(snap => {
+      callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+}
+
+async function createCategory(data) {
+  await db.collection('categories').add({
+    name: data.name,
+    color: data.color || '#FF5A5F',
+    icon: data.icon || '',
+    sortOrder: data.sortOrder || Date.now(),
+    active: true,
+    createdBy: auth.currentUser.uid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    ...writeMeta()
+  });
+}
+
+async function updateCategory(categoryId, data) {
+  await db.collection('categories').doc(categoryId).update({
+    ...data,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    ...writeMeta()
+  });
 }
 
 // ---- Tasks ----

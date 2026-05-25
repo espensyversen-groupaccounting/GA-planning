@@ -106,6 +106,7 @@ Opprettes automatisk ved første innlogging.
 ### `tasks/{taskId}`
 - `title`, `description`: string
 - `priority`: 'høy' | 'medium' | 'lav'
+- `categoryId`: string | null — `categoryName`, `categoryColor`: snapshot-felter for visning
 - `status`: 'ikke_startet' | 'i_gang' | 'fullfort'
 - `assignedTo`: uid — `assignedToName`: string
 - `startDate`, `dueDate`: Firestore Timestamp (nullable)
@@ -115,6 +116,12 @@ Opprettes automatisk ved første innlogging.
 
 ### `comments/{commentId}`
 - `taskId`, `userId`, `userDisplayName`, `userPhotoURL`, `text`, `createdAt`
+
+### `categories/{categoryId}`
+Konfigureres fra Admin-panelet av Admin eller Teamleder.
+- `name`: string — `color`: hex string — `icon`: string
+- `sortOrder`: number — `active`: boolean
+- `createdBy`: uid — `createdAt`, `updatedAt`: timestamp
 
 ### `users/{userId}/notifications/{notifId}`
 - `type`: 'task_assigned' | 'comment_added' | 'status_changed'
