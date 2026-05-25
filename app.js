@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.1.8';
+const APP_VERSION = '1.1.9';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -1355,6 +1355,7 @@ function renderAdmin() {
   updateAdminUpdateUI();
 
   document.getElementById('add-user-card')?.classList.toggle('hidden', !isAdmin());
+  updateInviteLinkUI();
 
   const el = document.getElementById('users-list');
   if (!state.users.length) {
@@ -1388,6 +1389,41 @@ function renderAdmin() {
     </div>`).join('');
 
   renderCategoriesAdmin();
+}
+
+function getAppShareLink() {
+  const url = new URL(window.location.href);
+  url.hash = '';
+  url.search = '';
+  url.pathname = url.pathname.replace(/\/index\.html$/, '/');
+  return url.toString();
+}
+
+function updateInviteLinkUI() {
+  const input = document.getElementById('invite-link-input');
+  if (!input) return;
+  input.value = getAppShareLink();
+}
+
+async function handleCopyInviteLink() {
+  const link = getAppShareLink();
+  const input = document.getElementById('invite-link-input');
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(link);
+    } else {
+      input.value = link;
+      input.focus();
+      input.select();
+      document.execCommand('copy');
+      input.blur();
+    }
+    showToast('Link kopiert');
+  } catch(e) {
+    console.error('Copy invite link error:', e);
+    showToast('Kunne ikke kopiere linken automatisk. Marker og kopier linken manuelt.', 'error');
+  }
 }
 
 function renderCategoriesAdmin() {
@@ -1696,6 +1732,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Admin add user
   document.getElementById('add-user-form').addEventListener('submit', handleAddUser);
+  document.getElementById('btn-copy-invite-link').addEventListener('click', handleCopyInviteLink);
   document.getElementById('btn-toggle-categories').addEventListener('click', toggleCategoryPanel);
   document.getElementById('add-category-form').addEventListener('submit', handleAddCategory);
 

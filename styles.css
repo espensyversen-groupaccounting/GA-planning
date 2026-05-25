@@ -661,6 +661,59 @@ body {
 .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
 .form-row .form-group { flex: 1; min-width: 140px; }
 
+.invite-link-box {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.invite-link-title {
+  font-size: .875rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.invite-link-help {
+  margin: 2px 0 0;
+  font-size: .78rem;
+  color: var(--text-2);
+}
+.invite-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.invite-link-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-2);
+  padding: 8px 10px;
+  font-size: .8rem;
+}
+.invite-link-input:focus {
+  outline: none;
+  border-color: var(--coral);
+  background: var(--white);
+  color: var(--text);
+}
+.invite-copy-btn {
+  white-space: nowrap;
+}
+@media (max-width: 520px) {
+  .invite-link-row {
+    grid-template-columns: 1fr;
+  }
+  .invite-copy-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 .users-list { display: flex; flex-direction: column; gap: 10px; }
 .user-item {
   display: flex; align-items: center; gap: 12px;
