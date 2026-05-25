@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.0.7';
+const APP_VERSION = '1.0.8';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -344,6 +344,11 @@ function taskCardHtml(task, compact = false) {
             title="${isDone ? 'Angre fullføring' : 'Marker som fullført'}">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
     </button>` : '';
+  const undoDoneBtn = canQuickChange && isDone ? `
+    <button class="task-undo-btn" onclick="quickStatusChange('${task.id}','i_gang',event)" title="Angre fullført">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>
+      Angre fullført
+    </button>` : '';
 
   const progressHtml = prog ? `
     <div class="subtask-progress">
@@ -376,6 +381,7 @@ function taskCardHtml(task, compact = false) {
         <div class="task-card-meta">
           ${assigneeHtml}
           ${dueDateHtml}
+          ${undoDoneBtn}
         </div>
         ${progressHtml}
       </div>`;
@@ -399,6 +405,7 @@ function taskCardHtml(task, compact = false) {
         ${assigneeHtml}
         ${dueDateHtml}
         ${prog ? `<span style="font-size:.75rem;color:var(--text-2)">${prog.done}/${prog.total} deloppgaver</span>` : ''}
+        ${undoDoneBtn}
       </div>
       ${progressHtml}
     </div>`;
@@ -592,10 +599,12 @@ function fillTaskForm(task) {
 
 function updateModalButtons(task) {
   const deleteBtn = document.getElementById('btn-delete-task');
+  const undoBtn   = document.getElementById('btn-undo-complete');
   const saveBtn   = document.getElementById('btn-save-task');
   const cancelBtn = document.getElementById('btn-cancel-task');
 
   deleteBtn.classList.toggle('hidden', !task || !canEdit());
+  undoBtn.classList.toggle('hidden', !task || task.status !== 'fullfort' || !(canEdit() || task.assignedTo === state.user.uid));
   saveBtn.textContent  = task ? 'Lagre endringer' : 'Opprett oppgave';
 
   // Membres can only change status on their own tasks
@@ -818,7 +827,7 @@ async function quickStatusChange(taskId, newStatus, event) {
         });
       }
     } else {
-      showToast('Status oppdatert');
+      showToast(task.status === 'fullfort' ? 'Fullføring angret' : 'Status oppdatert');
     }
   } catch(e) {
     showToast('Feil ved oppdatering.', 'error');
@@ -838,10 +847,15 @@ async function quickSetStatus(newStatus) {
   try {
     await updateTask(state.activeTaskId, { status: newStatus });
     if (newStatus === 'fullfort') showToast('✓ Oppgave fullført!');
-    else showToast('Status oppdatert');
+    else showToast(task.status === 'fullfort' ? 'Fullføring angret' : 'Status oppdatert');
   } catch(e) {
     showToast('Feil ved statusoppdatering.', 'error');
   }
+}
+
+async function handleUndoComplete() {
+  if (!state.activeTaskId) return;
+  await quickSetStatus('i_gang');
 }
 
 // Bygg/oppdater status-stepperen øverst i modal-detaljfanen
@@ -1139,6 +1153,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Task form save / delete
   document.getElementById('btn-save-task').addEventListener('click', handleSaveTask);
   document.getElementById('btn-delete-task').addEventListener('click', handleDeleteTask);
+  document.getElementById('btn-undo-complete').addEventListener('click', handleUndoComplete);
 
   // Subtask add
   document.getElementById('btn-add-subtask').addEventListener('click', handleAddSubtask);
