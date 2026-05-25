@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.1.3';
+const APP_VERSION = '1.1.4';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -1269,7 +1269,11 @@ async function handleAddCategory(e) {
     colorEl.value = '#FF5A5F';
     showToast('Kategori lagt til');
   } catch(e) {
-    showToast('Feil ved lagring av kategori.', 'error');
+    console.error('Category create error:', e);
+    const message = e && e.code === 'permission-denied'
+      ? 'Kunne ikke lagre kategori. Firestore-reglene må oppdateres først.'
+      : 'Feil ved lagring av kategori.';
+    showToast(message, 'error');
   } finally {
     btn.disabled = false;
   }
