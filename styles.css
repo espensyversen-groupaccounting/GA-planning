@@ -652,11 +652,15 @@ body {
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   backdrop-filter: blur(24px) saturate(180%);
   border-top: 1px solid rgba(0, 0, 0, .08);
-  display: flex; align-items: flex-start;
+  display: none; align-items: flex-start;
   padding-top: 6px;
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
   z-index: 100;
+}
+.bottom-nav { display: none; }
+@media (max-width: 767px) {
+  .bottom-nav { display: flex; }
 }
 .bottom-btn {
   flex: 1;

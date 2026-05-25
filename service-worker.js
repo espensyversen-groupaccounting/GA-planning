@@ -1,7 +1,7 @@
 // ============================================================
 // VERSJON – Bump denne ved hver deploy for å tvinge oppdatering
 // ============================================================
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '1.1.2';
 const CACHE_NAME  = `strawberry-plan-v${APP_VERSION}`;
 
 const APP_FILES = [
@@ -56,6 +56,21 @@ self.addEventListener('fetch', event => {
       event.request.url.includes('firebase') ||
       event.request.url.includes('googleapis.com') ||
       event.request.url.includes('gstatic.com')) return;
+
+  // Navigasjon til app-root må også være network-first. På custom domain
+  // slutter URL-en ofte ikke med /index.html, så den må håndteres eksplisitt.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put('./index.html', clone));
+          return response;
+        })
+        .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
 
   // App-filer: network-first
   const isAppFile = APP_FILES.some(f =>

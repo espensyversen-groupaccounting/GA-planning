@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '1.1.2';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -1363,8 +1363,11 @@ async function handleUpdateApp() {
         const keys = await caches.keys();
         await Promise.all(keys.map(k => caches.delete(k)));
       }
-      if (swRegistration) await swRegistration.update().catch(() => {});
-      window.location.reload(true);
+      const regs = 'serviceWorker' in navigator
+        ? await navigator.serviceWorker.getRegistrations()
+        : [];
+      await Promise.all(regs.map(reg => reg.update().catch(() => {})));
+      window.location.href = `${window.location.pathname}?v=${Date.now()}${window.location.hash || ''}`;
     }
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Oppdater app'; }
