@@ -2,6 +2,19 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
+const CLIENT_APP_VERSION = '1.0.7';
+const CLIENT_BUILD = 1007;
+const WRITE_SCHEMA_VERSION = 1;
+
+function writeMeta() {
+  return {
+    clientAppVersion: CLIENT_APP_VERSION,
+    clientBuild: CLIENT_BUILD,
+    clientWriteId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    writeSchemaVersion: WRITE_SCHEMA_VERSION
+  };
+}
+
 function sanitizeEmail(email) {
   return email.replace(/\./g, '_dot_').replace('@', '_at_');
 }
@@ -18,7 +31,8 @@ async function initializeAllowedUsers(initialUsers) {
       email: u.email,
       role: u.role,
       invitedBy: 'system',
-      invitedAt: firebase.firestore.FieldValue.serverTimestamp()
+      invitedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      ...writeMeta()
     });
   });
   await batch.commit();
@@ -41,7 +55,8 @@ async function addAllowedUser(email, role) {
     email,
     role,
     invitedBy: auth.currentUser.uid,
-    invitedAt: firebase.firestore.FieldValue.serverTimestamp()
+    invitedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    ...writeMeta()
   });
 }
 
@@ -50,7 +65,7 @@ async function removeAllowedUser(email) {
 }
 
 async function updateAllowedUserRole(email, role) {
-  await db.collection('allowedUsers').doc(sanitizeEmail(email)).update({ role });
+  await db.collection('allowedUsers').doc(sanitizeEmail(email)).update({ role, ...writeMeta() });
 }
 
 // ---- Users ----
@@ -59,9 +74,18 @@ async function createOrUpdateUser(uid, data) {
   const ref = db.collection('users').doc(uid);
   const doc = await ref.get();
   if (!doc.exists) {
-    await ref.set({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp(), lastLogin: firebase.firestore.FieldValue.serverTimestamp() });
+    await ref.set({
+      ...data,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+      ...writeMeta()
+    });
   } else {
-    await ref.update({ ...data, lastLogin: firebase.firestore.FieldValue.serverTimestamp() });
+    await ref.update({
+      ...data,
+      lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+      ...writeMeta()
+    });
   }
 }
 
@@ -82,7 +106,7 @@ function subscribeToUsers(callback) {
 }
 
 async function updateUserRole(uid, role) {
-  await db.collection('users').doc(uid).update({ role });
+  await db.collection('users').doc(uid).update({ role, ...writeMeta() });
 }
 
 async function removeUser(uid) {
@@ -95,13 +119,14 @@ function subscribeToTasks(callback) {
   return db.collection('tasks')
     .orderBy('createdAt', 'desc')
     .onSnapshot(snap => {
-      callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      callback(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => !t.deletedAt));
     });
 }
 
 async function getTask(taskId) {
   const doc = await db.collection('tasks').doc(taskId).get();
-  return doc.exists ? { id: doc.id, ...doc.data() } : null;
+  if (!doc.exists || doc.data().deletedAt) return null;
+  return { id: doc.id, ...doc.data() };
 }
 
 async function createTask(data) {
@@ -110,7 +135,10 @@ async function createTask(data) {
     subtasks: data.subtasks || [],
     createdBy: auth.currentUser.uid,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    detailsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastEditedBy: auth.currentUser.uid,
+    ...writeMeta()
   });
   return ref.id;
 }
@@ -118,16 +146,67 @@ async function createTask(data) {
 async function updateTask(taskId, data) {
   await db.collection('tasks').doc(taskId).update({
     ...data,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastEditedBy: auth.currentUser.uid,
+    ...writeMeta()
   });
 }
 
+async function updateTaskIfUnchanged(taskId, data, expectedUpdatedAt) {
+  const ref = db.collection('tasks').doc(taskId);
+  await db.runTransaction(async tx => {
+    const doc = await tx.get(ref);
+    if (!doc.exists) throw new Error('TASK_NOT_FOUND');
+
+    const current = doc.data();
+    const currentUpdatedAt = current.detailsUpdatedAt || current.updatedAt;
+    const expectedMs = expectedUpdatedAt?.toMillis ? expectedUpdatedAt.toMillis() : null;
+    const currentMs = currentUpdatedAt?.toMillis ? currentUpdatedAt.toMillis() : null;
+
+    if (expectedMs && currentMs && expectedMs !== currentMs) {
+      throw new Error('TASK_CHANGED');
+    }
+
+    tx.update(ref, {
+      ...data,
+      detailsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastEditedBy: auth.currentUser.uid,
+      ...writeMeta()
+    });
+  });
+}
+
+async function updateSubtasksSafely(taskId, transform) {
+  const ref = db.collection('tasks').doc(taskId);
+  let nextSubtasks = [];
+
+  await db.runTransaction(async tx => {
+    const doc = await tx.get(ref);
+    if (!doc.exists) throw new Error('TASK_NOT_FOUND');
+
+    const currentSubtasks = doc.data().subtasks || [];
+    nextSubtasks = transform(currentSubtasks);
+
+    tx.update(ref, {
+      subtasks: nextSubtasks,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastEditedBy: auth.currentUser.uid,
+      ...writeMeta()
+    });
+  });
+
+  return nextSubtasks;
+}
+
 async function deleteTask(taskId) {
-  const batch = db.batch();
-  batch.delete(db.collection('tasks').doc(taskId));
-  const commentsSnap = await db.collection('comments').where('taskId', '==', taskId).get();
-  commentsSnap.docs.forEach(d => batch.delete(d.ref));
-  await batch.commit();
+  await db.collection('tasks').doc(taskId).update({
+    deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    deletedBy: auth.currentUser.uid,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastEditedBy: auth.currentUser.uid,
+    ...writeMeta()
+  });
 }
 
 // ---- Comments ----
@@ -149,7 +228,8 @@ async function addComment(taskId, text) {
     userDisplayName: u.displayName,
     userPhotoURL: u.photoURL,
     text,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    ...writeMeta()
   });
 }
 
@@ -169,17 +249,18 @@ async function createNotification(userId, data) {
   await db.collection('users').doc(userId).collection('notifications').add({
     ...data,
     read: false,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    ...writeMeta()
   });
 }
 
 async function markNotificationRead(userId, notifId) {
-  await db.collection('users').doc(userId).collection('notifications').doc(notifId).update({ read: true });
+  await db.collection('users').doc(userId).collection('notifications').doc(notifId).update({ read: true, ...writeMeta() });
 }
 
 async function markAllNotificationsRead(userId) {
   const snap = await db.collection('users').doc(userId).collection('notifications').where('read', '==', false).get();
   const batch = db.batch();
-  snap.docs.forEach(d => batch.update(d.ref, { read: true }));
+  snap.docs.forEach(d => batch.update(d.ref, { read: true, ...writeMeta() }));
   await batch.commit();
 }

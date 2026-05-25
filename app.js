@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.0.6';
+const APP_VERSION = '1.0.7';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -18,6 +18,7 @@ const state = {
   currentView: 'dashboard',
   unsubscribers: [],
   activeTaskId: null,
+  activeTaskDetailsUpdatedAt: null,
   commentUnsub: null,
   editMode: false,
 };
@@ -528,7 +529,13 @@ async function openTaskModal(taskId = null) {
 
   if (taskId) {
     const task = state.tasks.find(t => t.id === taskId) || await getTask(taskId);
+    if (!task) {
+      showToast('Oppgaven finnes ikke lenger.', 'error');
+      closeTaskModal();
+      return;
+    }
     document.getElementById('modal-title').textContent = task.title;
+    state.activeTaskDetailsUpdatedAt = task.detailsUpdatedAt || task.updatedAt || null;
     fillTaskForm(task);
     updateStatusStepper(task.status);
     updateModalButtons(task);
@@ -538,6 +545,7 @@ async function openTaskModal(taskId = null) {
     document.getElementById('modal-title').textContent = 'Ny oppgave';
     document.getElementById('task-form').reset();
     document.getElementById('task-id').value = '';
+    state.activeTaskDetailsUpdatedAt = null;
     document.getElementById('subtasks-list').innerHTML = '';
     document.getElementById('comments-list').innerHTML = '';
     updateStatusStepper('ikke_startet');
@@ -556,6 +564,7 @@ function closeTaskModal() {
   document.body.style.overflow = '';
   if (state.commentUnsub) { state.commentUnsub(); state.commentUnsub = null; }
   state.activeTaskId = null;
+  state.activeTaskDetailsUpdatedAt = null;
 }
 
 function fillTaskForm(task) {
@@ -650,7 +659,7 @@ async function handleSaveTask() {
       if (!canEdit()) {
         await updateTask(taskId, { status });
       } else {
-        await updateTask(taskId, data);
+        await updateTaskIfUnchanged(taskId, data, state.activeTaskDetailsUpdatedAt);
         // Notify if assignee changed
         if (assigneeId && oldTask && oldTask.assignedTo !== assigneeId) {
           await createNotification(assigneeId, {
@@ -686,7 +695,11 @@ async function handleSaveTask() {
     closeTaskModal();
   } catch(e) {
     console.error(e);
-    showToast('Feil ved lagring. Prøv igjen.', 'error');
+    if (e.message === 'TASK_CHANGED') {
+      showToast('Oppgaven ble endret av noen andre. Åpne den på nytt og lagre igjen.', 'error');
+    } else {
+      showToast('Feil ved lagring. Prøv igjen.', 'error');
+    }
   } finally {
     saveBtn.disabled = false;
   }
@@ -751,11 +764,13 @@ function renderSubtasks(subtasks) {
 
 async function toggleSubtask(index, completed) {
   const taskId = state.activeTaskId;
-  const task = state.tasks.find(t => t.id === taskId);
-  if (!task) return;
-  const subtasks = [...task.subtasks];
-  subtasks[index] = { ...subtasks[index], completed };
-  await updateTask(taskId, { subtasks });
+  if (!taskId) return;
+  const subtasks = await updateSubtasksSafely(taskId, current => {
+    const next = [...current];
+    if (!next[index]) return current;
+    next[index] = { ...next[index], completed };
+    return next;
+  });
   renderSubtasks(subtasks);
   // Update progress in task card if dashboard/tasks view visible
   if (state.currentView === 'dashboard') renderDashboard();
@@ -767,19 +782,18 @@ async function handleAddSubtask() {
   if (!title) return;
   const taskId = state.activeTaskId;
   if (!taskId) return;
-  const task = state.tasks.find(t => t.id === taskId);
-  const subtasks = [...(task ? task.subtasks : []), { id: Date.now().toString(), title, completed: false }];
-  await updateTask(taskId, { subtasks });
+  const subtasks = await updateSubtasksSafely(taskId, current => [
+    ...current,
+    { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, title, completed: false }
+  ]);
   input.value = '';
   renderSubtasks(subtasks);
 }
 
 async function removeSubtask(index) {
   const taskId = state.activeTaskId;
-  const task = state.tasks.find(t => t.id === taskId);
-  if (!task) return;
-  const subtasks = task.subtasks.filter((_, i) => i !== index);
-  await updateTask(taskId, { subtasks });
+  if (!taskId) return;
+  const subtasks = await updateSubtasksSafely(taskId, current => current.filter((_, i) => i !== index));
   renderSubtasks(subtasks);
 }
 

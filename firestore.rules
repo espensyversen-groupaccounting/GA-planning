@@ -1,0 +1,120 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function signedInUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getRole() {
+      return signedInUser().data.role;
+    }
+
+    function isAdmin() {
+      return getRole() == 'admin';
+    }
+
+    function isAdminOrTeamleder() {
+      return getRole() in ['admin', 'teamleder'];
+    }
+
+    function hasSupportedClientMeta() {
+      return request.resource.data.clientBuild is int
+        && request.resource.data.clientBuild >= 1007
+        && request.resource.data.writeSchemaVersion == 1
+        && request.resource.data.clientAppVersion is string
+        && request.resource.data.clientWriteId is string;
+    }
+
+    function writeMetaWasTouched() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasAll(['clientAppVersion', 'clientBuild', 'clientWriteId', 'writeSchemaVersion']);
+    }
+
+    function isSupportedCreate() {
+      return hasSupportedClientMeta();
+    }
+
+    function isSupportedUpdate() {
+      return hasSupportedClientMeta()
+        && writeMetaWasTouched()
+        && (
+          !resource.data.keys().hasAll(['clientWriteId'])
+          || request.resource.data.clientWriteId != resource.data.clientWriteId
+        );
+    }
+
+    function currentUserHasSupportedClient() {
+      return signedInUser().data.clientBuild is int
+        && signedInUser().data.clientBuild >= 1007;
+    }
+
+    match /allowedUsers/{doc} {
+      allow read: if isAuth();
+      allow create: if isAuth() && isAdmin() && isSupportedCreate();
+      allow update: if isAuth() && isAdmin() && isSupportedUpdate();
+      allow delete: if isAuth() && isAdmin() && currentUserHasSupportedClient();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuth();
+      allow create: if isAuth()
+        && request.auth.uid == userId
+        && isSupportedCreate();
+      allow update: if isAuth()
+        && (request.auth.uid == userId || isAdmin())
+        && isSupportedUpdate();
+      allow delete: if isAuth() && isAdmin() && currentUserHasSupportedClient();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isAuth();
+      allow create: if isAuth()
+        && isAdminOrTeamleder()
+        && isSupportedCreate()
+        && !('deletedAt' in request.resource.data);
+      allow update: if isAuth()
+        && isSupportedUpdate()
+        && (
+          isAdminOrTeamleder()
+          || (
+            getRole() == 'medlem'
+            && resource.data.assignedTo == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status',
+              'updatedAt',
+              'lastEditedBy',
+              'clientAppVersion',
+              'clientBuild',
+              'clientWriteId',
+              'writeSchemaVersion'
+            ])
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /comments/{commentId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && isSupportedCreate();
+      allow update: if isAuth()
+        && (resource.data.userId == request.auth.uid || isAdmin())
+        && isSupportedUpdate();
+      allow delete: if false;
+    }
+
+    match /users/{userId}/notifications/{notifId} {
+      allow read: if isAuth() && request.auth.uid == userId;
+      allow create: if isAuth() && isSupportedCreate();
+      allow update: if isAuth()
+        && request.auth.uid == userId
+        && isSupportedUpdate();
+      allow delete: if isAuth()
+        && request.auth.uid == userId
+        && currentUserHasSupportedClient();
+    }
+  }
+}

@@ -159,5 +159,10 @@ Admin kan legge til flere brukere via Admin-panelet i appen.
 Fase 1: Internt varslingssenter (bjelle-ikon) med sanntidsoppdateringer via Firestore.
 Fase 2 (fremtidig): Ekte Web Push (VAPID + Firebase Cloud Functions, krever Blaze-abonnement).
 
+## Synksikkerhet
+Appen skriver ikke hele datasett tilbake til Firestore. Oppgaver opprettes som egne dokumenter, oppdateres feltvis, og sletting av oppgaver er soft-delete (`deletedAt`) slik at gamle klienter ikke kan fjerne oppgavedokumenter permanent.
+
+Alle skriver legger på `clientAppVersion`, `clientBuild`, `clientWriteId` og `writeSchemaVersion`. Deploy `firestore.rules` sammen med appen for å avvise gamle klienter som ikke sender dette metadata-stempelet. Full redigering av en eksisterende oppgave bruker transaksjon med `updatedAt`-sjekk, slik at en bruker som har hatt en gammel modal åpen ikke overskriver endringer andre har gjort i mellomtiden.
+
 ## Firebase SDK-versjon
 Firebase 9 (compat mode) via CDN. Alle scripts lastes i `index.html`.
