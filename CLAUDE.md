@@ -110,7 +110,7 @@ Opprettes automatisk ved første innlogging.
 - `assignedTo`: uid — `assignedToName`: string
 - `startDate`, `dueDate`: Firestore Timestamp (nullable)
 - `dependencies`: string
-- `subtasks`: array av `{id, title, completed}`
+- `subtasks`: array av `{id, title, completed, dueDate}` der `dueDate` er `YYYY-MM-DD` eller `null`
 - `createdBy`: uid — `createdAt`, `updatedAt`: timestamp
 
 ### `comments/{commentId}`

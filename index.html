@@ -307,6 +307,7 @@
         <div id="tab-details" class="tab-pane active">
           <!-- Visuell status-stepper (erstatter dropdown) -->
           <div id="status-stepper" class="status-stepper"></div>
+          <div id="subtask-timeline" class="subtask-timeline hidden"></div>
           <!-- Status-select skjult i DOM – synkes av updateStatusStepper() -->
           <select id="task-status" class="hidden" aria-hidden="true">
             <option value="ikke_startet" selected>Ikke startet</option>
@@ -361,6 +362,7 @@
           <div id="subtasks-list" class="subtasks-list"></div>
           <div class="add-subtask-wrap" id="add-subtask-wrap">
             <input type="text" id="new-subtask-input" class="form-input" placeholder="Legg til deloppgave..." />
+            <input type="date" id="new-subtask-due-date" class="form-input subtask-new-date" aria-label="Frist for deloppgave" />
             <button id="btn-add-subtask" class="btn btn-secondary">Legg til</button>
           </div>
         </div>

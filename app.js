@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.0.8';
+const APP_VERSION = '1.0.9';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -93,6 +93,31 @@ function subtaskProgress(subtasks) {
   if (!subtasks || subtasks.length === 0) return null;
   const done = subtasks.filter(s => s.completed).length;
   return { done, total: subtasks.length, pct: Math.round((done / subtasks.length) * 100) };
+}
+
+function parseDateString(value) {
+  if (!value) return null;
+  const [year, month, day] = String(value).split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function formatDateString(value) {
+  const d = parseDateString(value);
+  if (!d) return '';
+  return d.toLocaleDateString('no-NO', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+
+function subtaskDueClass(subtask) {
+  if (!subtask || subtask.completed || !subtask.dueDate) return '';
+  const d = parseDateString(subtask.dueDate);
+  if (!d) return '';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((d.getTime() - today.getTime()) / 86400000);
+  if (diffDays < 0) return 'overdue';
+  if (diffDays <= 3) return 'soon';
+  return '';
 }
 
 // ============================================================
@@ -547,6 +572,7 @@ async function openTaskModal(taskId = null) {
     updateStatusStepper(task.status);
     updateModalButtons(task);
     renderSubtasks(task.subtasks || []);
+    renderSubtaskTimeline(task.subtasks || []);
     startCommentListener(taskId);
   } else {
     document.getElementById('modal-title').textContent = 'Ny oppgave';
@@ -554,6 +580,7 @@ async function openTaskModal(taskId = null) {
     document.getElementById('task-id').value = '';
     state.activeTaskDetailsUpdatedAt = null;
     document.getElementById('subtasks-list').innerHTML = '';
+    renderSubtaskTimeline([]);
     document.getElementById('comments-list').innerHTML = '';
     updateStatusStepper('ikke_startet');
     updateModalButtons(null);
@@ -747,28 +774,85 @@ function switchTab(name) {
 // SUBTASKS
 // ============================================================
 
+function renderSubtaskTimeline(subtasks) {
+  const el = document.getElementById('subtask-timeline');
+  if (!el) return;
+
+  if (!subtasks || subtasks.length === 0) {
+    el.classList.add('hidden');
+    el.innerHTML = '';
+    return;
+  }
+
+  const progress = subtaskProgress(subtasks);
+  const withDates = subtasks
+    .filter(s => s.dueDate)
+    .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)));
+  const next = withDates.find(s => !s.completed);
+  const overdue = subtasks.filter(s => subtaskDueClass(s) === 'overdue').length;
+
+  const rows = subtasks.map((s, i) => {
+    const dueClass = subtaskDueClass(s);
+    const stateLabel = s.completed ? 'Fullført' : dueClass === 'overdue' ? 'Forfalt' : dueClass === 'soon' ? 'Snart' : s.dueDate ? formatDateString(s.dueDate) : 'Ingen frist';
+    return `
+      <div class="subtask-timeline-row ${s.completed ? 'done' : ''} ${dueClass}">
+        <div class="subtask-timeline-main">
+          <span class="subtask-timeline-index">${i + 1}</span>
+          <span class="subtask-timeline-title">${esc(s.title)}</span>
+        </div>
+        <span class="subtask-timeline-date">${stateLabel}</span>
+      </div>`;
+  }).join('');
+
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <div class="subtask-progress-card">
+      <div class="subtask-progress-head">
+        <div>
+          <div class="subtask-progress-title">Deloppgaver</div>
+          <div class="subtask-progress-subtitle">
+            ${progress.done} av ${progress.total} fullført${next ? ` · neste frist ${formatDateString(next.dueDate)}` : ''}
+          </div>
+        </div>
+        ${overdue ? `<span class="subtask-alert">${overdue} forfalt</span>` : ''}
+      </div>
+      <div class="progress-bar-wrap subtask-main-progress">
+        <div class="progress-bar-fill" style="width:${progress.pct}%"></div>
+      </div>
+      <div class="subtask-timeline-rows">${rows}</div>
+    </div>`;
+}
+
 function renderSubtasks(subtasks) {
   const el = document.getElementById('subtasks-list');
   const countEl = document.getElementById('subtasks-tab-count');
   if (!subtasks.length) {
     el.innerHTML = '<p style="color:var(--text-3);font-size:.875rem;text-align:center;padding:20px 0">Ingen deloppgaver ennå</p>';
     countEl.textContent = '';
+    renderSubtaskTimeline([]);
     return;
   }
   const done = subtasks.filter(s => s.completed).length;
   countEl.textContent = `${done}/${subtasks.length}`;
 
   el.innerHTML = subtasks.map((s, i) => `
-    <div class="subtask-item">
+    <div class="subtask-item ${subtaskDueClass(s)}">
       <input type="checkbox" class="subtask-checkbox" ${s.completed ? 'checked' : ''}
         onchange="toggleSubtask(${i}, this.checked)" />
-      <span class="subtask-title ${s.completed ? 'done' : ''}">${esc(s.title)}</span>
+      <div class="subtask-content">
+        <span class="subtask-title ${s.completed ? 'done' : ''}">${esc(s.title)}</span>
+        <div class="subtask-meta">
+          ${s.dueDate ? `<span class="subtask-due ${subtaskDueClass(s)}">${formatDateString(s.dueDate)}${subtaskDueClass(s) === 'overdue' ? ' · Forfalt' : subtaskDueClass(s) === 'soon' ? ' · Snart' : ''}</span>` : '<span class="subtask-due muted">Ingen frist</span>'}
+        </div>
+      </div>
+      ${canEdit() ? `<input type="date" class="subtask-date-input" value="${esc(s.dueDate || '')}" onchange="updateSubtaskDueDate(${i}, this.value)" aria-label="Frist for ${esc(s.title)}" />` : ''}
       ${canEdit() ? `<button class="btn-remove-subtask" onclick="removeSubtask(${i})" title="Fjern">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>` : ''}
     </div>`).join('');
 
   document.getElementById('add-subtask-wrap').classList.toggle('hidden', !canEdit());
+  renderSubtaskTimeline(subtasks);
 }
 
 async function toggleSubtask(index, completed) {
@@ -783,19 +867,34 @@ async function toggleSubtask(index, completed) {
   renderSubtasks(subtasks);
   // Update progress in task card if dashboard/tasks view visible
   if (state.currentView === 'dashboard') renderDashboard();
+  if (state.currentView === 'tasks') renderTasksList();
 }
 
 async function handleAddSubtask() {
   const input = document.getElementById('new-subtask-input');
+  const dueInput = document.getElementById('new-subtask-due-date');
   const title = input.value.trim();
   if (!title) return;
   const taskId = state.activeTaskId;
   if (!taskId) return;
   const subtasks = await updateSubtasksSafely(taskId, current => [
     ...current,
-    { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, title, completed: false }
+    { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, title, completed: false, dueDate: dueInput.value || null }
   ]);
   input.value = '';
+  dueInput.value = '';
+  renderSubtasks(subtasks);
+}
+
+async function updateSubtaskDueDate(index, dueDate) {
+  const taskId = state.activeTaskId;
+  if (!taskId || !canEdit()) return;
+  const subtasks = await updateSubtasksSafely(taskId, current => {
+    const next = [...current];
+    if (!next[index]) return current;
+    next[index] = { ...next[index], dueDate: dueDate || null };
+    return next;
+  });
   renderSubtasks(subtasks);
 }
 
