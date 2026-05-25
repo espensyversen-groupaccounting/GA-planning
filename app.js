@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -233,6 +233,39 @@ async function signOutUser() {
   await auth.signOut();
 }
 
+async function getAllowedUserFast(email) {
+  let allowed = await checkAllowedUser(email);
+  if (allowed) return allowed;
+
+  // Første gangs oppsett: seed kun hvis allowlisten faktisk ser tom ut.
+  await initializeAllowedUsers(INITIAL_USERS);
+  return checkAllowedUser(email);
+}
+
+async function finishAppStartup(user, allowed) {
+  try {
+    await createOrUpdateUser(user.uid, {
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+      role: allowed.role,
+    });
+
+    const freshProfile = await getUser(user.uid);
+    if (freshProfile && state.user && state.user.uid === user.uid) {
+      state.profile = freshProfile;
+      setupUI();
+    }
+
+    if (state.user && state.user.uid === user.uid && state.unsubscribers.length === 0) {
+      subscribeToRealtime();
+    }
+  } catch (e) {
+    console.error('Startup sync error:', e);
+    showToast('Data kunne ikke lastes akkurat nå. Prøv å oppdatere appen.', 'error');
+  }
+}
+
 auth.onAuthStateChanged(async (user) => {
   if (!user) {
     showLoading();
@@ -244,9 +277,7 @@ auth.onAuthStateChanged(async (user) => {
 
   showLoading();
   try {
-    await initializeAllowedUsers(INITIAL_USERS);
-
-    const allowed = await checkAllowedUser(user.email);
+    const allowed = await getAllowedUserFast(user.email);
     if (!allowed) {
       await auth.signOut();
       document.getElementById('login-screen').classList.remove('hidden');
@@ -256,30 +287,31 @@ auth.onAuthStateChanged(async (user) => {
       return;
     }
 
-    await createOrUpdateUser(user.uid, {
+    state.user = user;
+    state.profile = {
+      id: user.uid,
       email: user.email,
       displayName: user.displayName,
       photoURL: user.photoURL,
       role: allowed.role,
-    });
-
-    state.user = user;
-    state.profile = await getUser(user.uid);
+    };
 
     setupUI();
-    subscribeToRealtime();
 
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('app-shell').classList.remove('hidden');
     showView('dashboard');
+    hideLoading();
+
+    finishAppStartup(user, allowed);
   } catch (e) {
     console.error('Auth error:', e);
     // Vis login-siden igjen i stedet for blank side
     document.getElementById('login-screen').classList.remove('hidden');
     document.getElementById('login-error').textContent = 'Det oppstod en feil. Prøv å laste siden på nytt.';
     document.getElementById('login-error').classList.remove('hidden');
-  } finally {
     hideLoading();
+  } finally {
   }
 });
 
@@ -317,29 +349,34 @@ function setupUI() {
 }
 
 function subscribeToRealtime() {
+  const onRealtimeError = (e) => {
+    console.error('Realtime sync error:', e);
+    showToast('Kunne ikke laste sanntidsdata. Prøv å oppdatere appen.', 'error');
+  };
+
   state.unsubscribers.push(
     subscribeToTasks(tasks => {
       state.tasks = tasks;
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'tasks') renderTasksList();
-    }),
+    }, onRealtimeError),
     subscribeToUsers(users => {
       state.users = users;
       populateAssigneeSelects();
       if (state.currentView === 'admin') renderAdmin();
-    }),
+    }, onRealtimeError),
     subscribeToCategories(categories => {
       state.categories = categories;
       populateCategorySelects();
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'tasks') renderTasksList();
       if (state.currentView === 'admin') renderAdmin();
-    }),
+    }, onRealtimeError),
     subscribeToNotifications(state.user.uid, notifs => {
       state.notifications = notifs;
       updateNotifBadge();
       if (state.currentView === 'notifications') renderNotifications();
-    })
+    }, onRealtimeError)
   );
 }
 

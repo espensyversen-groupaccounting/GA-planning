@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.1.0';
-const CLIENT_BUILD = 1100;
+const CLIENT_APP_VERSION = '1.1.1';
+const CLIENT_BUILD = 1101;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -99,10 +99,10 @@ async function getAllUsers() {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-function subscribeToUsers(callback) {
+function subscribeToUsers(callback, onError) {
   return db.collection('users').onSnapshot(snap => {
     callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-  });
+  }, onError);
 }
 
 async function updateUserRole(uid, role) {
@@ -115,12 +115,12 @@ async function removeUser(uid) {
 
 // ---- Categories ----
 
-function subscribeToCategories(callback) {
+function subscribeToCategories(callback, onError) {
   return db.collection('categories')
     .orderBy('sortOrder', 'asc')
     .onSnapshot(snap => {
       callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    }, onError);
 }
 
 async function createCategory(data) {
@@ -147,12 +147,12 @@ async function updateCategory(categoryId, data) {
 
 // ---- Tasks ----
 
-function subscribeToTasks(callback) {
+function subscribeToTasks(callback, onError) {
   return db.collection('tasks')
     .orderBy('createdAt', 'desc')
     .onSnapshot(snap => {
       callback(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => !t.deletedAt));
-    });
+    }, onError);
 }
 
 async function getTask(taskId) {
@@ -267,14 +267,14 @@ async function addComment(taskId, text) {
 
 // ---- Notifications ----
 
-function subscribeToNotifications(userId, callback) {
+function subscribeToNotifications(userId, callback, onError) {
   return db.collection('users').doc(userId)
     .collection('notifications')
     .orderBy('createdAt', 'desc')
     .limit(50)
     .onSnapshot(snap => {
       callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    }, onError);
 }
 
 async function createNotification(userId, data) {
