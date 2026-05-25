@@ -303,6 +303,7 @@ body {
   margin-bottom: 28px;
 }
 @media (min-width: 640px) { .stats-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 1100px) { .stats-grid { grid-template-columns: repeat(5, 1fr); } }
 
 .stat-card {
   background: var(--white);
@@ -323,6 +324,7 @@ body {
 .stat-card.stat-active .stat-number { color: var(--coral); }
 .stat-card.stat-done   .stat-number { color: var(--success); }
 .stat-card.stat-overdue .stat-number { color: var(--danger); }
+.stat-card.stat-today .stat-number { color: var(--red); }
 .stat-card.stat-soon .stat-number { color: var(--warning); }
 .stat-card.stat-unassigned .stat-number { color: var(--black); }
 
@@ -348,6 +350,39 @@ body {
 
 /* ---- Task cards ---- */
 .task-list-compact { display: flex; flex-direction: column; gap: 8px; }
+
+.priority-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.priority-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.priority-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  color: var(--text);
+  font-size: .82rem;
+  font-weight: 800;
+}
+.priority-group-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 99px;
+  background: var(--white);
+  color: var(--text-2);
+  font-size: .72rem;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
 
 .task-card {
   background: var(--white);

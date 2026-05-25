@@ -132,8 +132,12 @@
           <div class="stats-grid" id="stats-grid"></div>
           <div class="dashboard-sections">
             <section class="dashboard-section dashboard-section-wide">
-              <h2 class="section-title">Må følges opp nå</h2>
-              <div id="attention-tasks-list" class="task-list-compact"></div>
+              <h2 class="section-title">Prioriter i dag</h2>
+              <div id="today-priority-list" class="priority-group-list"></div>
+            </section>
+            <section class="dashboard-section dashboard-section-wide">
+              <h2 class="section-title">Planlegg denne uken</h2>
+              <div id="week-priority-list" class="priority-group-list"></div>
             </section>
             <section class="dashboard-section">
               <h2 class="section-title">Uten ansvarlig</h2>
@@ -159,7 +163,8 @@
             <button class="quick-filter active" type="button" data-quick-filter="">Alle</button>
             <button class="quick-filter" type="button" data-quick-filter="attention">Må følges opp</button>
             <button class="quick-filter" type="button" data-quick-filter="unassigned">Uten ansvarlig</button>
-            <button class="quick-filter" type="button" data-quick-filter="soon">Forfaller snart</button>
+            <button class="quick-filter" type="button" data-quick-filter="week">Denne uken</button>
+            <button class="quick-filter" type="button" data-quick-filter="soon">Neste 14 dager</button>
             <button class="quick-filter" type="button" data-quick-filter="mine">Mine</button>
             <button class="quick-filter" type="button" data-quick-filter="high">Høy prioritet</button>
           </div>

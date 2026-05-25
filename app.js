@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.1.9';
+const APP_VERSION = '1.2.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -104,6 +104,31 @@ function taskHasSoonSubtask(task, threshold = 7) {
   });
 }
 
+function taskHasSubtaskDueBetween(task, minDays, maxDays) {
+  return (task.subtasks || []).some(s => {
+    if (s.completed || !s.dueDate) return false;
+    const d = parseDateString(s.dueDate);
+    if (!d) return false;
+    d.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((d.getTime() - startOfToday().getTime()) / 86400000);
+    return diffDays >= minDays && diffDays <= maxDays;
+  });
+}
+
+function dueTodayOrOverdue(task) {
+  return taskDueDays(task) <= 0 || taskHasSubtaskDueBetween(task, -999, 0);
+}
+
+function dueThisWeek(task) {
+  return (taskDueDays(task) >= 1 && taskDueDays(task) <= 7) ||
+    taskHasSubtaskDueBetween(task, 1, 7);
+}
+
+function dueNext14Days(task) {
+  return (taskDueDays(task) >= 0 && taskDueDays(task) <= 14) ||
+    taskHasSubtaskDueBetween(task, 0, 14);
+}
+
 function taskNeedsAttention(task) {
   if (!task || task.status === 'fullfort') return false;
   const days = taskDueDays(task);
@@ -120,8 +145,8 @@ function taskSignals(task) {
   const signals = [];
   if (days < 0) signals.push({ key: 'overdue', label: 'Forfalt' });
   else if (days === 0) signals.push({ key: 'today', label: 'Frist i dag' });
-  else if (days <= 7) signals.push({ key: 'soon', label: 'Frist snart' });
-  else if (days <= 14) signals.push({ key: 'upcoming', label: 'Neste 14 dager' });
+  else if (days <= 7) signals.push({ key: 'soon', label: 'Denne uken' });
+  else if (days <= 14) signals.push({ key: 'upcoming', label: 'Neste 14 d' });
   if (!task.assignedTo) signals.push({ key: 'unassigned', label: 'Ikke tildelt' });
   if (taskHasSoonSubtask(task)) signals.push({ key: 'subtask', label: 'Deloppgavefrist' });
   return signals;
@@ -481,19 +506,27 @@ function renderDashboard() {
   const tasks = state.tasks;
   const open = tasks.filter(t => t.status !== 'fullfort');
   const overdue = open.filter(t => taskDueDays(t) < 0);
-  const soon = open.filter(t => taskDueDays(t) >= 0 && taskDueDays(t) <= 14);
+  const today = open.filter(dueTodayOrOverdue);
+  const week = open.filter(t => dueTodayOrOverdue(t) || dueThisWeek(t));
   const unassigned = open.filter(t => !t.assignedTo);
   const high = open.filter(t => t.priority === 'høy');
-  const attention = open.filter(taskNeedsAttention).sort(compareTasksByUrgency);
+  const todayPriority = today.sort(compareTasksByUrgency);
+  const weekPriority = week
+    .filter(t => !todayPriority.some(todayTask => todayTask.id === t.id))
+    .sort(compareTasksByUrgency);
 
   document.getElementById('stats-grid').innerHTML = `
     <button class="stat-card stat-overdue" type="button" onclick="openTasksWithQuickFilter('attention')">
       <div class="stat-number">${overdue.length}</div>
       <div class="stat-label">Forsinket</div>
     </button>
-    <button class="stat-card stat-soon" type="button" onclick="openTasksWithQuickFilter('soon')">
-      <div class="stat-number">${soon.length}</div>
-      <div class="stat-label">Forfaller snart</div>
+    <button class="stat-card stat-today" type="button" onclick="openTasksWithQuickFilter('today')">
+      <div class="stat-number">${today.length}</div>
+      <div class="stat-label">I dag</div>
+    </button>
+    <button class="stat-card stat-soon" type="button" onclick="openTasksWithQuickFilter('week')">
+      <div class="stat-number">${week.length}</div>
+      <div class="stat-label">Denne uken</div>
     </button>
     <button class="stat-card stat-unassigned" type="button" onclick="openTasksWithQuickFilter('unassigned')">
       <div class="stat-number">${unassigned.length}</div>
@@ -505,7 +538,8 @@ function renderDashboard() {
     </button>
   `;
 
-  renderCompactList('attention-tasks-list', attention.slice(0, 8), 'Ingen åpne risikopunkter akkurat nå');
+  renderPriorityGroups('today-priority-list', todayPriority, 'Ingen oppgaver eller deloppgaver har frist i dag');
+  renderPriorityGroups('week-priority-list', weekPriority, 'Ingen flere oppgaver har frist denne uken');
   renderCompactList('unassigned-tasks-list', unassigned.sort(compareTasksByUrgency).slice(0, 6), 'Alle åpne oppgaver har ansvarlig');
   renderTeamWorkload(open);
 }
@@ -550,6 +584,37 @@ function renderCompactList(containerId, tasks, emptyMsg) {
     return;
   }
   el.innerHTML = tasks.map(t => taskCardHtml(t, true)).join('');
+}
+
+function renderPriorityGroups(containerId, tasks, emptyMsg) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!tasks.length) {
+    el.innerHTML = `<div class="empty-state compact-empty"><p>${emptyMsg}</p></div>`;
+    return;
+  }
+
+  const groups = [
+    { key: 'høy', label: 'Høy prioritet' },
+    { key: 'medium', label: 'Medium prioritet' },
+    { key: 'lav', label: 'Lav prioritet' },
+  ];
+
+  el.innerHTML = groups.map(group => {
+    const groupTasks = tasks.filter(t => t.priority === group.key).sort(compareTasksByUrgency);
+    if (!groupTasks.length) return '';
+    return `
+      <div class="priority-group">
+        <div class="priority-group-title">
+          <span class="priority-dot ${group.key}"></span>
+          <span>${group.label}</span>
+          <span class="priority-group-count">${groupTasks.length}</span>
+        </div>
+        <div class="task-list-compact">
+          ${groupTasks.map(t => taskCardHtml(t, true)).join('')}
+        </div>
+      </div>`;
+  }).join('');
 }
 
 function openTasksWithQuickFilter(filter) {
@@ -699,9 +764,11 @@ function renderTasksList() {
     (t.description || '').toLowerCase().includes(search) ||
     (t.categoryName || '').toLowerCase().includes(search));
 
-  if (state.quickFilter === 'attention') tasks = tasks.filter(taskNeedsAttention);
+  if (state.quickFilter === 'attention') tasks = tasks.filter(t => t.status !== 'fullfort' && (dueTodayOrOverdue(t) || dueThisWeek(t) || !t.assignedTo || t.priority === 'høy'));
+  if (state.quickFilter === 'today') tasks = tasks.filter(t => t.status !== 'fullfort' && dueTodayOrOverdue(t));
+  if (state.quickFilter === 'week') tasks = tasks.filter(t => t.status !== 'fullfort' && (dueTodayOrOverdue(t) || dueThisWeek(t)));
   if (state.quickFilter === 'unassigned') tasks = tasks.filter(t => t.status !== 'fullfort' && !t.assignedTo);
-  if (state.quickFilter === 'soon') tasks = tasks.filter(t => t.status !== 'fullfort' && taskDueDays(t) >= 0 && taskDueDays(t) <= 14);
+  if (state.quickFilter === 'soon') tasks = tasks.filter(t => t.status !== 'fullfort' && dueNext14Days(t));
   if (state.quickFilter === 'mine') tasks = tasks.filter(t => t.status !== 'fullfort' && t.assignedTo === state.user.uid);
   if (state.quickFilter === 'high') tasks = tasks.filter(t => t.status !== 'fullfort' && t.priority === 'høy');
 
