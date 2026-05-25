@@ -131,15 +131,17 @@
           </div>
           <div class="stats-grid" id="stats-grid"></div>
           <div class="dashboard-sections">
-            <section class="dashboard-section">
-              <h2 class="section-title">Mine oppgaver</h2>
-              <div id="my-tasks-list" class="task-list-compact"></div>
+            <section class="dashboard-section dashboard-section-wide">
+              <h2 class="section-title">Må følges opp nå</h2>
+              <div id="attention-tasks-list" class="task-list-compact"></div>
             </section>
             <section class="dashboard-section">
-              <h2 class="section-title">
-                <span class="priority-dot høy"></span> Høy prioritet
-              </h2>
-              <div id="high-priority-list" class="task-list-compact"></div>
+              <h2 class="section-title">Uten ansvarlig</h2>
+              <div id="unassigned-tasks-list" class="task-list-compact"></div>
+            </section>
+            <section class="dashboard-section">
+              <h2 class="section-title">Teamoversikt</h2>
+              <div id="team-workload-list" class="team-workload-list"></div>
             </section>
           </div>
         </div>
@@ -152,6 +154,14 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Ny oppgave
             </button>
+          </div>
+          <div class="quick-filters" id="quick-filters" aria-label="Hurtigfiltre">
+            <button class="quick-filter active" type="button" data-quick-filter="">Alle</button>
+            <button class="quick-filter" type="button" data-quick-filter="attention">Må følges opp</button>
+            <button class="quick-filter" type="button" data-quick-filter="unassigned">Uten ansvarlig</button>
+            <button class="quick-filter" type="button" data-quick-filter="soon">Forfaller snart</button>
+            <button class="quick-filter" type="button" data-quick-filter="mine">Mine</button>
+            <button class="quick-filter" type="button" data-quick-filter="high">Høy prioritet</button>
           </div>
           <div class="tasks-toolbar">
             <div class="filter-group">

@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.1.7';
+const APP_VERSION = '1.1.8';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -22,6 +22,7 @@ const state = {
   activeTaskDetailsUpdatedAt: null,
   commentUnsub: null,
   editMode: false,
+  quickFilter: '',
 };
 
 // ============================================================
@@ -57,12 +58,101 @@ function timeAgo(ts) {
 
 function dueDateClass(ts) {
   if (!ts) return '';
-  const d = ts.toDate ? ts.toDate() : new Date(ts);
-  const diff = d.getTime() - Date.now();
-  const days = diff / 86400000;
+  const days = taskDueDays({ dueDate: ts });
   if (days < 0)  return 'overdue';
   if (days < 3)  return 'soon';
   return '';
+}
+
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function toDate(value) {
+  if (!value) return null;
+  const d = value.toDate ? value.toDate() : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function taskDueDays(task) {
+  const d = toDate(task && task.dueDate);
+  if (!d) return Infinity;
+  d.setHours(0, 0, 0, 0);
+  return Math.ceil((d.getTime() - startOfToday().getTime()) / 86400000);
+}
+
+function dueDateRelativeLabel(task) {
+  const days = taskDueDays(task);
+  if (!Number.isFinite(days)) return '';
+  if (days < 0) return `${Math.abs(days)} d over frist`;
+  if (days === 0) return 'I dag';
+  if (days === 1) return 'I morgen';
+  if (days <= 14) return `Om ${days} d`;
+  return '';
+}
+
+function taskHasSoonSubtask(task, threshold = 7) {
+  return (task.subtasks || []).some(s => {
+    if (s.completed || !s.dueDate) return false;
+    const d = parseDateString(s.dueDate);
+    if (!d) return false;
+    d.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((d.getTime() - startOfToday().getTime()) / 86400000);
+    return diffDays <= threshold;
+  });
+}
+
+function taskNeedsAttention(task) {
+  if (!task || task.status === 'fullfort') return false;
+  const days = taskDueDays(task);
+  return days < 0 ||
+    days <= 14 ||
+    !task.assignedTo ||
+    task.priority === 'høy' ||
+    taskHasSoonSubtask(task);
+}
+
+function taskSignals(task) {
+  if (!task || task.status === 'fullfort') return [];
+  const days = taskDueDays(task);
+  const signals = [];
+  if (days < 0) signals.push({ key: 'overdue', label: 'Forfalt' });
+  else if (days === 0) signals.push({ key: 'today', label: 'Frist i dag' });
+  else if (days <= 7) signals.push({ key: 'soon', label: 'Frist snart' });
+  else if (days <= 14) signals.push({ key: 'upcoming', label: 'Neste 14 dager' });
+  if (!task.assignedTo) signals.push({ key: 'unassigned', label: 'Ikke tildelt' });
+  if (taskHasSoonSubtask(task)) signals.push({ key: 'subtask', label: 'Deloppgavefrist' });
+  return signals;
+}
+
+function taskUrgencyScore(task) {
+  if (!task || task.status === 'fullfort') return -1000;
+  const days = taskDueDays(task);
+  const priority = { høy: 30, medium: 16, lav: 6 }[task.priority] || 10;
+  let due = 0;
+  if (days < 0) due = 90 + Math.min(Math.abs(days), 30);
+  else if (days === 0) due = 82;
+  else if (days <= 3) due = 70 - days * 3;
+  else if (days <= 7) due = 54 - days;
+  else if (days <= 14) due = 34 - days * .5;
+  else if (Number.isFinite(days)) due = Math.max(4, 20 - days * .15);
+  const unassigned = task.assignedTo ? 0 : 38;
+  const started = task.status === 'i_gang' ? 4 : 0;
+  const subtaskDue = taskHasSoonSubtask(task) ? 18 : 0;
+  return due + priority + unassigned + started + subtaskDue;
+}
+
+function compareTasksByUrgency(a, b) {
+  if (a.status === 'fullfort' && b.status !== 'fullfort') return 1;
+  if (b.status === 'fullfort' && a.status !== 'fullfort') return -1;
+  const score = taskUrgencyScore(b) - taskUrgencyScore(a);
+  if (score !== 0) return score;
+  const due = taskDueDays(a) - taskDueDays(b);
+  if (due !== 0) return due;
+  const pOrd = { høy: 0, medium: 1, lav: 2 };
+  return (pOrd[a.priority] ?? 1) - (pOrd[b.priority] ?? 1);
 }
 
 function priorityLabel(p) {
@@ -389,41 +479,111 @@ function subscribeToRealtime() {
 
 function renderDashboard() {
   const tasks = state.tasks;
-  const mine  = tasks.filter(t => t.assignedTo === state.user.uid && t.status !== 'fullfort');
-  const high  = tasks.filter(t => t.priority === 'høy' && t.status !== 'fullfort');
-  const done  = tasks.filter(t => t.status === 'fullfort');
-  const going = tasks.filter(t => t.status === 'i_gang');
+  const open = tasks.filter(t => t.status !== 'fullfort');
+  const overdue = open.filter(t => taskDueDays(t) < 0);
+  const soon = open.filter(t => taskDueDays(t) >= 0 && taskDueDays(t) <= 14);
+  const unassigned = open.filter(t => !t.assignedTo);
+  const high = open.filter(t => t.priority === 'høy');
+  const attention = open.filter(taskNeedsAttention).sort(compareTasksByUrgency);
 
   document.getElementById('stats-grid').innerHTML = `
-    <div class="stat-card stat-total">
-      <div class="stat-number">${tasks.length}</div>
-      <div class="stat-label">Totalt oppgaver</div>
-    </div>
-    <div class="stat-card stat-high">
+    <button class="stat-card stat-overdue" type="button" onclick="openTasksWithQuickFilter('attention')">
+      <div class="stat-number">${overdue.length}</div>
+      <div class="stat-label">Forsinket</div>
+    </button>
+    <button class="stat-card stat-soon" type="button" onclick="openTasksWithQuickFilter('soon')">
+      <div class="stat-number">${soon.length}</div>
+      <div class="stat-label">Forfaller snart</div>
+    </button>
+    <button class="stat-card stat-unassigned" type="button" onclick="openTasksWithQuickFilter('unassigned')">
+      <div class="stat-number">${unassigned.length}</div>
+      <div class="stat-label">Uten ansvarlig</div>
+    </button>
+    <button class="stat-card stat-high" type="button" onclick="openTasksWithQuickFilter('high')">
       <div class="stat-number">${high.length}</div>
       <div class="stat-label">Høy prioritet</div>
-    </div>
-    <div class="stat-card stat-active">
-      <div class="stat-number">${going.length}</div>
-      <div class="stat-label">I gang</div>
-    </div>
-    <div class="stat-card stat-done">
-      <div class="stat-number">${done.length}</div>
-      <div class="stat-label">Fullført</div>
-    </div>
+    </button>
   `;
 
-  renderCompactList('my-tasks-list', mine.slice(0,5), 'Ingen tildelte oppgaver til deg');
-  renderCompactList('high-priority-list', high.slice(0,5), 'Ingen oppgaver med høy prioritet');
+  renderCompactList('attention-tasks-list', attention.slice(0, 8), 'Ingen åpne risikopunkter akkurat nå');
+  renderCompactList('unassigned-tasks-list', unassigned.sort(compareTasksByUrgency).slice(0, 6), 'Alle åpne oppgaver har ansvarlig');
+  renderTeamWorkload(open);
+}
+
+function renderTeamWorkload(openTasks) {
+  const el = document.getElementById('team-workload-list');
+  if (!el) return;
+
+  const assignedUsers = state.users.map(u => {
+    const tasks = openTasks.filter(t => t.assignedTo === u.id);
+    return {
+      user: u,
+      total: tasks.length,
+      urgent: tasks.filter(taskNeedsAttention).length,
+      soon: tasks.filter(t => taskDueDays(t) >= 0 && taskDueDays(t) <= 14).length,
+    };
+  }).filter(row => row.total > 0 || row.urgent > 0)
+    .sort((a, b) => b.urgent - a.urgent || b.total - a.total);
+
+  if (!assignedUsers.length) {
+    el.innerHTML = `<div class="empty-state compact-empty"><p>Ingen åpne oppgaver er tildelt ennå</p></div>`;
+    return;
+  }
+
+  el.innerHTML = assignedUsers.map(row => `
+    <button class="workload-row" type="button" onclick="openTasksForAssignee('${row.user.id}')">
+      ${row.user.photoURL
+        ? `<img src="${esc(row.user.photoURL)}" class="workload-avatar" alt="" />`
+        : `<span class="workload-avatar">${initials(row.user.displayName || row.user.email)}</span>`}
+      <span class="workload-person">
+        <span class="workload-name">${esc(row.user.displayName || row.user.email)}</span>
+        <span class="workload-meta">${row.total} åpne${row.soon ? ` · ${row.soon} snart` : ''}</span>
+      </span>
+      <span class="workload-count ${row.urgent ? 'has-risk' : ''}">${row.urgent}</span>
+    </button>`).join('');
 }
 
 function renderCompactList(containerId, tasks, emptyMsg) {
   const el = document.getElementById(containerId);
   if (!tasks.length) {
-    el.innerHTML = `<div class="empty-state" style="padding:24px;border:1px dashed var(--border)"><p style="margin:0;font-size:.85rem">${emptyMsg}</p></div>`;
+    el.innerHTML = `<div class="empty-state compact-empty"><p>${emptyMsg}</p></div>`;
     return;
   }
   el.innerHTML = tasks.map(t => taskCardHtml(t, true)).join('');
+}
+
+function openTasksWithQuickFilter(filter) {
+  resetTaskFilters();
+  state.quickFilter = filter || '';
+  showView('tasks');
+}
+
+function openTasksForAssignee(userId) {
+  resetTaskFilters();
+  state.quickFilter = '';
+  const assigneeEl = document.getElementById('filter-assignee');
+  if (assigneeEl) assigneeEl.value = userId;
+  showView('tasks');
+}
+
+function resetTaskFilters() {
+  ['filter-status', 'filter-priority', 'filter-assignee', 'filter-category'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const searchEl = document.getElementById('task-search');
+  if (searchEl) searchEl.value = '';
+}
+
+function setQuickFilter(filter) {
+  state.quickFilter = filter || '';
+  renderTasksList();
+}
+
+function updateQuickFilterButtons() {
+  document.querySelectorAll('.quick-filter').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.quickFilter === state.quickFilter);
+  });
 }
 
 // ============================================================
@@ -460,14 +620,16 @@ function taskCardHtml(task, compact = false) {
         ? `<img src="${esc(assignee.photoURL)}" class="assignee-avatar" alt="" />`
         : `<span class="assignee-avatar" style="background:var(--coral);font-size:.6rem;display:flex;align-items:center;justify-content:center;">${initials(assignee.displayName)}</span>`}
       <span>${esc(assignee.displayName || assignee.email)}</span>
-    </span>` : '';
+    </span>` : `<span class="unassigned-chip">Ikke tildelt</span>`;
 
+  const relativeDue = dueDateRelativeLabel(task);
   const dueDateHtml = task.dueDate ? `
     <span class="due-date ${dateClass}">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      ${formatDate(task.dueDate)}${dateClass === 'overdue' ? ' · Forfalt' : dateClass === 'soon' ? ' · Snart' : ''}
+      ${formatDate(task.dueDate)}${relativeDue ? ` · ${relativeDue}` : ''}
     </span>` : '';
   const categoryHtml = categoryChipHtml(task);
+  const signalHtml = taskSignals(task).map(s => `<span class="risk-badge ${s.key}">${s.label}</span>`).join('');
 
   if (compact) {
     return `
@@ -478,6 +640,7 @@ function taskCardHtml(task, compact = false) {
           <span class="status-badge ${task.status}">${statusLabel(task.status)}</span>
         </div>
         <div class="task-card-meta">
+          ${signalHtml}
           ${categoryHtml}
           ${assigneeHtml}
           ${dueDateHtml}
@@ -497,6 +660,7 @@ function taskCardHtml(task, compact = false) {
         </div>
       </div>
       <div class="task-row-bottom">
+        ${signalHtml}
         ${categoryHtml}
         <span class="status-badge ${task.status}">${statusLabel(task.status)}</span>
         <span class="priority-badge ${task.priority}">
@@ -522,24 +686,26 @@ function renderTasksList() {
   const assignee = document.getElementById('filter-assignee').value;
   const category = document.getElementById('filter-category').value;
   const search   = (document.getElementById('task-search').value || '').toLowerCase();
+  updateQuickFilterButtons();
 
   let tasks = [...state.tasks];
   if (status)   tasks = tasks.filter(t => t.status === status);
   if (priority) tasks = tasks.filter(t => t.priority === priority);
-  if (assignee) tasks = tasks.filter(t => t.assignedTo === assignee);
+  if (assignee === '__unassigned') tasks = tasks.filter(t => !t.assignedTo);
+  else if (assignee) tasks = tasks.filter(t => t.assignedTo === assignee);
   if (category) tasks = tasks.filter(t => t.categoryId === category);
   if (search)   tasks = tasks.filter(t =>
     t.title.toLowerCase().includes(search) ||
     (t.description || '').toLowerCase().includes(search) ||
     (t.categoryName || '').toLowerCase().includes(search));
 
-  // Sort: priority then date
-  const pOrd = { høy:0, medium:1, lav:2 };
-  tasks.sort((a,b) => {
-    if (a.status === 'fullfort' && b.status !== 'fullfort') return 1;
-    if (b.status === 'fullfort' && a.status !== 'fullfort') return -1;
-    return (pOrd[a.priority] || 1) - (pOrd[b.priority] || 1);
-  });
+  if (state.quickFilter === 'attention') tasks = tasks.filter(taskNeedsAttention);
+  if (state.quickFilter === 'unassigned') tasks = tasks.filter(t => t.status !== 'fullfort' && !t.assignedTo);
+  if (state.quickFilter === 'soon') tasks = tasks.filter(t => t.status !== 'fullfort' && taskDueDays(t) >= 0 && taskDueDays(t) <= 14);
+  if (state.quickFilter === 'mine') tasks = tasks.filter(t => t.status !== 'fullfort' && t.assignedTo === state.user.uid);
+  if (state.quickFilter === 'high') tasks = tasks.filter(t => t.status !== 'fullfort' && t.priority === 'høy');
+
+  tasks.sort(compareTasksByUrgency);
 
   const el = document.getElementById('tasks-list');
   if (!tasks.length) {
@@ -547,7 +713,8 @@ function renderTasksList() {
                        document.getElementById('filter-priority').value ||
                        document.getElementById('filter-assignee').value ||
                        document.getElementById('filter-category').value ||
-                       document.getElementById('task-search').value;
+                       document.getElementById('task-search').value ||
+                       state.quickFilter;
     el.innerHTML = hasFilters
       ? `<div class="empty-state">
            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -567,6 +734,7 @@ function renderTasksList() {
 
 function populateAssigneeSelects() {
   const opts = ['<option value="">Alle ansvarlige</option>',
+    '<option value="__unassigned">Uten ansvarlig</option>',
     ...state.users.map(u => `<option value="${u.id}">${esc(u.displayName || u.email)}</option>`)
   ].join('');
   const filterEl = document.getElementById('filter-assignee');
@@ -1536,6 +1704,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById(id).addEventListener('change', renderTasksList);
   });
   document.getElementById('task-search').addEventListener('input', renderTasksList);
+  document.querySelectorAll('.quick-filter').forEach(btn => {
+    btn.addEventListener('click', () => setQuickFilter(btn.dataset.quickFilter || ''));
+  });
 
   // Keyboard: Escape closes modal
   document.addEventListener('keydown', (e) => {
