@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.1.2';
+const APP_VERSION = '1.1.3';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -349,9 +349,12 @@ function setupUI() {
 }
 
 function subscribeToRealtime() {
-  const onRealtimeError = (e) => {
-    console.error('Realtime sync error:', e);
-    showToast('Kunne ikke laste sanntidsdata. Prøv å oppdatere appen.', 'error');
+  const shownRealtimeErrors = new Set();
+  const onRealtimeError = (area, message) => (e) => {
+    console.error(`Realtime sync error (${area}):`, e);
+    if (shownRealtimeErrors.has(area)) return;
+    shownRealtimeErrors.add(area);
+    showToast(message, 'error');
   };
 
   state.unsubscribers.push(
@@ -359,24 +362,24 @@ function subscribeToRealtime() {
       state.tasks = tasks;
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'tasks') renderTasksList();
-    }, onRealtimeError),
+    }, onRealtimeError('tasks', 'Kunne ikke laste oppgaver. Prøv å oppdatere appen.')),
     subscribeToUsers(users => {
       state.users = users;
       populateAssigneeSelects();
       if (state.currentView === 'admin') renderAdmin();
-    }, onRealtimeError),
+    }, onRealtimeError('users', 'Kunne ikke laste teammedlemmer. Prøv å oppdatere appen.')),
     subscribeToCategories(categories => {
       state.categories = categories;
       populateCategorySelects();
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'tasks') renderTasksList();
       if (state.currentView === 'admin') renderAdmin();
-    }, onRealtimeError),
+    }, onRealtimeError('categories', 'Kategorier kunne ikke lastes. Firestore-reglene må trolig oppdateres.')),
     subscribeToNotifications(state.user.uid, notifs => {
       state.notifications = notifs;
       updateNotifBadge();
       if (state.currentView === 'notifications') renderNotifications();
-    }, onRealtimeError)
+    }, onRealtimeError('notifications', 'Kunne ikke laste varsler. Prøv å oppdatere appen.'))
   );
 }
 
