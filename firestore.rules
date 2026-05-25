@@ -5,12 +5,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function signedInUser() {
+    function userDoc() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function getRole() {
-      return signedInUser().data.role;
+      return userDoc().data.role;
     }
 
     function isAdmin() {
@@ -21,113 +21,65 @@ service cloud.firestore {
       return getRole() in ['admin', 'teamleder'];
     }
 
-    function hasSupportedClientMeta() {
-      return request.resource.data.clientBuild is int
-        && request.resource.data.clientBuild >= 1100
-        && request.resource.data.writeSchemaVersion == 1
-        && request.resource.data.clientAppVersion is string
-        && request.resource.data.clientWriteId is string;
-    }
-
-    function writeMetaWasTouched() {
-      return request.resource.data.diff(resource.data).affectedKeys()
-        .hasAll(['clientAppVersion', 'clientBuild', 'clientWriteId', 'writeSchemaVersion']);
-    }
-
-    function isSupportedCreate() {
-      return hasSupportedClientMeta();
-    }
-
-    function isSupportedUpdate() {
-      return hasSupportedClientMeta()
-        && writeMetaWasTouched()
-        && (
-          !resource.data.keys().hasAll(['clientWriteId'])
-          || request.resource.data.clientWriteId != resource.data.clientWriteId
-        );
-    }
-
-    function currentUserHasSupportedClient() {
-      return signedInUser().data.clientBuild is int
-        && signedInUser().data.clientBuild >= 1100;
+    function isOwnAssignedTask() {
+      return resource.data.assignedTo == request.auth.uid;
     }
 
     match /allowedUsers/{doc} {
       allow read: if isAuth();
-      allow create: if isAuth() && isAdmin() && isSupportedCreate();
-      allow update: if isAuth() && isAdmin() && isSupportedUpdate();
-      allow delete: if isAuth() && isAdmin() && currentUserHasSupportedClient();
+      allow create, update, delete: if isAuth() && isAdmin();
     }
 
     match /users/{userId} {
       allow read: if isAuth();
-      allow create: if isAuth()
-        && request.auth.uid == userId
-        && isSupportedCreate();
-      allow update: if isAuth()
-        && (request.auth.uid == userId || isAdmin())
-        && isSupportedUpdate();
-      allow delete: if isAuth() && isAdmin() && currentUserHasSupportedClient();
+      allow create: if isAuth() && request.auth.uid == userId;
+      allow update: if isAuth() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAuth() && isAdmin();
     }
 
     match /categories/{categoryId} {
       allow read: if isAuth();
       allow create: if isAuth()
         && isAdminOrTeamleder()
-        && isSupportedCreate()
         && request.resource.data.name is string
         && request.resource.data.active == true;
-      allow update: if isAuth()
-        && isAdminOrTeamleder()
-        && isSupportedUpdate();
+      allow update: if isAuth() && isAdminOrTeamleder();
       allow delete: if false;
     }
 
     match /tasks/{taskId} {
       allow read: if isAuth();
-      allow create: if isAuth()
-        && isAdminOrTeamleder()
-        && isSupportedCreate()
-        && !('deletedAt' in request.resource.data);
-      allow update: if isAuth()
-        && isSupportedUpdate()
-        && (
-          isAdminOrTeamleder()
-          || (
-            getRole() == 'medlem'
-            && resource.data.assignedTo == request.auth.uid
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'status',
-              'updatedAt',
-              'lastEditedBy',
-              'clientAppVersion',
-              'clientBuild',
-              'clientWriteId',
-              'writeSchemaVersion'
-            ])
-          )
-        );
+      allow create: if isAuth() && isAdminOrTeamleder();
+      allow update: if isAuth() && (
+        isAdminOrTeamleder()
+        || (
+          getRole() == 'medlem'
+          && isOwnAssignedTask()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'updatedAt',
+            'lastEditedBy',
+            'clientAppVersion',
+            'clientBuild',
+            'clientWriteId',
+            'writeSchemaVersion'
+          ])
+        )
+      );
       allow delete: if false;
     }
 
     match /comments/{commentId} {
       allow read: if isAuth();
-      allow create: if isAuth() && isSupportedCreate();
-      allow update: if isAuth()
-        && (resource.data.userId == request.auth.uid || isAdmin())
-        && isSupportedUpdate();
+      allow create: if isAuth();
+      allow update: if isAuth() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
       allow delete: if false;
     }
 
     match /users/{userId}/notifications/{notifId} {
-      allow read: if isAuth() && request.auth.uid == userId;
-      allow create: if isAuth() && isSupportedCreate();
-      allow update: if isAuth()
-        && request.auth.uid == userId
-        && isSupportedUpdate();
-      allow delete: if isAuth()
-        && request.auth.uid == userId
-        && currentUserHasSupportedClient();
+      allow read, update, delete: if isAuth() && request.auth.uid == userId;
+      allow create: if isAuth();
     }
   }
 }

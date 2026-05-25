@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.1.4';
+const APP_VERSION = '1.1.5';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -243,6 +243,10 @@ async function getAllowedUserFast(email) {
 }
 
 async function finishAppStartup(user, allowed) {
+  if (state.user && state.user.uid === user.uid && state.unsubscribers.length === 0) {
+    subscribeToRealtime();
+  }
+
   try {
     await createOrUpdateUser(user.uid, {
       email: user.email,
@@ -256,13 +260,9 @@ async function finishAppStartup(user, allowed) {
       state.profile = freshProfile;
       setupUI();
     }
-
-    if (state.user && state.user.uid === user.uid && state.unsubscribers.length === 0) {
-      subscribeToRealtime();
-    }
   } catch (e) {
-    console.error('Startup sync error:', e);
-    showToast('Data kunne ikke lastes akkurat nå. Prøv å oppdatere appen.', 'error');
+    console.error('Profile sync error:', e);
+    showToast('Profilen kunne ikke oppdateres akkurat nå, men data lastes likevel.', 'error');
   }
 }
 
