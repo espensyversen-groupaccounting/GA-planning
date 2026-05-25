@@ -1,175 +1,167 @@
-# Strawberry Planleggingsapp – CLAUDE.md
+# Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektoversikt
-PWA-basert teamplanleggingsapp for Strawberry. Erstatter Google Sheets-regnearket "Plan 2026&2027".
-Sanntidssynkronisering via Firebase Firestore. Norsk UI. Ingen datamigrering nødvendig.
+PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Den gir teamet oversikt over oppgaver, prioritet, ansvarlig, frister, deloppgaver, kommentarer, kategorier og varsler.
+
+Sanntidssynkronisering skjer via Firebase Firestore. UI er norsk, og appen er bygget som en enkel vanilla HTML/CSS/JS single-page app uten bundler.
 
 ## Teknologistakk
-- **Frontend**: HTML5, CSS3, JavaScript ES6+ (ingen bundler/framework)
-- **Hosting**: GitHub Pages
-- **Database**: Firebase Firestore (sanntidssynkronisering)
-- **Autentisering**: Firebase Authentication med Google Sign-In
+- Frontend: HTML5, CSS3, JavaScript ES6+
+- Hosting: GitHub Pages
+- Database: Firebase Firestore
+- Autentisering: Firebase Authentication med Google Sign-In
+- PWA: manifest + service worker
 
 ## Filstruktur
-```
-Planleggingsapp/
-├── index.html          # App-skallet (single-page app, alle views)
-├── styles.css          # All CSS med Strawberry-merkevarefarger
-├── firebase-config.js  # Firebase-konfigurasjon (fyll inn credentials)
-├── firestore.js        # Alle Firestore CRUD-operasjoner
-├── app.js              # All UI-logikk, routing, hendelseshåndtering
-├── manifest.json       # PWA-manifest (installasjon på hjemskjerm)
-├── service-worker.js   # Caching og offline-støtte
+```text
+Planning/
+├── index.html          # App-skallet, views og modaler
+├── styles.css          # All styling og responsiv layout
+├── firebase-config.js  # Firebase config og INITIAL_USERS
+├── firestore.js        # Firestore CRUD, subscriptions og write metadata
+├── firestore.rules     # Firestore Security Rules - kilde for rules som deployes
+├── app.js              # UI-logikk, routing og hendelseshåndtering
+├── manifest.json       # PWA-manifest
+├── service-worker.js   # Caching og app-oppdatering
+├── icon-180.png
+├── icon-192.png
+├── icon-512.png
 ├── Strawberry_Logotype_Primary_Black_RGB.png
 ├── Strawberry_Logotype_Primary_White_RGB.png
 └── CLAUDE.md
 ```
 
-## Oppsett – Firebase (MÅ GJØRES FØR FØRSTE KJØRING)
+## Firebase-oppsett
 
-### 1. Opprett Firebase-prosjekt
-1. Gå til https://console.firebase.google.com
-2. Klikk "Add project" → gi navn (f.eks. "strawberry-planlegging")
-3. Deaktiver Google Analytics om ønskelig → klikk "Create project"
+### 1. Firebase-prosjekt
+1. Opprett prosjekt i Firebase Console.
+2. Aktiver Firestore i production mode.
+3. Bruk region `europe-west1`.
+4. Aktiver Google Sign-In under Authentication.
+5. Legg til GitHub Pages-domenet under Authorized domains.
+6. Lim inn web app-konfigurasjon i `firebase-config.js`.
 
-### 2. Aktiver Firestore
-1. Build → Firestore Database → "Create database"
-2. Velg "Start in production mode"
-3. Velg region: `europe-west1`
+### 2. Firestore Security Rules
+`firestore.rules` i repoet er kilde til gjeldende rules. Når rules endres, kopier hele innholdet derfra til Firebase Console -> Firestore -> Rules og publiser.
 
-### 3. Aktiver Authentication
-1. Build → Authentication → Get started
-2. Under "Sign-in method": Aktiver "Google"
-3. Legg til ditt domene i "Authorized domains" (inkl. GitHub Pages URL når klar)
+Viktig nåværende rollemodell:
+- `allowedUsers`: alle innloggede kan lese; kun Admin kan opprette, endre og slette.
+- `users`: alle innloggede kan lese; bruker kan opprette/oppdatere egen profil; Admin kan oppdatere/slette brukere.
+- `categories`: Admin og Teamleder kan opprette, endre, skjule og slette.
+- `tasks`: Admin og Teamleder kan opprette og oppdatere; direkte delete er blokkert. Oppgaver arkiveres med soft-delete.
+- `comments`: alle innloggede kan lese og opprette; direkte delete er blokkert.
+- `notifications`: brukeren eier egne varsler.
 
-### 4. Hent Firebase-konfigurasjon
-1. Prosjektinnstillinger (tannhjulet) → "Your apps" → Klikk </> (Web app)
-2. Registrer appen, kopier `firebaseConfig`-objektet
-3. Lim inn verdiene i `firebase-config.js`
-
-### 5. Sett Firestore Security Rules
-Gå til Firestore → Rules og lim inn:
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    function isAuth() { return request.auth != null; }
-    function getRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
-    }
-    function isAdmin() { return getRole() == 'admin'; }
-    function isAdminOrTeamleder() { return getRole() in ['admin', 'teamleder']; }
-
-    match /allowedUsers/{doc} {
-      allow read: if isAuth();
-      allow write: if isAuth() && isAdmin();
-    }
-    match /users/{userId} {
-      allow read: if isAuth();
-      allow create: if isAuth() && request.auth.uid == userId;
-      allow update: if isAuth() && (request.auth.uid == userId || isAdmin());
-      allow delete: if isAuth() && isAdmin();
-    }
-    match /tasks/{taskId} {
-      allow read: if isAuth();
-      allow create, delete: if isAuth() && isAdminOrTeamleder();
-      allow update: if isAuth() && (isAdminOrTeamleder() ||
-        (getRole() == 'medlem' && request.resource.data.diff(resource.data)
-          .affectedKeys().hasOnly(['status', 'updatedAt'])));
-    }
-    match /comments/{commentId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update, delete: if isAuth() &&
-        (resource.data.userId == request.auth.uid || isAdmin());
-    }
-    match /users/{userId}/notifications/{notifId} {
-      allow read, update, delete: if isAuth() && request.auth.uid == userId;
-      allow create: if isAuth();
-    }
-  }
-}
-```
-
-## Datamodell (Firestore)
+## Datamodell
 
 ### `allowedUsers/{sanitizedEmail}`
-Email sanitisert: `.` → `_dot_`, `@` → `_at_` (f.eks. `espen_dot_syversen_at_strawberry_dot_no`)
-- `email`: string — `role`: 'admin' | 'teamleder' | 'medlem'
-- `invitedBy`: string (uid eller 'system') — `invitedAt`: timestamp
+Email sanitisert: `.` -> `_dot_`, `@` -> `_at_`.
+
+Brukes som allowlist for hvem som slipper inn i appen.
+- `email`: string
+- `role`: `admin` | `teamleder` | `medlem`
+- `invitedBy`: uid eller `system`
+- `invitedAt`: timestamp
+- `clientAppVersion`, `clientBuild`, `clientWriteId`, `writeSchemaVersion`
 
 ### `users/{uid}`
-Opprettes automatisk ved første innlogging.
-- `email`, `displayName`, `photoURL`, `role`, `createdAt`, `lastLogin`
+Opprettes eller oppdateres automatisk ved innlogging etter at brukeren finnes i `allowedUsers`.
+- `email`, `displayName`, `photoURL`, `role`
+- `createdAt`, `lastLogin`
 
 ### `tasks/{taskId}`
-- `title`, `description`: string
-- `priority`: 'høy' | 'medium' | 'lav'
-- `categoryId`: string | null — `categoryName`, `categoryColor`: snapshot-felter for visning
-- `status`: 'ikke_startet' | 'i_gang' | 'fullfort'
-- `assignedTo`: uid — `assignedToName`: string
-- `startDate`, `dueDate`: Firestore Timestamp (nullable)
-- `dependencies`: string
-- `subtasks`: array av `{id, title, completed, dueDate}` der `dueDate` er `YYYY-MM-DD` eller `null`
-- `createdBy`: uid — `createdAt`, `updatedAt`: timestamp
-
-### `comments/{commentId}`
-- `taskId`, `userId`, `userDisplayName`, `userPhotoURL`, `text`, `createdAt`
+- `title`, `description`
+- `priority`: `høy` | `medium` | `lav`
+- `categoryId`: string eller null
+- `categoryName`, `categoryColor`: snapshot-felter for stabil visning
+- `status`: `ikke_startet` | `i_gang` | `fullfort`
+- `assignedTo`, `assignedToName`
+- `startDate`, `dueDate`: Firestore Timestamp eller null
+- `dependencies`
+- `subtasks`: array av `{ id, title, completed, dueDate }`, der `dueDate` er `YYYY-MM-DD` eller null
+- `deletedAt`, `deletedBy`: soft-delete/arkivering
+- `createdBy`, `createdAt`, `updatedAt`
+- write metadata: `clientAppVersion`, `clientBuild`, `clientWriteId`, `writeSchemaVersion`
 
 ### `categories/{categoryId}`
 Konfigureres fra Admin-panelet av Admin eller Teamleder.
-- `name`: string — `color`: hex string — `icon`: string
-- `sortOrder`: number — `active`: boolean
-- `createdBy`: uid — `createdAt`, `updatedAt`: timestamp
+- `name`
+- `color`: hex string
+- `sortOrder`
+- `active`: boolean
+- `createdBy`, `createdAt`, `updatedAt`
+
+Kategorier kan skjules eller slettes. Oppgaver lagrer også kategoriens navn/farge som snapshot, slik at gamle oppgaver fortsatt har lesbar kontekst hvis en kategori fjernes.
+
+### `comments/{commentId}`
+- `taskId`, `userId`, `userDisplayName`, `userPhotoURL`
+- `text`, `createdAt`
 
 ### `users/{userId}/notifications/{notifId}`
-- `type`: 'task_assigned' | 'comment_added' | 'status_changed'
-- `taskId`, `taskTitle`, `message`: string
-- `read`: boolean — `createdAt`: timestamp
+- `type`: `task_assigned` | `comment_added` | `status_changed`
+- `taskId`, `taskTitle`, `message`
+- `read`, `createdAt`
+
+## Roller og rettigheter
+
+| Rolle | Opprette oppgaver | Redigere oppgaver | Endre status | Kategorier | Brukere |
+|-------|:---:|:---:|:---:|:---:|:---:|
+| Admin | Ja | Ja | Ja | Ja | Ja |
+| Teamleder | Ja | Ja | Ja | Ja | Nei |
+| Medlem | Nei | Nei | Egne tildelte | Nei | Nei |
+
+Admin-panelet er synlig for Admin og Teamleder fordi kategorier administreres der. Brukeradministrasjon vises og fungerer bare for Admin.
+
+## Legge til nye brukere
+1. Logg inn som en bruker med rollen `admin`.
+2. Gå til Administrasjon.
+3. Skriv inn e-postadressen i "Legg til bruker".
+4. Velg rolle og trykk "Legg til".
+5. Den nye personen logger inn med Google-kontoen sin.
+
+Appen oppretter ikke `users/{uid}` når en bruker inviteres. Den legger bare e-posten i `allowedUsers`. Selve `users/{uid}`-dokumentet opprettes automatisk første gang personen logger inn.
+
+Hvis dette feiler:
+- Sjekk at innlogget bruker har `role: "admin"` i `users/{uid}`.
+- Sjekk at `firestore.rules` er publisert i Firebase Console.
+- Sjekk at e-posten er skrevet likt som Google-kontoen brukeren logger inn med.
+
+## Synksikkerhet
+Appen skriver ikke hele datasett tilbake til Firestore. Oppgaver ligger som egne dokumenter og oppdateres feltvis. Direkte sletting av oppgaver er blokkert i rules; sletting i UI er soft-delete med `deletedAt`.
+
+Full redigering av en eksisterende oppgave bruker transaksjon med `updatedAt`-sjekk. Hvis en bruker har hatt en gammel modal åpen og en annen allerede har lagret endringer, stoppes overskrivingen og brukeren må åpne oppgaven på nytt.
+
+Alle skriver legger på `clientAppVersion`, `clientBuild`, `clientWriteId` og `writeSchemaVersion` for sporbarhet. Rules krever ikke app-versjon per nå, fordi for streng versjonsgating tidligere gjorde det lett å blokkere legitime brukere ved utrulling.
+
+## Oppstart og caching
+App-skallet vises så snart brukerens tilgang er bekreftet. Realtime subscriptions for oppgaver, brukere, kategorier og varsler startes før bakgrunnssynk av profil fullføres, slik at en profil-write ikke skal stoppe datalasting.
+
+Service worker cacher appfiler. Ved ny release må `APP_VERSION` i `app.js` og `service-worker.js`, samt `CLIENT_APP_VERSION`/`CLIENT_BUILD` i `firestore.js`, holdes i sync.
 
 ## Merkevarefarger
 | Navn | Hex |
 |------|-----|
-| Signature Coral (primær) | #FF5A5F |
-| Strawberry Red | #FF0036 |
-| Black | #000000 |
-| White | #FFFFFF |
-| Grey (bakgrunn) | #f7f5f3 |
-| Light Pink | #ffd7d7 |
+| Signature Coral | `#FF5A5F` |
+| Strawberry Red | `#FF0036` |
+| Black | `#000000` |
+| White | `#FFFFFF` |
+| Grey bakgrunn | `#f7f5f3` |
+| Light Pink | `#ffd7d7` |
 
-## Brukere ved oppstart
-Hardkodet i `firebase-config.js` under `INITIAL_USERS`.
-Seedes automatisk til `allowedUsers` ved første kjøring hvis samlingen er tom.
+## Første brukere
+Hardkodet i `firebase-config.js` under `INITIAL_USERS`. Disse seedes til `allowedUsers` første gang appen kjører hvis allowlisten er tom.
 
 | E-post | Rolle |
 |--------|-------|
 | espen.syversen@strawberry.no | Admin |
 | christine.bjornstadjordet@strawberry.no | Teamleder |
 
-Admin kan legge til flere brukere via Admin-panelet i appen.
-
-## Roller og rettigheter
-| Rolle | Opprette | Redigere | Slette | Oppdatere status | Adminpanel |
-|-------|:---:|:---:|:---:|:---:|:---:|
-| Admin | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Teamleder | ✓ | ✓ | ✓ | ✓ | ✗ |
-| Medlem | ✗ | ✗ | ✗ | Egne oppg. | ✗ |
-
 ## Deployment til GitHub Pages
-1. Opprett repository på GitHub
-2. Last opp alle filer (eller push via git)
-3. Settings → Pages → Source: `main` branch, `/ (root)`
-4. Legg til `<brukernavn>.github.io` i Firebase Authentication → Authorized domains
+1. Push alle filer til GitHub.
+2. Settings -> Pages -> Source: `main` branch, `/ (root)`.
+3. Legg til GitHub Pages-domenet i Firebase Authentication -> Authorized domains.
+4. Publiser `firestore.rules` i Firebase Console.
+5. Åpne appen og bruk "Oppdater app" under Administrasjon for å tvinge ny PWA-versjon på enheten.
 
-## Varsler
-Fase 1: Internt varslingssenter (bjelle-ikon) med sanntidsoppdateringer via Firestore.
-Fase 2 (fremtidig): Ekte Web Push (VAPID + Firebase Cloud Functions, krever Blaze-abonnement).
-
-## Synksikkerhet
-Appen skriver ikke hele datasett tilbake til Firestore. Oppgaver opprettes som egne dokumenter, oppdateres feltvis, og sletting av oppgaver er soft-delete (`deletedAt`) slik at gamle klienter ikke kan fjerne oppgavedokumenter permanent.
-
-Alle skriver legger på `clientAppVersion`, `clientBuild`, `clientWriteId` og `writeSchemaVersion`. Deploy `firestore.rules` sammen med appen for å avvise gamle klienter som ikke sender dette metadata-stempelet. Full redigering av en eksisterende oppgave bruker transaksjon med `updatedAt`-sjekk, slik at en bruker som har hatt en gammel modal åpen ikke overskriver endringer andre har gjort i mellomtiden.
-
-## Firebase SDK-versjon
-Firebase 9 (compat mode) via CDN. Alle scripts lastes i `index.html`.
+## Firebase SDK
+Firebase 9 compat mode lastes via CDN i `index.html`.

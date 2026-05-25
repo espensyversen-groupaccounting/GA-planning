@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.1.6';
+const APP_VERSION = '1.1.7';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -1186,6 +1186,8 @@ function renderAdmin() {
   if (verEl) verEl.textContent = `v${APP_VERSION}`;
   updateAdminUpdateUI();
 
+  document.getElementById('add-user-card')?.classList.toggle('hidden', !isAdmin());
+
   const el = document.getElementById('users-list');
   if (!state.users.length) {
     el.innerHTML = '<p style="color:var(--text-2);font-size:.875rem">Ingen brukere ennå</p>';
@@ -1339,6 +1341,11 @@ async function handleDeleteCategory(categoryId) {
 
 async function handleAddUser(e) {
   e.preventDefault();
+  if (!isAdmin()) {
+    showToast('Du må være Admin for å legge til brukere.', 'error');
+    return;
+  }
+
   const email = document.getElementById('new-user-email').value.trim().toLowerCase();
   const role  = document.getElementById('new-user-role').value;
   if (!email) return;
@@ -1350,7 +1357,11 @@ async function handleAddUser(e) {
     document.getElementById('new-user-email').value = '';
     showToast(`${email} lagt til som ${roleLabel(role)}`);
   } catch(err) {
-    showToast('Feil ved tillegging av bruker.', 'error');
+    console.error('Add user error:', err);
+    const message = err && err.code === 'permission-denied'
+      ? 'Kunne ikke legge til bruker. Sjekk at du er Admin og at Firestore-reglene er oppdatert.'
+      : 'Feil ved tillegging av bruker.';
+    showToast(message, 'error');
   } finally {
     btn.disabled = false;
   }
