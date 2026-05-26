@@ -1,7 +1,9 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
-## Prosjektoversikt
-PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Den gir teamet oversikt over oppgaver, prioritet, ansvarlig, frister, deloppgaver, kommentarer, kategorier og varsler.
+## Prosjektstatus
+Gjeldende appversjon: `v1.2.1`
+
+PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver som mangler eier, og hva som er fullført.
 
 Sanntidssynkronisering skjer via Firebase Firestore. UI er norsk, og appen er bygget som en enkel vanilla HTML/CSS/JS single-page app uten bundler.
 
@@ -10,7 +12,8 @@ Sanntidssynkronisering skjer via Firebase Firestore. UI er norsk, og appen er by
 - Hosting: GitHub Pages
 - Database: Firebase Firestore
 - Autentisering: Firebase Authentication med Google Sign-In
-- PWA: manifest + service worker
+- PWA: `manifest.json` + `service-worker.js`
+- Firebase SDK: Firebase 9 compat mode via CDN i `index.html`
 
 ## Filstruktur
 ```text
@@ -32,19 +35,17 @@ Planning/
 ```
 
 ## Firebase-oppsett
-
-### 1. Firebase-prosjekt
-1. Opprett prosjekt i Firebase Console.
+1. Opprett Firebase-prosjekt.
 2. Aktiver Firestore i production mode.
 3. Bruk region `europe-west1`.
 4. Aktiver Google Sign-In under Authentication.
 5. Legg til GitHub Pages-domenet under Authorized domains.
 6. Lim inn web app-konfigurasjon i `firebase-config.js`.
+7. Publiser innholdet i `firestore.rules` i Firebase Console.
 
-### 2. Firestore Security Rules
 `firestore.rules` i repoet er kilde til gjeldende rules. Når rules endres, kopier hele innholdet derfra til Firebase Console -> Firestore -> Rules og publiser.
 
-Viktig nåværende rollemodell:
+## Rollemodell og regler
 - `allowedUsers`: alle innloggede kan lese; kun Admin kan opprette, endre og slette.
 - `users`: alle innloggede kan lese; bruker kan opprette/oppdatere egen profil; Admin kan oppdatere/slette brukere.
 - `categories`: Admin og Teamleder kan opprette, endre, skjule og slette.
@@ -52,22 +53,31 @@ Viktig nåværende rollemodell:
 - `comments`: alle innloggede kan lese og opprette; direkte delete er blokkert.
 - `notifications`: brukeren eier egne varsler.
 
+| Rolle | Opprette oppgaver | Redigere oppgaver | Endre status | Kategorier | Brukere |
+|-------|:---:|:---:|:---:|:---:|:---:|
+| Admin | Ja | Ja | Ja | Ja | Ja |
+| Teamleder | Ja | Ja | Ja | Ja | Nei |
+| Medlem | Nei | Nei | Egne tildelte | Nei | Nei |
+
+Admin-panelet er synlig for Admin og Teamleder fordi kategorier administreres der. Brukeradministrasjon vises og fungerer bare for Admin.
+
 ## Datamodell
 
 ### `allowedUsers/{sanitizedEmail}`
-Email sanitisert: `.` -> `_dot_`, `@` -> `_at_`.
+Brukes som allowlist for hvem som slipper inn i appen. Email sanitisert: `.` -> `_dot_`, `@` -> `_at_`.
 
-Brukes som allowlist for hvem som slipper inn i appen.
 - `email`: string
 - `role`: `admin` | `teamleder` | `medlem`
 - `invitedBy`: uid eller `system`
 - `invitedAt`: timestamp
-- `clientAppVersion`, `clientBuild`, `clientWriteId`, `writeSchemaVersion`
+- write metadata: `clientAppVersion`, `clientBuild`, `clientWriteId`, `writeSchemaVersion`
 
 ### `users/{uid}`
-Opprettes eller oppdateres automatisk ved innlogging etter at brukeren finnes i `allowedUsers`.
+Opprettes eller oppdateres automatisk ved første innlogging etter at brukeren finnes i `allowedUsers`.
+
 - `email`, `displayName`, `photoURL`, `role`
 - `createdAt`, `lastLogin`
+- write metadata
 
 ### `tasks/{taskId}`
 - `title`, `description`
@@ -81,10 +91,11 @@ Opprettes eller oppdateres automatisk ved innlogging etter at brukeren finnes i 
 - `subtasks`: array av `{ id, title, completed, dueDate }`, der `dueDate` er `YYYY-MM-DD` eller null
 - `deletedAt`, `deletedBy`: soft-delete/arkivering
 - `createdBy`, `createdAt`, `updatedAt`
-- write metadata: `clientAppVersion`, `clientBuild`, `clientWriteId`, `writeSchemaVersion`
+- write metadata
 
 ### `categories/{categoryId}`
 Konfigureres fra Admin-panelet av Admin eller Teamleder.
+
 - `name`
 - `color`: hex string
 - `sortOrder`
@@ -102,29 +113,73 @@ Kategorier kan skjules eller slettes. Oppgaver lagrer også kategoriens navn/far
 - `taskId`, `taskTitle`, `message`
 - `read`, `createdAt`
 
-## Roller og rettigheter
+## Dashboard og prioritering
+Dashboardet er en operativ ledervisning, ikke bare en statusrapport.
 
-| Rolle | Opprette oppgaver | Redigere oppgaver | Endre status | Kategorier | Brukere |
-|-------|:---:|:---:|:---:|:---:|:---:|
-| Admin | Ja | Ja | Ja | Ja | Ja |
-| Teamleder | Ja | Ja | Ja | Ja | Nei |
-| Medlem | Nei | Nei | Egne tildelte | Nei | Nei |
+Toppkort:
+- `Forsinket`: åpne oppgaver med passert hovedfrist.
+- `I dag`: åpne oppgaver eller deloppgaver med frist i dag, inkludert forfalte.
+- `Denne uken`: åpne oppgaver eller deloppgaver med frist innen 7 dager.
+- `Uten ansvarlig`: åpne oppgaver uten tildelt person.
+- `Høy prioritet`: åpne oppgaver med høy prioritet.
 
-Admin-panelet er synlig for Admin og Teamleder fordi kategorier administreres der. Brukeradministrasjon vises og fungerer bare for Admin.
+Dashboardseksjoner:
+- `Prioriter i dag`: forfalte oppgaver og oppgaver/deloppgaver med frist i dag, gruppert etter `Høy`, `Medium`, `Lav`.
+- `Planlegg denne uken`: kommende oppgaver/deloppgaver innen 1-7 dager, gruppert etter prioritet.
+- `Uten ansvarlig`: åpne oppgaver som må delegeres.
+- `Teamoversikt`: viser åpne oppgaver og risikopunkter per person.
+
+Hasteberegningen i `app.js` tar hensyn til frist, om fristen er passert, prioritet, om oppgaven mangler ansvarlig, status og deloppgavefrister.
+
+## Oppgaver-fanen
+Oppgaver-fanen har ordinære filtre og hurtigfiltre.
+
+Hurtigfiltre:
+- `Alle`
+- `Må følges opp`
+- `Uten ansvarlig`
+- `Denne uken`: frist i dag eller innen 7 dager, inkludert deloppgaver.
+- `Neste 14 dager`: bredere planleggingsvindu for kommende leveranser.
+- `Mine`
+- `Høy prioritet`
+
+Standard sortering er etter hastegrad, ikke bare prioritet. Oppgavekort viser signaler som `Forfalt`, `Frist i dag`, `Denne uken`, `Neste 14 d`, `Ikke tildelt` og `Deloppgavefrist`.
 
 ## Legge til nye brukere
 1. Logg inn som en bruker med rollen `admin`.
 2. Gå til Administrasjon.
 3. Skriv inn e-postadressen i "Legg til bruker".
 4. Velg rolle og trykk "Legg til".
-5. Den nye personen logger inn med Google-kontoen sin.
+5. Kopier app-lenken fra "Link til appen" og send til brukeren.
+6. Den nye personen logger inn med Google-kontoen sin.
 
-Appen oppretter ikke `users/{uid}` når en bruker inviteres. Den legger bare e-posten i `allowedUsers`. Selve `users/{uid}`-dokumentet opprettes automatisk første gang personen logger inn.
+Når en bruker inviteres, skrives personen til `allowedUsers`. Det betyr at brukeren har tilgang selv om personen ikke har logget inn ennå.
 
-Hvis dette feiler:
-- Sjekk at innlogget bruker har `role: "admin"` i `users/{uid}`.
-- Sjekk at `firestore.rules` er publisert i Firebase Console.
-- Sjekk at e-posten er skrevet likt som Google-kontoen brukeren logger inn med.
+`Teammedlemmer` viser både:
+- aktive brukere fra `users`
+- inviterte brukere fra `allowedUsers`
+
+Inviterte brukere vises med status `Invitert`. Når personen logger inn første gang, opprettes `users/{uid}` automatisk og brukeren vises som aktiv teambruker med navn og bilde fra Google.
+
+Hvis innlogging feiler:
+- Sjekk at e-posten i `allowedUsers` matcher Google-kontoen brukeren logger inn med.
+- Sjekk at innlogget admin faktisk har `role: "admin"` i `users/{uid}`.
+- Sjekk at `firestore.rules` er publisert.
+- Sjekk at GitHub Pages-domenet ligger i Firebase Authentication -> Authorized domains.
+
+## Kategorier
+Kategorier administreres i Administrasjon under knappen `Kategorier`.
+
+Admin og Teamleder kan:
+- opprette kategori
+- endre navn og farge
+- skjule/aktivere kategori
+- slette kategori med bekreftelsesdialog
+
+Skjulte kategorier kan fortsatt vises på gamle oppgaver, men kan ikke velges som aktiv kategori på nye oppgaver.
+
+## Deloppgaver og frister
+Deloppgaver kan ha egne deadlines. Disse brukes i dashboardets hasteberegning og i oppgavekortene. Deloppgaver med frist i dag eller denne uken kan løfte hovedoppgaven opp i dashboardet selv om hovedoppgavens egen frist er senere.
 
 ## Synksikkerhet
 Appen skriver ikke hele datasett tilbake til Firestore. Oppgaver ligger som egne dokumenter og oppdateres feltvis. Direkte sletting av oppgaver er blokkert i rules; sletting i UI er soft-delete med `deletedAt`.
@@ -134,7 +189,7 @@ Full redigering av en eksisterende oppgave bruker transaksjon med `updatedAt`-sj
 Alle skriver legger på `clientAppVersion`, `clientBuild`, `clientWriteId` og `writeSchemaVersion` for sporbarhet. Rules krever ikke app-versjon per nå, fordi for streng versjonsgating tidligere gjorde det lett å blokkere legitime brukere ved utrulling.
 
 ## Oppstart og caching
-App-skallet vises så snart brukerens tilgang er bekreftet. Realtime subscriptions for oppgaver, brukere, kategorier og varsler startes før bakgrunnssynk av profil fullføres, slik at en profil-write ikke skal stoppe datalasting.
+App-skallet vises så snart brukerens tilgang er bekreftet. Realtime subscriptions for oppgaver, brukere, inviterte brukere, kategorier og varsler startes før bakgrunnssynk av profil fullføres, slik at en profil-write ikke skal stoppe datalasting.
 
 Service worker cacher appfiler. Ved ny release må `APP_VERSION` i `app.js` og `service-worker.js`, samt `CLIENT_APP_VERSION`/`CLIENT_BUILD` i `firestore.js`, holdes i sync.
 
@@ -161,7 +216,4 @@ Hardkodet i `firebase-config.js` under `INITIAL_USERS`. Disse seedes til `allowe
 2. Settings -> Pages -> Source: `main` branch, `/ (root)`.
 3. Legg til GitHub Pages-domenet i Firebase Authentication -> Authorized domains.
 4. Publiser `firestore.rules` i Firebase Console.
-5. Åpne appen og bruk "Oppdater app" under Administrasjon for å tvinge ny PWA-versjon på enheten.
-
-## Firebase SDK
-Firebase 9 compat mode lastes via CDN i `index.html`.
+5. Åpne appen og bruk `Oppdater app` under Administrasjon for å tvinge ny PWA-versjon på enheten.
