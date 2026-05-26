@@ -25,7 +25,7 @@ const state = {
   commentUnsub: null,
   editMode: false,
   quickFilter: '',
-  dashboardScope: 'mine',
+  dashboardScope: localStorage.getItem('dashboardScope') || 'mine',
 };
 
 // ============================================================
@@ -553,15 +553,23 @@ function renderDashboard() {
   const unassignedTodos = openTodos.filter(t => !t.assignedTo);
   const high = open.filter(t => t.priority === 'høy');
   const highTodos = openTodos.filter(t => t.priority === 'høy');
-  // "Fokus nå" – hva trenger oppmerksomhet akkurat nå?
-  const fokusOverdue    = today.filter(t => taskDueDays(t) < 0).sort(compareTasksByUrgency);
-  const fokusToday      = today.filter(t => taskDueDays(t) >= 0).sort(compareTasksByUrgency);
+  // Todos som er urgente – løftes inn i "Fokus nå"
+  const fokusOverdueTodos = openTodos.filter(t => taskDueDays(t) < 0).map(t => ({ ...t, _isTodo: true }));
+  const fokusTodayTodos   = openTodos.filter(t => taskDueDays(t) === 0).map(t => ({ ...t, _isTodo: true }));
+
+  // "Fokus nå" – tasks og todos kombinert
+  const fokusOverdue    = [...today.filter(t => taskDueDays(t) < 0), ...fokusOverdueTodos].sort(compareTasksByUrgency);
+  const fokusToday      = [...today.filter(t => taskDueDays(t) >= 0), ...fokusTodayTodos].sort(compareTasksByUrgency);
   const fokusInProgress = open.filter(t =>
     t.status === 'i_gang' && t.priority === 'høy' && !dueTodayOrOverdue(t)
   ).sort(compareTasksByUrgency);
 
+  // "Korte ToDo's" – kun todos som IKKE er i fokus
+  const fokusTodoIds = new Set([...fokusOverdueTodos, ...fokusTodayTodos].map(t => t.id));
+  const queueTodos = openTodos.filter(t => !fokusTodoIds.has(t.id)).sort(compareTasksByUrgency).slice(0, 5);
+
   // "Planlegg denne uken" – 14 dagers vindu for høy prioritet, 7 dager for øvrige
-  const fokusIds = new Set([...fokusOverdue, ...fokusToday, ...fokusInProgress].map(t => t.id));
+  const fokusIds = new Set([...today, ...fokusInProgress].map(t => t.id));
   const weekPriority = open.filter(t => {
     if (fokusIds.has(t.id)) return false;
     if (t.priority === 'høy')
@@ -592,7 +600,7 @@ function renderDashboard() {
     </button>
   `;
 
-  renderTodosList(openTodos.sort(compareTasksByUrgency).slice(0, 5));
+  renderTodosList(queueTodos, fokusTodoIds.size);
   renderFokusNa(fokusOverdue, fokusToday, fokusInProgress);
   renderPriorityGroups('week-priority-list', weekPriority, 'Ingen oppgaver planlagt de neste 14 dagene');
   renderCompactList('unassigned-tasks-list', unassigned.sort(compareTasksByUrgency).slice(0, 6), 'Alle åpne oppgaver har ansvarlig');
@@ -607,6 +615,7 @@ function updateDashboardScopeButtons() {
 
 function setDashboardScope(scope) {
   state.dashboardScope = scope === 'mine' ? 'mine' : 'team';
+  localStorage.setItem('dashboardScope', state.dashboardScope);
   renderDashboard();
 }
 
@@ -657,7 +666,7 @@ function renderCompactList(containerId, tasks, emptyMsg) {
   el.innerHTML = tasks.map(t => taskCardHtml(t, true)).join('');
 }
 
-function renderTodosList(todos) {
+function renderTodosList(todos, fokusCount = 0) {
   const el = document.getElementById('todos-list');
   const countEl = document.getElementById('todo-count-label');
   if (!el) return;
@@ -667,7 +676,10 @@ function renderTodosList(todos) {
   }
 
   if (!todos.length) {
-    el.innerHTML = `<div class="empty-state compact-empty"><p>Ingen korte ToDo's i denne visningen</p></div>`;
+    const msg = fokusCount > 0
+      ? `${fokusCount === 1 ? '1 ToDo vises' : fokusCount + ' ToDo-er vises'} i Fokus nå`
+      : 'Ingen korte ToDo\'s i denne visningen';
+    el.innerHTML = `<div class="empty-state compact-empty"><p>${msg}</p></div>`;
     return;
   }
 
@@ -747,7 +759,7 @@ function renderFokusNa(overdue, today, inProgress) {
         <span class="priority-group-count">${g.items.length}</span>
       </div>
       <div class="task-list-compact">
-        ${g.items.map(t => taskCardHtml(t, true)).join('')}
+        ${g.items.map(t => t._isTodo ? todoCardHtml(t) : taskCardHtml(t, true)).join('')}
       </div>
     </div>`).join('');
 }
