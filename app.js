@@ -26,6 +26,9 @@ const state = {
   editMode: false,
   quickFilter: '',
   dashboardScope: localStorage.getItem('dashboardScope') || 'mine',
+  todoViewFilter: 'open',
+  todoViewPriority: '',
+  todoViewAssignee: '',
 };
 
 // ============================================================
@@ -345,6 +348,7 @@ function showView(name) {
 
   if (name === 'dashboard')     renderDashboard();
   if (name === 'tasks')         renderTasksList();
+  if (name === 'todos')         renderTodosView();
   if (name === 'notifications') renderNotifications();
   if (name === 'admin')         renderAdmin();
 }
@@ -479,13 +483,12 @@ function setupUI() {
 
   const showAdmin = ['admin','teamleder'].includes(role);
   document.getElementById('nav-admin-li')?.classList.toggle('hidden', !showAdmin);
-  document.getElementById('bottom-admin-btn')?.classList.toggle('hidden', !showAdmin);
+  document.getElementById('btn-admin-gear')?.classList.toggle('hidden', !showAdmin);
 
   const showCreate = canEdit();
   document.getElementById('btn-add-task')?.classList.toggle('hidden', !showCreate);
   document.getElementById('btn-add-task-dashboard')?.classList.toggle('hidden', !showCreate);
-  document.getElementById('quick-todo-form')?.classList.toggle('hidden', !showCreate);
-  document.getElementById('toggle-quick-todo')?.classList.toggle('hidden', !showCreate);
+  document.getElementById('btn-toggle-todo-form')?.classList.toggle('hidden', !showCreate);
 }
 
 function subscribeToRealtime() {
@@ -506,6 +509,7 @@ function subscribeToRealtime() {
     subscribeToTodos(todos => {
       state.todos = todos;
       if (state.currentView === 'dashboard') renderDashboard();
+      if (state.currentView === 'todos')     renderTodosView();
     }, onRealtimeError('todos', 'Kunne ikke laste ToDo-listen. Firestore-reglene må trolig oppdateres.')),
     subscribeToUsers(users => {
       state.users = users;
@@ -1014,6 +1018,16 @@ function populateAssigneeSelects() {
     todoEditAssigneeEl.innerHTML = formOpts;
     if (current && state.users.some(u => u.id === current)) todoEditAssigneeEl.value = current;
   }
+
+  const filterOpts = ['<option value="">Alle ansvarlige</option>',
+    ...state.users.map(u => `<option value="${u.id}">${esc(u.displayName || u.email)}</option>`)
+  ].join('');
+  const todoFilterAssigneeEl = document.getElementById('todo-filter-assignee');
+  if (todoFilterAssigneeEl) {
+    const current = todoFilterAssigneeEl.value;
+    todoFilterAssigneeEl.innerHTML = filterOpts;
+    if (current && state.users.some(u => u.id === current)) todoFilterAssigneeEl.value = current;
+  }
 }
 
 function populateCategorySelects() {
@@ -1394,6 +1408,50 @@ async function handleDeleteTodo(todoId, event) {
     console.error('Todo delete error:', e);
     showToast('Feil ved sletting av ToDo.', 'error');
   }
+}
+
+function renderTodosView() {
+  document.querySelectorAll('.todo-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.todoStatus === state.todoViewFilter);
+  });
+
+  const priorityEl = document.getElementById('todo-filter-priority');
+  const assigneeEl = document.getElementById('todo-filter-assignee');
+  if (priorityEl) priorityEl.value = state.todoViewPriority;
+  if (assigneeEl) assigneeEl.value = state.todoViewAssignee;
+
+  let todos = state.todos;
+  if (state.todoViewFilter === 'open') {
+    todos = todos.filter(t => !isDoneItem(t));
+  } else {
+    todos = todos.filter(t => isDoneItem(t));
+  }
+  if (state.todoViewPriority) todos = todos.filter(t => t.priority === state.todoViewPriority);
+  if (state.todoViewAssignee) todos = todos.filter(t => t.assignedTo === state.todoViewAssignee);
+  todos.sort(compareTasksByUrgency);
+
+  const el = document.getElementById('todos-view-list');
+  if (!el) return;
+
+  if (!todos.length) {
+    const hasFilters = state.todoViewPriority || state.todoViewAssignee;
+    el.innerHTML = hasFilters
+      ? `<div class="empty-state">
+           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+           <strong>Ingen treff</strong>
+           <p>Ingen ToDo-er matcher filteret. Prøv å endre filter.</p>
+         </div>`
+      : state.todoViewFilter === 'done'
+        ? `<div class="empty-state"><p>Ingen fullførte ToDo-er ennå</p></div>`
+        : `<div class="empty-state">
+             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+             <strong>Ingen åpne ToDo-er</strong>
+             <p>Legg til en ny kort ToDo for å komme i gang.</p>
+             ${canEdit() ? `<button class="btn btn-primary" onclick="document.getElementById('quick-todo-form').classList.add('is-open');document.getElementById('todo-title').focus()">+ Legg til ToDo</button>` : ''}
+           </div>`;
+    return;
+  }
+  el.innerHTML = todos.map(todoCardHtml).join('');
 }
 
 function openTodoEditModal(todoId, event) {
@@ -2153,6 +2211,32 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.querySelectorAll('.scope-btn').forEach(btn => {
     btn.addEventListener('click', () => setDashboardScope(btn.dataset.dashboardScope || 'team'));
+  });
+
+  // Admin gear-knapp
+  document.getElementById('btn-admin-gear')?.addEventListener('click', () => showView('admin'));
+
+  // Todo-fane: toggle skjema
+  document.getElementById('btn-toggle-todo-form')?.addEventListener('click', () => {
+    document.getElementById('quick-todo-form')?.classList.toggle('is-open');
+  });
+
+  // Todo-fane: status-tabs (Åpne / Fullført)
+  document.querySelectorAll('.todo-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.todoViewFilter = btn.dataset.todoStatus;
+      renderTodosView();
+    });
+  });
+
+  // Todo-fane: filtre
+  document.getElementById('todo-filter-priority')?.addEventListener('change', (e) => {
+    state.todoViewPriority = e.target.value;
+    renderTodosView();
+  });
+  document.getElementById('todo-filter-assignee')?.addEventListener('change', (e) => {
+    state.todoViewAssignee = e.target.value;
+    renderTodosView();
   });
 
   // Todo edit modal

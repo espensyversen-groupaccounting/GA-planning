@@ -1773,6 +1773,72 @@ body {
   }
 }
 
+/* ============================================================
+   TODO-FANE (view-todos)
+   ============================================================ */
+
+/* Skjul skjemaet som standard – vises kun etter klikk på "Ny ToDo" */
+#quick-todo-form.todo-view-form {
+  display: none;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+#quick-todo-form.todo-view-form.is-open {
+  display: grid;
+}
+
+.todo-view-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.todo-status-tabs {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  gap: 2px;
+}
+
+.todo-tab {
+  padding: 5px 16px;
+  border: none;
+  background: transparent;
+  border-radius: calc(var(--radius-sm) - 2px);
+  font-size: .85rem;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all .15s;
+}
+
+.todo-tab.active {
+  background: var(--white);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,.1);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--coral);
+  font-size: .85rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: opacity .15s;
+  white-space: nowrap;
+}
+.btn-link:hover {
+  opacity: .75;
+}
+
 /* ---- Scrollbar ---- */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

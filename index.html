@@ -55,6 +55,9 @@
         <span class="header-title">Plan</span>
       </div>
       <div class="header-right">
+        <button id="btn-admin-gear" class="icon-btn hidden" title="Administrasjon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
         <button id="btn-notif" class="icon-btn notif-btn" title="Varsler">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -101,6 +104,12 @@
               Oppgaver
             </button>
           </li>
+          <li>
+            <button class="nav-btn" data-view="todos">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              ToDo-er
+            </button>
+          </li>
           <li id="nav-notifications">
             <button class="nav-btn" data-view="notifications">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -141,25 +150,9 @@
               <h2 class="section-title">Korte ToDo's</h2>
               <div class="section-header-actions">
                 <span id="todo-count-label" class="section-count-label"></span>
-                <button id="toggle-quick-todo" class="btn btn-secondary btn-compact mobile-only" type="button">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  ToDo
-                </button>
+                <button class="btn-link" type="button" onclick="showView('todos')">Se alle →</button>
               </div>
             </div>
-            <form id="quick-todo-form" class="quick-todo-form">
-              <input type="text" id="todo-title" class="form-input todo-title-input" placeholder="Legg til kort ToDo..." required />
-              <select id="todo-assignee" class="form-input todo-assignee-select">
-                <option value="">Ingen ansvarlig</option>
-              </select>
-              <input type="date" id="todo-due-date" class="form-input todo-date-input" aria-label="Frist" />
-              <select id="todo-priority" class="form-input todo-priority-select">
-                <option value="medium">Normal</option>
-                <option value="høy">Haster</option>
-                <option value="lav">Lav</option>
-              </select>
-              <button type="submit" class="btn btn-primary todo-add-btn">Legg til</button>
-            </form>
             <div id="todos-list" class="todos-list"></div>
           </section>
           <div class="dashboard-sections">
@@ -244,6 +237,48 @@
             <button id="btn-mark-all-read" class="btn btn-secondary">Merk alle som lest</button>
           </div>
           <div id="notifications-list" class="notifications-list"></div>
+        </div>
+
+        <!-- TODO-OVERSIKT -->
+        <div id="view-todos" class="view">
+          <div class="view-header">
+            <h1 class="view-title">ToDo-er</h1>
+            <button id="btn-toggle-todo-form" class="btn btn-primary hidden" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Ny ToDo
+            </button>
+          </div>
+          <form id="quick-todo-form" class="quick-todo-form todo-view-form" autocomplete="off">
+            <input type="text" id="todo-title" class="form-input todo-title-input" placeholder="Legg til kort ToDo..." required />
+            <select id="todo-assignee" class="form-input todo-assignee-select">
+              <option value="">Ingen ansvarlig</option>
+            </select>
+            <input type="date" id="todo-due-date" class="form-input todo-date-input" aria-label="Frist" />
+            <select id="todo-priority" class="form-input todo-priority-select">
+              <option value="medium">Normal</option>
+              <option value="høy">Haster</option>
+              <option value="lav">Lav</option>
+            </select>
+            <button type="submit" class="btn btn-primary todo-add-btn">Legg til</button>
+          </form>
+          <div class="todo-view-toolbar">
+            <div class="todo-status-tabs">
+              <button class="todo-tab active" type="button" data-todo-status="open">Åpne</button>
+              <button class="todo-tab" type="button" data-todo-status="done">Fullført</button>
+            </div>
+            <div class="filter-group">
+              <select id="todo-filter-priority" class="filter-select">
+                <option value="">Alle prioriteter</option>
+                <option value="høy">Haster</option>
+                <option value="medium">Normal</option>
+                <option value="lav">Lav</option>
+              </select>
+              <select id="todo-filter-assignee" class="filter-select">
+                <option value="">Alle ansvarlige</option>
+              </select>
+            </div>
+          </div>
+          <div id="todos-view-list" class="todos-list"></div>
         </div>
 
         <!-- ADMINISTRASJON -->
@@ -354,6 +389,12 @@
         </div>
         <span>Dashboard</span>
       </button>
+      <button class="bottom-btn" data-view="todos">
+        <div class="bottom-btn-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+        <span>ToDo-er</span>
+      </button>
       <button class="bottom-btn" data-view="tasks">
         <div class="bottom-btn-icon-wrap">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -366,12 +407,6 @@
           <span id="bottom-notif-badge" class="notif-badge hidden">0</span>
         </div>
         <span>Varsler</span>
-      </button>
-      <button class="bottom-btn hidden" id="bottom-admin-btn" data-view="admin">
-        <div class="bottom-btn-icon-wrap">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        </div>
-        <span>Admin</span>
       </button>
     </nav>
 
