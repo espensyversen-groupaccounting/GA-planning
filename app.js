@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.3.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -13,6 +13,7 @@ const state = {
   user: null,
   profile: null,
   tasks: [],
+  todos: [],
   users: [],
   allowedUsers: [],
   categories: [],
@@ -24,6 +25,7 @@ const state = {
   commentUnsub: null,
   editMode: false,
   quickFilter: '',
+  dashboardScope: 'team',
 };
 
 // ============================================================
@@ -84,6 +86,26 @@ function taskDueDays(task) {
   return Math.ceil((d.getTime() - startOfToday().getTime()) / 86400000);
 }
 
+function isDoneItem(item) {
+  return item && (item.status === 'fullfort' || item.status === 'done');
+}
+
+function isMineItem(item) {
+  return state.user && item && item.assignedTo === state.user.uid;
+}
+
+function scopedTasks() {
+  return state.dashboardScope === 'mine'
+    ? state.tasks.filter(isMineItem)
+    : state.tasks;
+}
+
+function scopedTodos() {
+  return state.dashboardScope === 'mine'
+    ? state.todos.filter(isMineItem)
+    : state.todos;
+}
+
 function dueDateRelativeLabel(task) {
   const days = taskDueDays(task);
   if (!Number.isFinite(days)) return '';
@@ -131,7 +153,7 @@ function dueNext14Days(task) {
 }
 
 function taskNeedsAttention(task) {
-  if (!task || task.status === 'fullfort') return false;
+  if (!task || isDoneItem(task)) return false;
   const days = taskDueDays(task);
   return days < 0 ||
     days <= 14 ||
@@ -141,7 +163,7 @@ function taskNeedsAttention(task) {
 }
 
 function taskSignals(task) {
-  if (!task || task.status === 'fullfort') return [];
+  if (!task || isDoneItem(task)) return [];
   const days = taskDueDays(task);
   const signals = [];
   if (days < 0) signals.push({ key: 'overdue', label: 'Forfalt' });
@@ -154,7 +176,7 @@ function taskSignals(task) {
 }
 
 function taskUrgencyScore(task) {
-  if (!task || task.status === 'fullfort') return -1000;
+  if (!task || isDoneItem(task)) return -1000;
   const days = taskDueDays(task);
   const priority = { høy: 30, medium: 16, lav: 6 }[task.priority] || 10;
   let due = 0;
@@ -171,8 +193,8 @@ function taskUrgencyScore(task) {
 }
 
 function compareTasksByUrgency(a, b) {
-  if (a.status === 'fullfort' && b.status !== 'fullfort') return 1;
-  if (b.status === 'fullfort' && a.status !== 'fullfort') return -1;
+  if (isDoneItem(a) && !isDoneItem(b)) return 1;
+  if (isDoneItem(b) && !isDoneItem(a)) return -1;
   const score = taskUrgencyScore(b) - taskUrgencyScore(a);
   if (score !== 0) return score;
   const due = taskDueDays(a) - taskDueDays(b);
@@ -462,6 +484,7 @@ function setupUI() {
   const showCreate = canEdit();
   document.getElementById('btn-add-task')?.classList.toggle('hidden', !showCreate);
   document.getElementById('btn-add-task-dashboard')?.classList.toggle('hidden', !showCreate);
+  document.getElementById('quick-todo-form')?.classList.toggle('hidden', !showCreate);
 }
 
 function subscribeToRealtime() {
@@ -479,9 +502,15 @@ function subscribeToRealtime() {
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'tasks') renderTasksList();
     }, onRealtimeError('tasks', 'Kunne ikke laste oppgaver. Prøv å oppdatere appen.')),
+    subscribeToTodos(todos => {
+      state.todos = todos;
+      if (state.currentView === 'dashboard') renderDashboard();
+    }, onRealtimeError('todos', 'Kunne ikke laste ToDo-listen. Firestore-reglene må trolig oppdateres.')),
     subscribeToUsers(users => {
       state.users = users;
       populateAssigneeSelects();
+      if (state.currentView === 'dashboard') renderDashboard();
+      if (state.currentView === 'tasks') renderTasksList();
       if (state.currentView === 'admin') renderAdmin();
     }, onRealtimeError('users', 'Kunne ikke laste teammedlemmer. Prøv å oppdatere appen.')),
     subscribeToAllowedUsers(allowedUsers => {
@@ -508,13 +537,21 @@ function subscribeToRealtime() {
 // ============================================================
 
 function renderDashboard() {
-  const tasks = state.tasks;
-  const open = tasks.filter(t => t.status !== 'fullfort');
+  updateDashboardScopeButtons();
+  const tasks = scopedTasks();
+  const todos = scopedTodos();
+  const open = tasks.filter(t => !isDoneItem(t));
+  const openTodos = todos.filter(t => !isDoneItem(t));
   const overdue = open.filter(t => taskDueDays(t) < 0);
+  const overdueTodos = openTodos.filter(t => taskDueDays(t) < 0);
   const today = open.filter(dueTodayOrOverdue);
+  const todayTodos = openTodos.filter(dueTodayOrOverdue);
   const week = open.filter(t => dueTodayOrOverdue(t) || dueThisWeek(t));
+  const weekTodos = openTodos.filter(t => dueTodayOrOverdue(t) || dueThisWeek(t));
   const unassigned = open.filter(t => !t.assignedTo);
+  const unassignedTodos = openTodos.filter(t => !t.assignedTo);
   const high = open.filter(t => t.priority === 'høy');
+  const highTodos = openTodos.filter(t => t.priority === 'høy');
   const todayPriority = today.sort(compareTasksByUrgency);
   const weekPriority = week
     .filter(t => !todayPriority.some(todayTask => todayTask.id === t.id))
@@ -522,39 +559,56 @@ function renderDashboard() {
 
   document.getElementById('stats-grid').innerHTML = `
     <button class="stat-card stat-overdue" type="button" onclick="openTasksWithQuickFilter('attention')">
-      <div class="stat-number">${overdue.length}</div>
+      <div class="stat-number">${overdue.length + overdueTodos.length}</div>
       <div class="stat-label">Forsinket</div>
     </button>
     <button class="stat-card stat-today" type="button" onclick="openTasksWithQuickFilter('today')">
-      <div class="stat-number">${today.length}</div>
+      <div class="stat-number">${today.length + todayTodos.length}</div>
       <div class="stat-label">I dag</div>
     </button>
     <button class="stat-card stat-soon" type="button" onclick="openTasksWithQuickFilter('week')">
-      <div class="stat-number">${week.length}</div>
+      <div class="stat-number">${week.length + weekTodos.length}</div>
       <div class="stat-label">Denne uken</div>
     </button>
     <button class="stat-card stat-unassigned" type="button" onclick="openTasksWithQuickFilter('unassigned')">
-      <div class="stat-number">${unassigned.length}</div>
+      <div class="stat-number">${unassigned.length + unassignedTodos.length}</div>
       <div class="stat-label">Uten ansvarlig</div>
     </button>
     <button class="stat-card stat-high" type="button" onclick="openTasksWithQuickFilter('high')">
-      <div class="stat-number">${high.length}</div>
+      <div class="stat-number">${high.length + highTodos.length}</div>
       <div class="stat-label">Høy prioritet</div>
     </button>
   `;
 
+  renderTodosList(openTodos.sort(compareTasksByUrgency).slice(0, 5));
   renderPriorityGroups('today-priority-list', todayPriority, 'Ingen oppgaver eller deloppgaver har frist i dag');
   renderPriorityGroups('week-priority-list', weekPriority, 'Ingen flere oppgaver har frist denne uken');
   renderCompactList('unassigned-tasks-list', unassigned.sort(compareTasksByUrgency).slice(0, 6), 'Alle åpne oppgaver har ansvarlig');
-  renderTeamWorkload(open);
+  renderTeamWorkload([...open, ...openTodos]);
 }
 
-function renderTeamWorkload(openTasks) {
+function updateDashboardScopeButtons() {
+  document.querySelectorAll('.scope-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.dashboardScope === state.dashboardScope);
+  });
+}
+
+function setDashboardScope(scope) {
+  state.dashboardScope = scope === 'mine' ? 'mine' : 'team';
+  renderDashboard();
+}
+
+function renderTeamWorkload(openItems) {
   const el = document.getElementById('team-workload-list');
   if (!el) return;
 
+  if (state.dashboardScope === 'mine') {
+    el.innerHTML = `<div class="empty-state compact-empty"><p>Bytt til Team for å se fordeling per person</p></div>`;
+    return;
+  }
+
   const assignedUsers = state.users.map(u => {
-    const tasks = openTasks.filter(t => t.assignedTo === u.id);
+    const tasks = openItems.filter(t => t.assignedTo === u.id);
     return {
       user: u,
       total: tasks.length,
@@ -589,6 +643,70 @@ function renderCompactList(containerId, tasks, emptyMsg) {
     return;
   }
   el.innerHTML = tasks.map(t => taskCardHtml(t, true)).join('');
+}
+
+function renderTodosList(todos) {
+  const el = document.getElementById('todos-list');
+  const countEl = document.getElementById('todo-count-label');
+  if (!el) return;
+  if (countEl) {
+    const total = scopedTodos().filter(t => !isDoneItem(t)).length;
+    countEl.textContent = total ? `${total} åpne` : '';
+  }
+
+  if (!todos.length) {
+    el.innerHTML = `<div class="empty-state compact-empty"><p>Ingen korte ToDo's i denne visningen</p></div>`;
+    return;
+  }
+
+  el.innerHTML = todos.map(todoCardHtml).join('');
+}
+
+function todoCardHtml(todo) {
+  const dateClass = dueDateClass(todo.dueDate);
+  const assignee = state.users.find(u => u.id === todo.assignedTo);
+  const relativeDue = dueDateRelativeLabel(todo);
+  const dueDateHtml = todo.dueDate ? `
+    <span class="due-date ${dateClass}">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      ${formatDate(todo.dueDate)}${relativeDue ? ` · ${relativeDue}` : ''}
+    </span>` : '';
+  const assigneeHtml = assignee ? `
+    <span class="assignee-chip">
+      ${assignee.photoURL
+        ? `<img src="${esc(assignee.photoURL)}" class="assignee-avatar" alt="" />`
+        : `<span class="assignee-avatar">${initials(assignee.displayName || assignee.email)}</span>`}
+      <span>${esc(assignee.displayName || assignee.email)}</span>
+    </span>` : `<span class="unassigned-chip">Ikke tildelt</span>`;
+  const signalHtml = taskSignals(todo).map(s => `<span class="risk-badge ${s.key}">${s.label}</span>`).join('');
+  const canChange = canEdit() || isMineItem(todo);
+
+  return `
+    <div class="todo-card priority-${todo.priority || 'medium'}">
+      <button class="todo-check-btn ${isDoneItem(todo) ? 'checked' : ''}"
+        type="button"
+        onclick="toggleTodoDone('${todo.id}', event)"
+        ${!canChange ? 'disabled' : ''}
+        title="${isDoneItem(todo) ? 'Angre fullført' : 'Marker som fullført'}">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
+      <div class="todo-card-main">
+        <div class="todo-title">${esc(todo.title)}</div>
+        <div class="todo-meta">
+          ${signalHtml}
+          <span class="priority-badge ${todo.priority || 'medium'}">
+            <span class="priority-dot ${todo.priority || 'medium'}"></span>
+            ${todo.priority === 'høy' ? 'Haster' : todo.priority === 'lav' ? 'Lav' : 'Normal'}
+          </span>
+          ${assigneeHtml}
+          ${dueDateHtml}
+        </div>
+      </div>
+      ${canEdit() ? `
+        <button class="btn-icon-danger todo-delete-btn" type="button" onclick="handleDeleteTodo('${todo.id}', event)" title="Slett ToDo">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>` : ''}
+    </div>`;
 }
 
 function renderPriorityGroups(containerId, tasks, emptyMsg) {
@@ -758,29 +876,39 @@ function renderTasksList() {
   const search   = (document.getElementById('task-search').value || '').toLowerCase();
   updateQuickFilterButtons();
 
-  let tasks = [...state.tasks];
-  if (status)   tasks = tasks.filter(t => t.status === status);
-  if (priority) tasks = tasks.filter(t => t.priority === priority);
-  if (assignee === '__unassigned') tasks = tasks.filter(t => !t.assignedTo);
-  else if (assignee) tasks = tasks.filter(t => t.assignedTo === assignee);
-  if (category) tasks = tasks.filter(t => t.categoryId === category);
-  if (search)   tasks = tasks.filter(t =>
-    t.title.toLowerCase().includes(search) ||
+  let items = [
+    ...state.tasks.map(t => ({ ...t, itemType: 'task' })),
+    ...state.todos.map(t => ({ ...t, itemType: 'todo' }))
+  ];
+  if (status) {
+    items = items.filter(t => {
+      if (t.itemType === 'todo') return status === 'fullfort' ? isDoneItem(t) : false;
+      return t.status === status;
+    });
+  }
+  if (priority) items = items.filter(t => t.priority === priority);
+  if (assignee === '__unassigned') items = items.filter(t => !t.assignedTo);
+  else if (assignee) items = items.filter(t => t.assignedTo === assignee);
+  if (category) items = items.filter(t => t.itemType === 'task' && t.categoryId === category);
+  if (search) items = items.filter(t =>
+    (t.title || '').toLowerCase().includes(search) ||
     (t.description || '').toLowerCase().includes(search) ||
     (t.categoryName || '').toLowerCase().includes(search));
 
-  if (state.quickFilter === 'attention') tasks = tasks.filter(t => t.status !== 'fullfort' && (dueTodayOrOverdue(t) || dueThisWeek(t) || !t.assignedTo || t.priority === 'høy'));
-  if (state.quickFilter === 'today') tasks = tasks.filter(t => t.status !== 'fullfort' && dueTodayOrOverdue(t));
-  if (state.quickFilter === 'week') tasks = tasks.filter(t => t.status !== 'fullfort' && (dueTodayOrOverdue(t) || dueThisWeek(t)));
-  if (state.quickFilter === 'unassigned') tasks = tasks.filter(t => t.status !== 'fullfort' && !t.assignedTo);
-  if (state.quickFilter === 'soon') tasks = tasks.filter(t => t.status !== 'fullfort' && dueNext14Days(t));
-  if (state.quickFilter === 'mine') tasks = tasks.filter(t => t.status !== 'fullfort' && t.assignedTo === state.user.uid);
-  if (state.quickFilter === 'high') tasks = tasks.filter(t => t.status !== 'fullfort' && t.priority === 'høy');
+  if (state.quickFilter === 'projects') items = items.filter(t => t.itemType === 'task');
+  if (state.quickFilter === 'todos') items = items.filter(t => t.itemType === 'todo');
+  if (state.quickFilter === 'attention') items = items.filter(t => !isDoneItem(t) && (dueTodayOrOverdue(t) || dueThisWeek(t) || !t.assignedTo || t.priority === 'høy'));
+  if (state.quickFilter === 'today') items = items.filter(t => !isDoneItem(t) && dueTodayOrOverdue(t));
+  if (state.quickFilter === 'week') items = items.filter(t => !isDoneItem(t) && (dueTodayOrOverdue(t) || dueThisWeek(t)));
+  if (state.quickFilter === 'unassigned') items = items.filter(t => !isDoneItem(t) && !t.assignedTo);
+  if (state.quickFilter === 'soon') items = items.filter(t => !isDoneItem(t) && dueNext14Days(t));
+  if (state.quickFilter === 'mine') items = items.filter(t => !isDoneItem(t) && t.assignedTo === state.user.uid);
+  if (state.quickFilter === 'high') items = items.filter(t => !isDoneItem(t) && t.priority === 'høy');
 
-  tasks.sort(compareTasksByUrgency);
+  items.sort(compareTasksByUrgency);
 
   const el = document.getElementById('tasks-list');
-  if (!tasks.length) {
+  if (!items.length) {
     const hasFilters = document.getElementById('filter-status').value ||
                        document.getElementById('filter-priority').value ||
                        document.getElementById('filter-assignee').value ||
@@ -801,7 +929,7 @@ function renderTasksList() {
          </div>`;
     return;
   }
-  el.innerHTML = tasks.map(t => taskCardHtml(t, false)).join('');
+  el.innerHTML = items.map(t => t.itemType === 'todo' ? todoCardHtml(t) : taskCardHtml(t, false)).join('');
 }
 
 function populateAssigneeSelects() {
@@ -817,6 +945,13 @@ function populateAssigneeSelects() {
   ].join('');
   const formEl = document.getElementById('task-assignee');
   if (formEl) formEl.innerHTML = formOpts;
+
+  const todoAssigneeEl = document.getElementById('todo-assignee');
+  if (todoAssigneeEl) {
+    const current = todoAssigneeEl.value;
+    todoAssigneeEl.innerHTML = formOpts;
+    if (current && state.users.some(u => u.id === current)) todoAssigneeEl.value = current;
+  }
 }
 
 function populateCategorySelects() {
@@ -1117,6 +1252,84 @@ async function handleDeleteTask() {
     showToast('Oppgave slettet');
   } catch(e) {
     showToast('Feil ved sletting.', 'error');
+  }
+}
+
+// ============================================================
+// TODOS
+// ============================================================
+
+async function handleAddTodo(e) {
+  e.preventDefault();
+  if (!canEdit()) {
+    showToast('Du må være Admin eller Teamleder for å legge til ToDo.', 'error');
+    return;
+  }
+
+  const titleEl = document.getElementById('todo-title');
+  const assigneeId = document.getElementById('todo-assignee').value;
+  const dueStr = document.getElementById('todo-due-date').value;
+  const priority = document.getElementById('todo-priority').value;
+  const title = titleEl.value.trim();
+  if (!title) return;
+
+  const assignee = state.users.find(u => u.id === assigneeId);
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true;
+
+  try {
+    await createTodo({
+      title,
+      priority,
+      assignedTo: assigneeId || null,
+      assignedToName: assignee ? (assignee.displayName || assignee.email) : null,
+      dueDate: dueStr ? firebase.firestore.Timestamp.fromDate(new Date(dueStr)) : null,
+    });
+    e.target.reset();
+    document.getElementById('todo-priority').value = 'medium';
+    showToast('ToDo lagt til');
+  } catch(e) {
+    console.error('Todo create error:', e);
+    const message = e && e.code === 'permission-denied'
+      ? 'Kunne ikke lagre ToDo. Firestore-reglene må oppdateres først.'
+      : 'Feil ved lagring av ToDo.';
+    showToast(message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function toggleTodoDone(todoId, event) {
+  if (event) event.stopPropagation();
+  const todo = state.todos.find(t => t.id === todoId);
+  if (!todo) return;
+  if (!canEdit() && todo.assignedTo !== state.user.uid) return;
+
+  try {
+    await updateTodo(todoId, {
+      status: isDoneItem(todo) ? 'apen' : 'fullfort',
+      completedAt: isDoneItem(todo) ? null : firebase.firestore.FieldValue.serverTimestamp(),
+      completedBy: isDoneItem(todo) ? null : state.user.uid,
+    });
+    showToast(isDoneItem(todo) ? 'ToDo åpnet igjen' : 'ToDo fullført');
+  } catch(e) {
+    console.error('Todo status error:', e);
+    showToast('Feil ved oppdatering av ToDo.', 'error');
+  }
+}
+
+async function handleDeleteTodo(todoId, event) {
+  if (event) event.stopPropagation();
+  const todo = state.todos.find(t => t.id === todoId);
+  const confirmed = await showConfirm('Slett ToDo', `Er du sikker på at du vil slette "${todo ? todo.title : 'denne ToDo-en'}"?`);
+  if (!confirmed) return;
+
+  try {
+    await deleteTodo(todoId);
+    showToast('ToDo slettet');
+  } catch(e) {
+    console.error('Todo delete error:', e);
+    showToast('Feil ved sletting av ToDo.', 'error');
   }
 }
 
@@ -1804,6 +2017,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add task buttons
   document.getElementById('btn-add-task').addEventListener('click', () => openTaskModal());
   document.getElementById('btn-add-task-dashboard').addEventListener('click', () => openTaskModal());
+  document.getElementById('quick-todo-form').addEventListener('submit', handleAddTodo);
+  document.querySelectorAll('.scope-btn').forEach(btn => {
+    btn.addEventListener('click', () => setDashboardScope(btn.dataset.dashboardScope || 'team'));
+  });
 
   // Modal close
   document.getElementById('modal-close').addEventListener('click', closeTaskModal);

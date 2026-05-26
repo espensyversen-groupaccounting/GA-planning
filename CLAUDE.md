@@ -1,9 +1,9 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.2.1`
+Gjeldende appversjon: `v1.3.0`
 
-PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver som mangler eier, og hva som er fullført.
+PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
 Sanntidssynkronisering skjer via Firebase Firestore. UI er norsk, og appen er bygget som en enkel vanilla HTML/CSS/JS single-page app uten bundler.
 
@@ -50,6 +50,7 @@ Planning/
 - `users`: alle innloggede kan lese; bruker kan opprette/oppdatere egen profil; Admin kan oppdatere/slette brukere.
 - `categories`: Admin og Teamleder kan opprette, endre, skjule og slette.
 - `tasks`: Admin og Teamleder kan opprette og oppdatere; direkte delete er blokkert. Oppgaver arkiveres med soft-delete.
+- `todos`: Admin og Teamleder kan opprette, oppdatere og arkivere; Medlem kan fullføre/åpne egne tildelte ToDo-er.
 - `comments`: alle innloggede kan lese og opprette; direkte delete er blokkert.
 - `notifications`: brukeren eier egne varsler.
 
@@ -93,6 +94,19 @@ Opprettes eller oppdateres automatisk ved første innlogging etter at brukeren f
 - `createdBy`, `createdAt`, `updatedAt`
 - write metadata
 
+### `todos/{todoId}`
+Lettvektsoppgaver for ad hoc-arbeid som ikke trenger full prosjektstruktur.
+
+- `title`
+- `priority`: `høy` | `medium` | `lav`
+- `status`: `apen` | `fullfort`
+- `assignedTo`, `assignedToName`
+- `dueDate`: Firestore Timestamp eller null
+- `completedAt`, `completedBy`
+- `deletedAt`, `deletedBy`: soft-delete/arkivering
+- `createdBy`, `createdAt`, `updatedAt`, `lastEditedBy`
+- write metadata
+
 ### `categories/{categoryId}`
 Konfigureres fra Admin-panelet av Admin eller Teamleder.
 
@@ -116,18 +130,23 @@ Kategorier kan skjules eller slettes. Oppgaver lagrer også kategoriens navn/far
 ## Dashboard og prioritering
 Dashboardet er en operativ ledervisning, ikke bare en statusrapport.
 
+Dashboardet har en segmentert kontroll:
+- `Team`: viser teamets samlede oppgaver, ToDo-er, risiko og fordeling.
+- `Mine`: viser kun oppgaver og ToDo-er tildelt innlogget bruker.
+
 Toppkort:
 - `Forsinket`: åpne oppgaver med passert hovedfrist.
 - `I dag`: åpne oppgaver eller deloppgaver med frist i dag, inkludert forfalte.
-- `Denne uken`: åpne oppgaver eller deloppgaver med frist innen 7 dager.
-- `Uten ansvarlig`: åpne oppgaver uten tildelt person.
-- `Høy prioritet`: åpne oppgaver med høy prioritet.
+- `Denne uken`: åpne oppgaver, deloppgaver eller ToDo-er med frist innen 7 dager.
+- `Uten ansvarlig`: åpne oppgaver eller ToDo-er uten tildelt person.
+- `Høy prioritet`: åpne oppgaver eller ToDo-er med høy prioritet.
 
 Dashboardseksjoner:
+- `Korte ToDo's`: topp 5 åpne ToDo-er i valgt Team/Mine-visning, sortert etter hastegrad.
 - `Prioriter i dag`: forfalte oppgaver og oppgaver/deloppgaver med frist i dag, gruppert etter `Høy`, `Medium`, `Lav`.
 - `Planlegg denne uken`: kommende oppgaver/deloppgaver innen 1-7 dager, gruppert etter prioritet.
 - `Uten ansvarlig`: åpne oppgaver som må delegeres.
-- `Teamoversikt`: viser åpne oppgaver og risikopunkter per person.
+- `Teamoversikt`: viser åpne oppgaver/ToDo-er og risikopunkter per person. I `Mine`-visning skjules denne og brukeren får beskjed om å bytte til Team for teamfordeling.
 
 Hasteberegningen i `app.js` tar hensyn til frist, om fristen er passert, prioritet, om oppgaven mangler ansvarlig, status og deloppgavefrister.
 
@@ -136,6 +155,8 @@ Oppgaver-fanen har ordinære filtre og hurtigfiltre.
 
 Hurtigfiltre:
 - `Alle`
+- `Prosjekter`
+- `ToDo`
 - `Må følges opp`
 - `Uten ansvarlig`
 - `Denne uken`: frist i dag eller innen 7 dager, inkludert deloppgaver.
@@ -143,7 +164,24 @@ Hurtigfiltre:
 - `Mine`
 - `Høy prioritet`
 
-Standard sortering er etter hastegrad, ikke bare prioritet. Oppgavekort viser signaler som `Forfalt`, `Frist i dag`, `Denne uken`, `Neste 14 d`, `Ikke tildelt` og `Deloppgavefrist`.
+Standard sortering er etter hastegrad, ikke bare prioritet. Oppgavekort og ToDo-kort viser signaler som `Forfalt`, `Frist i dag`, `Denne uken`, `Neste 14 d`, `Ikke tildelt` og `Deloppgavefrist`.
+
+## Korte ToDo-er
+ToDo-er er ment for korte ad hoc-oppgaver som må følges opp, men som ikke trenger full prosjektstruktur med deloppgaver og kommentarer.
+
+ToDo legges inn direkte fra dashboardet med:
+- tittel
+- ansvarlig
+- frist
+- prioritet: `Haster`, `Normal`, `Lav`
+
+ToDo-er vises:
+- som egen `Korte ToDo's`-seksjon på dashboardet
+- i toppkortene på dashboardet der de påvirker `I dag`, `Denne uken`, `Uten ansvarlig` og `Høy prioritet`
+- i Oppgaver-fanen under `Alle` og hurtigfilteret `ToDo`
+- i Team/Mine-visningen på dashboardet
+
+Admin og Teamleder kan opprette og slette ToDo-er. Tildelt Medlem kan markere egne ToDo-er som fullført eller åpne dem igjen.
 
 ## Legge til nye brukere
 1. Logg inn som en bruker med rollen `admin`.
@@ -189,7 +227,7 @@ Full redigering av en eksisterende oppgave bruker transaksjon med `updatedAt`-sj
 Alle skriver legger på `clientAppVersion`, `clientBuild`, `clientWriteId` og `writeSchemaVersion` for sporbarhet. Rules krever ikke app-versjon per nå, fordi for streng versjonsgating tidligere gjorde det lett å blokkere legitime brukere ved utrulling.
 
 ## Oppstart og caching
-App-skallet vises så snart brukerens tilgang er bekreftet. Realtime subscriptions for oppgaver, brukere, inviterte brukere, kategorier og varsler startes før bakgrunnssynk av profil fullføres, slik at en profil-write ikke skal stoppe datalasting.
+App-skallet vises så snart brukerens tilgang er bekreftet. Realtime subscriptions for oppgaver, ToDo-er, brukere, inviterte brukere, kategorier og varsler startes før bakgrunnssynk av profil fullføres, slik at en profil-write ikke skal stoppe datalasting.
 
 Service worker cacher appfiler. Ved ny release må `APP_VERSION` i `app.js` og `service-worker.js`, samt `CLIENT_APP_VERSION`/`CLIENT_BUILD` i `firestore.js`, holdes i sync.
 

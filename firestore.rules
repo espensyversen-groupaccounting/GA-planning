@@ -25,6 +25,10 @@ service cloud.firestore {
       return resource.data.assignedTo == request.auth.uid;
     }
 
+    function isOwnAssignedTodo() {
+      return resource.data.assignedTo == request.auth.uid;
+    }
+
     match /allowedUsers/{doc} {
       allow read: if isAuth();
       allow create, update, delete: if isAuth() && isAdmin();
@@ -57,6 +61,30 @@ service cloud.firestore {
           && isOwnAssignedTask()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status',
+            'updatedAt',
+            'lastEditedBy',
+            'clientAppVersion',
+            'clientBuild',
+            'clientWriteId',
+            'writeSchemaVersion'
+          ])
+        )
+      );
+      allow delete: if false;
+    }
+
+    match /todos/{todoId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && isAdminOrTeamleder();
+      allow update: if isAuth() && (
+        isAdminOrTeamleder()
+        || (
+          getRole() == 'medlem'
+          && isOwnAssignedTodo()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'completedAt',
+            'completedBy',
             'updatedAt',
             'lastEditedBy',
             'clientAppVersion',

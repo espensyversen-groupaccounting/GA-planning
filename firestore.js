@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.2.1';
-const CLIENT_BUILD = 1201;
+const CLIENT_APP_VERSION = '1.3.0';
+const CLIENT_BUILD = 1300;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -243,6 +243,48 @@ async function updateSubtasksSafely(taskId, transform) {
 
 async function deleteTask(taskId) {
   await db.collection('tasks').doc(taskId).update({
+    deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    deletedBy: auth.currentUser.uid,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastEditedBy: auth.currentUser.uid,
+    ...writeMeta()
+  });
+}
+
+// ---- ToDos ----
+
+function subscribeToTodos(callback, onError) {
+  return db.collection('todos')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snap => {
+      callback(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => !t.deletedAt));
+    }, onError);
+}
+
+async function createTodo(data) {
+  const ref = await db.collection('todos').add({
+    ...data,
+    status: data.status || 'apen',
+    createdBy: auth.currentUser.uid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastEditedBy: auth.currentUser.uid,
+    ...writeMeta()
+  });
+  return ref.id;
+}
+
+async function updateTodo(todoId, data) {
+  await db.collection('todos').doc(todoId).update({
+    ...data,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastEditedBy: auth.currentUser.uid,
+    ...writeMeta()
+  });
+}
+
+async function deleteTodo(todoId) {
+  await db.collection('todos').doc(todoId).update({
     deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
     deletedBy: auth.currentUser.uid,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),

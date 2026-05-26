@@ -124,12 +124,38 @@
         <div id="view-dashboard" class="view active">
           <div class="view-header">
             <h1 class="view-title">Dashboard</h1>
-            <button id="btn-add-task-dashboard" class="btn btn-primary hidden">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Ny oppgave
-            </button>
+            <div class="dashboard-header-actions">
+              <div class="dashboard-scope-toggle" aria-label="Dashboard-visning">
+                <button class="scope-btn active" type="button" data-dashboard-scope="team">Team</button>
+                <button class="scope-btn" type="button" data-dashboard-scope="mine">Mine</button>
+              </div>
+              <button id="btn-add-task-dashboard" class="btn btn-primary hidden">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Ny oppgave
+              </button>
+            </div>
           </div>
           <div class="stats-grid" id="stats-grid"></div>
+          <section class="dashboard-section dashboard-section-wide todo-dashboard-section">
+            <div class="section-header-row">
+              <h2 class="section-title">Korte ToDo's</h2>
+              <span id="todo-count-label" class="section-count-label"></span>
+            </div>
+            <form id="quick-todo-form" class="quick-todo-form">
+              <input type="text" id="todo-title" class="form-input todo-title-input" placeholder="Legg til kort ToDo..." required />
+              <select id="todo-assignee" class="form-input todo-assignee-select">
+                <option value="">Ingen ansvarlig</option>
+              </select>
+              <input type="date" id="todo-due-date" class="form-input todo-date-input" aria-label="Frist" />
+              <select id="todo-priority" class="form-input todo-priority-select">
+                <option value="medium">Normal</option>
+                <option value="høy">Haster</option>
+                <option value="lav">Lav</option>
+              </select>
+              <button type="submit" class="btn btn-primary todo-add-btn">Legg til</button>
+            </form>
+            <div id="todos-list" class="todos-list"></div>
+          </section>
           <div class="dashboard-sections">
             <section class="dashboard-section dashboard-section-wide">
               <h2 class="section-title">Prioriter i dag</h2>
@@ -161,6 +187,8 @@
           </div>
           <div class="quick-filters" id="quick-filters" aria-label="Hurtigfiltre">
             <button class="quick-filter active" type="button" data-quick-filter="">Alle</button>
+            <button class="quick-filter" type="button" data-quick-filter="projects">Prosjekter</button>
+            <button class="quick-filter" type="button" data-quick-filter="todos">ToDo</button>
             <button class="quick-filter" type="button" data-quick-filter="attention">Må følges opp</button>
             <button class="quick-filter" type="button" data-quick-filter="unassigned">Uten ansvarlig</button>
             <button class="quick-filter" type="button" data-quick-filter="week">Denne uken</button>
