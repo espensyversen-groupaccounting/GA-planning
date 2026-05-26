@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.2.0';
-const CLIENT_BUILD = 1200;
+const CLIENT_APP_VERSION = '1.2.1';
+const CLIENT_BUILD = 1201;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -48,6 +48,12 @@ async function checkAllowedUser(email) {
 async function getAllowedUsers() {
   const snap = await db.collection('allowedUsers').get();
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+function subscribeToAllowedUsers(callback, onError) {
+  return db.collection('allowedUsers').onSnapshot(snap => {
+    callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  }, onError);
 }
 
 async function addAllowedUser(email, role) {

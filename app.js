@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -14,6 +14,7 @@ const state = {
   profile: null,
   tasks: [],
   users: [],
+  allowedUsers: [],
   categories: [],
   notifications: [],
   currentView: 'dashboard',
@@ -483,6 +484,10 @@ function subscribeToRealtime() {
       populateAssigneeSelects();
       if (state.currentView === 'admin') renderAdmin();
     }, onRealtimeError('users', 'Kunne ikke laste teammedlemmer. Prøv å oppdatere appen.')),
+    subscribeToAllowedUsers(allowedUsers => {
+      state.allowedUsers = allowedUsers;
+      if (state.currentView === 'admin') renderAdmin();
+    }, onRealtimeError('allowedUsers', 'Kunne ikke laste inviterte brukere. Prøv å oppdatere appen.')),
     subscribeToCategories(categories => {
       state.categories = categories;
       populateCategorySelects();
@@ -1425,30 +1430,32 @@ function renderAdmin() {
   updateInviteLinkUI();
 
   const el = document.getElementById('users-list');
-  if (!state.users.length) {
+  const users = adminTeamMembers();
+  if (!users.length) {
     el.innerHTML = '<p style="color:var(--text-2);font-size:.875rem">Ingen brukere ennå</p>';
     renderCategoriesAdmin();
     return;
   }
 
-  el.innerHTML = state.users.map(u => `
-    <div class="user-item">
+  el.innerHTML = users.map(u => `
+    <div class="user-item ${u.pending ? 'pending' : ''}">
       ${u.photoURL
         ? `<img src="${esc(u.photoURL)}" class="user-item-avatar" alt="" />`
         : `<div class="user-item-avatar">${initials(u.displayName || u.email)}</div>`}
       <div class="user-item-info">
         <div class="user-item-name">${esc(u.displayName || u.email)}</div>
-        <div class="user-item-email">${esc(u.email)}</div>
+        <div class="user-item-email">${esc(u.email)}${u.pending ? ' · Invitert' : ''}</div>
       </div>
       <div class="user-item-actions">
+        ${u.pending ? '<span class="pending-user-badge">Invitert</span>' : ''}
         ${isAdmin() ? `
-          <select class="role-select" onchange="handleRoleChange('${u.id}', '${u.email}', this.value)">
+          <select class="role-select" onchange="handleRoleChange('${u.userId || ''}', '${u.email}', this.value, ${u.pending ? 'true' : 'false'})">
             <option value="admin"     ${u.role==='admin'     ?'selected':''}>Admin</option>
             <option value="teamleder" ${u.role==='teamleder' ?'selected':''}>Teamleder</option>
             <option value="medlem"    ${u.role==='medlem'    ?'selected':''}>Medlem</option>
           </select>
-          ${u.id !== state.user.uid ? `
-          <button class="btn-icon-danger" onclick="handleRemoveUser('${u.id}','${u.email}')" title="Fjern bruker">
+          ${u.userId !== state.user.uid ? `
+          <button class="btn-icon-danger" onclick="handleRemoveUser('${u.userId || ''}','${u.email}', ${u.pending ? 'true' : 'false'})" title="Fjern bruker">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
           </button>` : ''}
         ` : `<span class="role-badge ${u.role}">${roleLabel(u.role)}</span>`}
@@ -1456,6 +1463,39 @@ function renderAdmin() {
     </div>`).join('');
 
   renderCategoriesAdmin();
+}
+
+function adminTeamMembers() {
+  const byEmail = new Map();
+
+  state.users.forEach(user => {
+    const email = (user.email || '').toLowerCase();
+    if (!email) return;
+    byEmail.set(email, {
+      ...user,
+      userId: user.id,
+      pending: false
+    });
+  });
+
+  state.allowedUsers.forEach(allowed => {
+    const email = (allowed.email || '').toLowerCase();
+    if (!email || byEmail.has(email)) return;
+    byEmail.set(email, {
+      id: allowed.id,
+      userId: '',
+      email,
+      displayName: allowed.email,
+      photoURL: '',
+      role: allowed.role,
+      pending: true
+    });
+  });
+
+  return Array.from(byEmail.values()).sort((a, b) => {
+    if (a.pending !== b.pending) return a.pending ? 1 : -1;
+    return (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '', 'no');
+  });
 }
 
 function getAppShareLink() {
@@ -1638,9 +1678,9 @@ async function handleAddUser(e) {
   }
 }
 
-async function handleRoleChange(uid, email, newRole) {
+async function handleRoleChange(uid, email, newRole, pending = false) {
   try {
-    await updateUserRole(uid, newRole);
+    if (!pending && uid) await updateUserRole(uid, newRole);
     await updateAllowedUserRole(email, newRole);
     showToast('Rolle oppdatert');
   } catch(e) {
@@ -1648,11 +1688,11 @@ async function handleRoleChange(uid, email, newRole) {
   }
 }
 
-async function handleRemoveUser(uid, email) {
+async function handleRemoveUser(uid, email, pending = false) {
   const confirmed = await showConfirm('Fjern bruker', `Er du sikker på at du vil fjerne tilgangen til ${email}?`);
   if (!confirmed) return;
   try {
-    await removeUser(uid);
+    if (!pending && uid) await removeUser(uid);
     await removeAllowedUser(email);
     showToast('Bruker fjernet');
   } catch(e) {

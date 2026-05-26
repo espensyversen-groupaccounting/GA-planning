@@ -755,6 +755,10 @@ body {
   padding: 10px 12px;
   background: var(--bg); border-radius: var(--radius-sm);
 }
+.user-item.pending {
+  background: #fff8f8;
+  border: 1px dashed rgba(255,90,95,.35);
+}
 .user-item-avatar {
   width: 36px; height: 36px; border-radius: 50%;
   object-fit: cover; background: var(--coral);
@@ -765,6 +769,16 @@ body {
 .user-item-name  { font-size: .875rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-item-email { font-size: .75rem; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-item-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.pending-user-badge {
+  display: inline-flex; align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--light-pink);
+  color: var(--red);
+  font-size: .68rem;
+  font-weight: 800;
+}
 .role-select {
   font-size: .75rem; padding: 4px 6px;
   border: 1px solid var(--border);
