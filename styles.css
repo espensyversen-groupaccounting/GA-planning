@@ -1266,6 +1266,36 @@ body {
 }
 .add-comment-wrap { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); padding-top: 16px; }
 
+/* ---- Todo edit modal ---- */
+.todo-edit-container {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 440px; width: 100%;
+  box-shadow: var(--shadow-md);
+  display: flex; flex-direction: column; gap: 16px;
+}
+.todo-edit-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 4px;
+}
+.todo-edit-header h3 { font-size: 1.05rem; font-weight: 700; }
+.todo-edit-footer {
+  display: flex; gap: 10px; justify-content: flex-end;
+  margin-top: 4px;
+}
+.todo-actions {
+  display: flex; align-items: center; gap: 2px;
+}
+.todo-edit-btn {
+  width: 32px; height: 32px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-3); padding: 4px;
+  border-radius: var(--radius-sm); transition: color .15s, background .15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.todo-edit-btn:hover { color: var(--coral); background: #fff0f0; }
+
 /* ---- Confirm dialog ---- */
 .confirm-container {
   background: var(--white);

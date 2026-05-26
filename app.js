@@ -704,9 +704,14 @@ function todoCardHtml(todo) {
         </div>
       </div>
       ${canEdit() ? `
-        <button class="btn-icon-danger todo-delete-btn" type="button" onclick="handleDeleteTodo('${todo.id}', event)" title="Slett ToDo">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>` : ''}
+        <div class="todo-actions">
+          <button class="todo-edit-btn" type="button" onclick="openTodoEditModal('${todo.id}', event)" title="Rediger ToDo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn-icon-danger todo-delete-btn" type="button" onclick="handleDeleteTodo('${todo.id}', event)" title="Slett ToDo">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>` : ''}
     </div>`;
 }
 
@@ -952,6 +957,13 @@ function populateAssigneeSelects() {
     const current = todoAssigneeEl.value;
     todoAssigneeEl.innerHTML = formOpts;
     if (current && state.users.some(u => u.id === current)) todoAssigneeEl.value = current;
+  }
+
+  const todoEditAssigneeEl = document.getElementById('todo-edit-assignee');
+  if (todoEditAssigneeEl) {
+    const current = todoEditAssigneeEl.value;
+    todoEditAssigneeEl.innerHTML = formOpts;
+    if (current && state.users.some(u => u.id === current)) todoEditAssigneeEl.value = current;
   }
 }
 
@@ -1332,6 +1344,73 @@ async function handleDeleteTodo(todoId, event) {
   } catch(e) {
     console.error('Todo delete error:', e);
     showToast('Feil ved sletting av ToDo.', 'error');
+  }
+}
+
+function openTodoEditModal(todoId, event) {
+  if (event) event.stopPropagation();
+  const todo = state.todos.find(t => t.id === todoId);
+  if (!todo) return;
+
+  document.getElementById('todo-edit-id').value = todoId;
+  document.getElementById('todo-edit-title-input').value = todo.title || '';
+
+  const formOpts = ['<option value="">Ingen tildelt</option>',
+    ...state.users.map(u => `<option value="${u.id}">${esc(u.displayName || u.email)}</option>`)
+  ].join('');
+  const assigneeEl = document.getElementById('todo-edit-assignee');
+  assigneeEl.innerHTML = formOpts;
+  assigneeEl.value = todo.assignedTo || '';
+
+  const dueDate = toDate(todo.dueDate);
+  document.getElementById('todo-edit-due-date').value = dueDate
+    ? dueDate.toISOString().slice(0, 10)
+    : '';
+
+  document.getElementById('todo-edit-priority').value = todo.priority || 'medium';
+
+  document.getElementById('todo-edit-modal').classList.remove('hidden');
+  document.getElementById('todo-edit-title-input').focus();
+}
+
+function closeTodoEditModal() {
+  document.getElementById('todo-edit-modal').classList.add('hidden');
+}
+
+async function handleSaveTodoEdit() {
+  const todoId = document.getElementById('todo-edit-id').value;
+  const title = document.getElementById('todo-edit-title-input').value.trim();
+  if (!title) {
+    showToast('Tittel kan ikke være tom.', 'error');
+    return;
+  }
+
+  const assigneeId = document.getElementById('todo-edit-assignee').value;
+  const dueStr = document.getElementById('todo-edit-due-date').value;
+  const priority = document.getElementById('todo-edit-priority').value;
+  const assignee = state.users.find(u => u.id === assigneeId);
+
+  const saveBtn = document.getElementById('todo-edit-save');
+  saveBtn.disabled = true;
+
+  try {
+    await updateTodo(todoId, {
+      title,
+      priority,
+      assignedTo: assigneeId || null,
+      assignedToName: assignee ? (assignee.displayName || assignee.email) : null,
+      dueDate: dueStr ? firebase.firestore.Timestamp.fromDate(new Date(dueStr)) : null,
+    });
+    closeTodoEditModal();
+    showToast('ToDo oppdatert');
+  } catch (e) {
+    console.error('Todo update error:', e);
+    const message = e && e.code === 'permission-denied'
+      ? 'Ingen tilgang til å redigere ToDo.'
+      : 'Feil ved lagring av ToDo.';
+    showToast(message, 'error');
+  } finally {
+    saveBtn.disabled = false;
   }
 }
 
@@ -2025,6 +2104,17 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.querySelectorAll('.scope-btn').forEach(btn => {
     btn.addEventListener('click', () => setDashboardScope(btn.dataset.dashboardScope || 'team'));
+  });
+
+  // Todo edit modal
+  document.getElementById('todo-edit-close').addEventListener('click', closeTodoEditModal);
+  document.getElementById('todo-edit-cancel').addEventListener('click', closeTodoEditModal);
+  document.getElementById('todo-edit-save').addEventListener('click', handleSaveTodoEdit);
+  document.getElementById('todo-edit-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeTodoEditModal();
+  });
+  document.getElementById('todo-edit-title-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); handleSaveTodoEdit(); }
   });
 
   // Modal close
