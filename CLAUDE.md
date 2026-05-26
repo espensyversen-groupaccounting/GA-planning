@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.3.1`
+Gjeldende appversjon: `v1.4.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -26,6 +26,7 @@ Planning/
 ├── app.js              # UI-logikk, routing og hendelseshåndtering
 ├── manifest.json       # PWA-manifest
 ├── service-worker.js   # Caching og app-oppdatering
+├── .nojekyll           # Hindrer GitHub Pages fra å kjøre Jekyll-prosessering
 ├── icon-180.png
 ├── icon-192.png
 ├── icon-512.png
@@ -252,9 +253,23 @@ Hardkodet i `firebase-config.js` under `INITIAL_USERS`. Disse seedes til `allowe
 | christine.bjornstadjordet@strawberry.no | Teamleder |
 
 ## Deployment til GitHub Pages
-1. Push alle filer til GitHub.
+
+### Førstegangsoppsett
+1. Push alle filer til GitHub, inkludert `.nojekyll`.
 2. Settings -> Pages -> Source: `main` branch, `/ (root)`.
 3. Legg til GitHub Pages-domenet i Firebase Authentication -> Authorized domains.
 4. Publiser `firestore.rules` i Firebase Console.
-5. Åpne appen og bruk `Oppdater app` under Administrasjon for å tvinge ny PWA-versjon på enheten.
 
+### Ved hver ny versjon
+1. Bump versjonsnummer i alle tre filer samtidig:
+   - `APP_VERSION` i `app.js`
+   - `APP_VERSION` i `service-worker.js`
+   - `CLIENT_APP_VERSION` og `CLIENT_BUILD` i `firestore.js`
+2. Last opp alle endrede filer til GitHub (inkl. `.nojekyll` hvis den mangler).
+3. Sjekk at deployment får grønn hake under **Deployments** i repoet (tar 1–3 min). Rødt kryss betyr at Jekyll-prosessering har feilet — dobbeltsjekk at `.nojekyll` ligger i repoet.
+4. Åpne appen og trykk **Administrasjon → Oppdater app** for å tvinge ny PWA-versjon på enheten.
+
+### Feilsøking ved deployment-problemer
+- **Rødt kryss på commit**: `.nojekyll` mangler trolig i repoet. Legg den til (tom fil) og commit på nytt.
+- **Appen viser gammel versjon etter oppdatering**: Åpne appen i inkognito-vindu for å bekrefte at nye filer er live. Bruk deretter `Oppdater app` i Administrasjon, eller slett nettstedsdata for domenet i nettleserinnstillingene.
+- **GitHub Pages deployment er «2 hours ago» eller eldre**: Gjør en triviell commit (f.eks. legg til blank linje i CLAUDE.md) for å tvinge en ny deployment.
