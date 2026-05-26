@@ -294,6 +294,8 @@ body {
 .btn-danger   { background: #FEE2E2; color: var(--danger); }
 .btn-danger:hover   { background: #FECACA; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-compact { padding: 7px 11px; min-height: 34px; }
+.mobile-only { display: none !important; }
 
 /* ---- Stats grid ---- */
 .stats-grid {
@@ -586,6 +588,11 @@ body {
   margin-bottom: 12px;
 }
 .section-header-row .section-title { margin-bottom: 0; }
+.section-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 .section-count-label {
   color: var(--text-2);
   font-size: .78rem;
@@ -1546,6 +1553,181 @@ body {
   .tasks-toolbar .filter-group,
   .tasks-toolbar .filter-select {
     max-width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  .mobile-only { display: inline-flex !important; }
+
+  .content-area {
+    padding: 12px 14px calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 34px);
+  }
+
+  #view-dashboard .view-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  #view-dashboard .view-title {
+    font-size: 1.25rem;
+    line-height: 1.15;
+  }
+
+  #view-dashboard .dashboard-header-actions {
+    display: contents;
+  }
+
+  #view-dashboard .dashboard-scope-toggle {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    box-shadow: none;
+  }
+
+  #view-dashboard .dashboard-header-actions .btn {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    min-height: 38px;
+    padding: 8px 12px;
+    justify-content: center;
+  }
+
+  .stats-grid {
+    display: flex;
+    gap: 8px;
+    margin: 0 -14px 16px;
+    padding: 0 14px 2px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .stats-grid::-webkit-scrollbar { display: none; }
+
+  .stat-card {
+    flex: 0 0 auto;
+    min-width: 116px;
+    min-height: 54px;
+    padding: 9px 11px;
+    border-radius: var(--radius-sm);
+    scroll-snap-align: start;
+  }
+
+  .stat-number {
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  .stat-label {
+    margin-top: 2px;
+    font-size: .72rem;
+    line-height: 1.2;
+  }
+
+  .todo-dashboard-section {
+    margin-bottom: 16px;
+  }
+
+  .section-header-row {
+    margin-bottom: 8px;
+  }
+
+  .section-title {
+    margin-bottom: 8px;
+    font-size: .95rem;
+  }
+
+  .section-count-label {
+    font-size: .74rem;
+  }
+
+  #quick-todo-form.quick-todo-form {
+    display: none;
+    grid-template-columns: 1fr;
+    gap: 7px;
+    margin-bottom: 10px;
+  }
+
+  #quick-todo-form.quick-todo-form.is-open {
+    display: grid;
+  }
+
+  .todos-list,
+  .priority-group-list,
+  .task-list-compact,
+  .team-workload-list {
+    gap: 7px;
+  }
+
+  .todo-card,
+  .task-card,
+  .workload-row {
+    padding: 10px 11px;
+    border-radius: var(--radius-sm);
+  }
+
+  .todo-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .todo-check-btn,
+  .task-check-btn {
+    width: 22px;
+    height: 22px;
+  }
+
+  .todo-title,
+  .task-card-title {
+    font-size: .84rem;
+    line-height: 1.25;
+  }
+
+  .todo-meta,
+  .task-card-meta,
+  .task-card-full .task-row-bottom {
+    gap: 5px;
+    margin-top: 5px;
+  }
+
+  .risk-badge,
+  .status-badge,
+  .category-chip,
+  .unassigned-chip {
+    min-height: 20px;
+    padding: 1px 7px;
+    font-size: .64rem;
+  }
+
+  .priority-badge,
+  .due-date,
+  .assignee-chip {
+    font-size: .68rem;
+  }
+
+  .assignee-avatar {
+    width: 16px;
+    height: 16px;
+  }
+
+  .subtask-progress {
+    margin-top: 6px;
+  }
+
+  .progress-label {
+    font-size: .66rem;
+  }
+
+  .dashboard-sections {
+    gap: 16px;
+  }
+
+  .compact-empty {
+    padding: 18px 12px;
   }
 }
 

@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.3.0`
+Gjeldende appversjon: `v1.3.1`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -147,6 +147,8 @@ Dashboardseksjoner:
 - `Planlegg denne uken`: kommende oppgaver/deloppgaver innen 1-7 dager, gruppert etter prioritet.
 - `Uten ansvarlig`: åpne oppgaver som må delegeres.
 - `Teamoversikt`: viser åpne oppgaver/ToDo-er og risikopunkter per person. I `Mine`-visning skjules denne og brukeren får beskjed om å bytte til Team for teamfordeling.
+
+På mobil er dashboardet komprimert: toppkortene vises som horisontale chips, ToDo-skjemaet åpnes først når brukeren trykker `+ ToDo`, og kort/spacing er strammet inn slik at prioriterte oppgaver kommer tidligere på skjermen. Desktop-layouten er beholdt bred og mer informasjonsrik.
 
 Hasteberegningen i `app.js` tar hensyn til frist, om fristen er passert, prioritet, om oppgaven mangler ansvarlig, status og deloppgavefrister.
 

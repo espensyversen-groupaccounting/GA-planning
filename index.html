@@ -139,7 +139,13 @@
           <section class="dashboard-section dashboard-section-wide todo-dashboard-section">
             <div class="section-header-row">
               <h2 class="section-title">Korte ToDo's</h2>
-              <span id="todo-count-label" class="section-count-label"></span>
+              <div class="section-header-actions">
+                <span id="todo-count-label" class="section-count-label"></span>
+                <button id="toggle-quick-todo" class="btn btn-secondary btn-compact mobile-only" type="button">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  ToDo
+                </button>
+              </div>
             </div>
             <form id="quick-todo-form" class="quick-todo-form">
               <input type="text" id="todo-title" class="form-input todo-title-input" placeholder="Legg til kort ToDo..." required />

@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.3.1';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -485,6 +485,7 @@ function setupUI() {
   document.getElementById('btn-add-task')?.classList.toggle('hidden', !showCreate);
   document.getElementById('btn-add-task-dashboard')?.classList.toggle('hidden', !showCreate);
   document.getElementById('quick-todo-form')?.classList.toggle('hidden', !showCreate);
+  document.getElementById('toggle-quick-todo')?.classList.toggle('hidden', !showCreate);
 }
 
 function subscribeToRealtime() {
@@ -1287,6 +1288,7 @@ async function handleAddTodo(e) {
     });
     e.target.reset();
     document.getElementById('todo-priority').value = 'medium';
+    e.target.classList.remove('is-open');
     showToast('ToDo lagt til');
   } catch(e) {
     console.error('Todo create error:', e);
@@ -2018,6 +2020,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-add-task').addEventListener('click', () => openTaskModal());
   document.getElementById('btn-add-task-dashboard').addEventListener('click', () => openTaskModal());
   document.getElementById('quick-todo-form').addEventListener('submit', handleAddTodo);
+  document.getElementById('toggle-quick-todo')?.addEventListener('click', () => {
+    document.getElementById('quick-todo-form')?.classList.toggle('is-open');
+  });
   document.querySelectorAll('.scope-btn').forEach(btn => {
     btn.addEventListener('click', () => setDashboardScope(btn.dataset.dashboardScope || 'team'));
   });
