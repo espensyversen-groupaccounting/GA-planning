@@ -257,3 +257,4 @@ Hardkodet i `firebase-config.js` under `INITIAL_USERS`. Disse seedes til `allowe
 3. Legg til GitHub Pages-domenet i Firebase Authentication -> Authorized domains.
 4. Publiser `firestore.rules` i Firebase Console.
 5. Åpne appen og bruk `Oppdater app` under Administrasjon for å tvinge ny PWA-versjon på enheten.
+
