@@ -377,6 +377,12 @@ body {
 .priority-dot {
   width: 8px; height: 8px; border-radius: 50%; display: inline-block;
 }
+.fokus-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block;
+}
+.fokus-dot--overdue    { background: var(--danger); }
+.fokus-dot--today      { background: var(--pri-medium); }
+.fokus-dot--inprogress { background: var(--success); }
 .priority-dot.høy    { background: var(--pri-høy); }
 .priority-dot.medium { background: var(--pri-medium); }
 .priority-dot.lav    { background: var(--pri-lav); }
@@ -588,6 +594,12 @@ body {
   margin-bottom: 12px;
 }
 .section-header-row .section-title { margin-bottom: 0; }
+.section-subtitle {
+  font-size: .73rem;
+  color: var(--text-3, var(--text-2));
+  font-weight: 400;
+  white-space: nowrap;
+}
 .section-header-actions {
   display: inline-flex;
   align-items: center;
