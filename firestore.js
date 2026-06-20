@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.4.0';
-const CLIENT_BUILD = 1400;
+const CLIENT_APP_VERSION = '1.4.1';
+const CLIENT_BUILD = 1401;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -348,3 +348,4 @@ async function markAllNotificationsRead(userId) {
   snap.docs.forEach(d => batch.update(d.ref, { read: true, ...writeMeta() }));
   await batch.commit();
 }
+

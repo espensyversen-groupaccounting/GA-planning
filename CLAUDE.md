@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.4.0`
+Gjeldende appversjon: `v1.4.1`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -273,3 +273,4 @@ Hardkodet i `firebase-config.js` under `INITIAL_USERS`. Disse seedes til `allowe
 - **Rødt kryss på commit**: `.nojekyll` mangler trolig i repoet. Legg den til (tom fil) og commit på nytt.
 - **Appen viser gammel versjon etter oppdatering**: Åpne appen i inkognito-vindu for å bekrefte at nye filer er live. Bruk deretter `Oppdater app` i Administrasjon, eller slett nettstedsdata for domenet i nettleserinnstillingene.
 - **GitHub Pages deployment er «2 hours ago» eller eldre**: Gjør en triviell commit (f.eks. legg til blank linje i CLAUDE.md) for å tvinge en ny deployment.
+

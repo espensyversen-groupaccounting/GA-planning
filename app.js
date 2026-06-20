@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -327,6 +327,25 @@ function showConfirm(title, message) {
     }
     document.getElementById('confirm-ok').addEventListener('click', onOk);
     document.getElementById('confirm-cancel').addEventListener('click', onCancel);
+  });
+}
+
+function setupBackdropClose(overlay, onClose) {
+  let pointerDownOnBackdrop = false;
+
+  overlay.addEventListener('pointerdown', (event) => {
+    pointerDownOnBackdrop = event.target === overlay;
+  });
+
+  overlay.addEventListener('pointerup', (event) => {
+    const pointerUpOnBackdrop = event.target === overlay;
+    const shouldClose = pointerDownOnBackdrop && pointerUpOnBackdrop;
+    pointerDownOnBackdrop = false;
+    if (shouldClose) onClose();
+  });
+
+  overlay.addEventListener('pointercancel', () => {
+    pointerDownOnBackdrop = false;
   });
 }
 
@@ -2243,9 +2262,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('todo-edit-close').addEventListener('click', closeTodoEditModal);
   document.getElementById('todo-edit-cancel').addEventListener('click', closeTodoEditModal);
   document.getElementById('todo-edit-save').addEventListener('click', handleSaveTodoEdit);
-  document.getElementById('todo-edit-modal').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closeTodoEditModal();
-  });
+  setupBackdropClose(document.getElementById('todo-edit-modal'), closeTodoEditModal);
   document.getElementById('todo-edit-title-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); handleSaveTodoEdit(); }
   });
@@ -2253,9 +2270,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Modal close
   document.getElementById('modal-close').addEventListener('click', closeTaskModal);
   document.getElementById('btn-cancel-task').addEventListener('click', closeTaskModal);
-  document.getElementById('task-modal').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closeTaskModal();
-  });
+  setupBackdropClose(document.getElementById('task-modal'), closeTaskModal);
 
   // Modal tabs
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -2307,3 +2322,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
