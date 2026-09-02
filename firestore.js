@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.4.3';
-const CLIENT_BUILD = 1403;
+const CLIENT_APP_VERSION = '1.5.0';
+const CLIENT_BUILD = 1500;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -163,6 +163,20 @@ async function updateCategory(categoryId, data) {
 
 async function deleteCategory(categoryId) {
   await db.collection('categories').doc(categoryId).delete();
+}
+
+// ---- Export ----
+
+async function getAllDataForExport() {
+  const collectionNames = ['tasks', 'todos', 'categories', 'users', 'allowedUsers', 'comments'];
+  const snapshots = await Promise.all(
+    collectionNames.map(name => db.collection(name).get())
+  );
+
+  return Object.fromEntries(collectionNames.map((name, index) => [
+    name,
+    snapshots[index].docs.map(doc => ({ id: doc.id, ...doc.data() }))
+  ]));
 }
 
 // ---- Tasks ----

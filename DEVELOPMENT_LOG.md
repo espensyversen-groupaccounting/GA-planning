@@ -1,5 +1,24 @@
 # Development Log
 
+## v1.5.0 - 2026-09-02
+
+### Eksport og sikkerhetskopi
+- La til et Admin-kort for manuell eksport under Administrasjon, med fremdrift, resultat og tydelig beskjed om at kopien ikke er automatisk.
+- Henter komplette rå snapshots av `tasks`, `todos`, `categories`, `users`, `allowedUsers` og `comments` med ett engangsoppslag per samling.
+- Beholder soft-slettede oppgaver og ToDo-er i eksporten; avledede varsler er utelatt.
+- Lager én autoritativ JSON-fil med dokument-ID-er, metadata, tellinger og rekursiv ISO 8601-konvertering av Firestore-timestamps.
+- Lager norske CSV-uttrekk for oppgaver og ToDo-er med semikolon, UTF-8 BOM, korrekt sitering, lesbare datoer, ansvarlignavn og arkivmarkering.
+- Klargjør alle filer etter vellykket datainnhenting og starter deretter tre nedlastinger med kort mellomrom. Objekt-URL-er tilbakekalles etter bruk.
+- Avbryter før filgenerering dersom én samling ikke kan leses, og gir egen norsk melding ved `permission-denied`.
+
+### Tilgang og avgrensning
+- Eksportkortet og eksporthandleren er kun tilgjengelige for rollen Admin i klienten.
+- Dagens Firestore-regler gir alle allowlistede roller lesetilgang til samlingene. Admin-only er derfor en UI-/arbeidsflytbegrensning i denne fasen, ikke en ny serverside-sikkerhetsgrense.
+- Ingen endringer i Firestore-regler, regeltester, datamodell, eksisterende skriving, dashboard, filtre, sortering eller oppgavemodal.
+
+### Versjon
+- Versjon bumpet til `1.5.0` i `app.js`, `service-worker.js` og `firestore.js`; klientbuild er `1500`.
+
 ## v1.4.3 - 2026-09-02
 
 ### Rettet

@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.4.3';
+const APP_VERSION = '1.5.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -1897,6 +1897,7 @@ function renderAdmin() {
   updateAdminUpdateUI();
 
   document.getElementById('add-user-card')?.classList.toggle('hidden', !isAdmin());
+  document.getElementById('backup-export-card')?.classList.toggle('hidden', !isAdmin());
   updateInviteLinkUI();
 
   const el = document.getElementById('users-list');
@@ -2171,6 +2172,204 @@ async function handleRemoveUser(uid, email, pending = false) {
 }
 
 // ============================================================
+// EKSPORT OG SIKKERHETSKOPI
+// ============================================================
+
+function normalizeExportValue(value) {
+  if (value === null || value === undefined) return value ?? null;
+  if (value && typeof value.toDate === 'function') {
+    return value.toDate().toISOString();
+  }
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(normalizeExportValue);
+  if (typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [key, normalizeExportValue(nestedValue)])
+    );
+  }
+  return value;
+}
+
+function csvCell(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  return /[;"\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function createCsv(headers, rows) {
+  const lines = [
+    headers.map(csvCell).join(';'),
+    ...rows.map(row => row.map(csvCell).join(';'))
+  ];
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
+}
+
+function exportDateStamp(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function buildAssigneeNames(collections) {
+  return new Map(collections.users.map(user => [
+    user.id,
+    user.displayName || user.email || user.id
+  ]));
+}
+
+function assigneeName(item, assigneeNames) {
+  if (!item.assignedTo) return '';
+  return assigneeNames.get(item.assignedTo) || item.assignedToName || item.assignedTo;
+}
+
+function buildTasksCsv(collections) {
+  const assigneeNames = buildAssigneeNames(collections);
+  const headers = [
+    'ID', 'Tittel', 'Beskrivelse', 'Prioritet', 'Status', 'Kategori',
+    'Ansvarlig', 'Startdato', 'Frist', 'Deloppgaver', 'Avhengigheter',
+    'Arkivert', 'Opprettet', 'Sist oppdatert'
+  ];
+  const rows = collections.tasks.map(task => {
+    const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+    const completed = subtasks.filter(subtask => subtask.completed).length;
+    return [
+      task.id,
+      task.title,
+      task.description,
+      priorityLabel(task.priority),
+      statusLabel(task.status),
+      task.categoryName,
+      assigneeName(task, assigneeNames),
+      formatDate(task.startDate),
+      formatDate(task.dueDate),
+      subtasks.length ? `${completed} av ${subtasks.length} fullført` : '',
+      task.dependencies,
+      task.deletedAt ? 'Ja' : '',
+      formatDate(task.createdAt),
+      formatDate(task.updatedAt)
+    ];
+  });
+  return createCsv(headers, rows);
+}
+
+function buildTodosCsv(collections) {
+  const assigneeNames = buildAssigneeNames(collections);
+  const headers = [
+    'ID', 'Tittel', 'Prioritet', 'Status', 'Ansvarlig', 'Frist',
+    'Fullført dato', 'Arkivert', 'Opprettet', 'Sist oppdatert'
+  ];
+  const rows = collections.todos.map(todo => [
+    todo.id,
+    todo.title,
+    { høy: 'Haster', medium: 'Normal', lav: 'Lav' }[todo.priority] || todo.priority,
+    { apen: 'Åpen', fullfort: 'Fullført' }[todo.status] || todo.status,
+    assigneeName(todo, assigneeNames),
+    formatDate(todo.dueDate),
+    formatDate(todo.completedAt),
+    todo.deletedAt ? 'Ja' : '',
+    formatDate(todo.createdAt),
+    formatDate(todo.updatedAt)
+  ]);
+  return createCsv(headers, rows);
+}
+
+function prepareDownload(filename, content, type) {
+  return {
+    filename,
+    url: URL.createObjectURL(new Blob([content], { type }))
+  };
+}
+
+function triggerDownload(download) {
+  const link = document.createElement('a');
+  link.href = download.url;
+  link.download = download.filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function wait(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function handleExportBackup() {
+  if (!isAdmin()) {
+    showToast('Eksport krever Admin-rolle.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-export-backup');
+  const status = document.getElementById('backup-export-status');
+  const originalButtonContent = btn.innerHTML;
+  let downloads = [];
+
+  btn.disabled = true;
+  btn.textContent = 'Henter data...';
+  status.textContent = 'Henter en komplett øyeblikkskopi fra Firestore...';
+
+  try {
+    const rawCollections = await getAllDataForExport();
+    const collections = normalizeExportValue(rawCollections);
+    const counts = Object.fromEntries(
+      Object.entries(collections).map(([name, documents]) => [name, documents.length])
+    );
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      exportedBy: state.user?.email || state.profile?.email || '',
+      appVersion: APP_VERSION,
+      schemaVersion: 1,
+      counts,
+      collections
+    };
+    const dateStamp = exportDateStamp();
+
+    status.textContent = 'Klargjør tre filer for nedlasting...';
+    downloads.push(prepareDownload(
+      `strawberry-plan-backup-${dateStamp}.json`,
+      JSON.stringify(backup, null, 2),
+      'application/json;charset=utf-8'
+    ));
+    downloads.push(prepareDownload(
+      `strawberry-plan-oppgaver-${dateStamp}.csv`,
+      buildTasksCsv(collections),
+      'text/csv;charset=utf-8'
+    ));
+    downloads.push(prepareDownload(
+      `strawberry-plan-todos-${dateStamp}.csv`,
+      buildTodosCsv(collections),
+      'text/csv;charset=utf-8'
+    ));
+
+    for (let index = 0; index < downloads.length; index += 1) {
+      status.textContent = `Laster ned ${index + 1} av ${downloads.length}. Nettleseren kan be om tillatelse til flere filer.`;
+      triggerDownload(downloads[index]);
+      if (index < downloads.length - 1) await wait(400);
+    }
+    await wait(100);
+
+    status.textContent = [
+      'Sikkerhetskopi lastet ned.',
+      `${counts.tasks} oppgaver, ${counts.todos} ToDo-er, ${counts.categories} kategorier,`,
+      `${counts.users} brukere, ${counts.allowedUsers} tillatte brukere og ${counts.comments} kommentarer.`
+    ].join(' ');
+    showToast('Sikkerhetskopien er lastet ned');
+  } catch (error) {
+    console.error('Backup export error:', error);
+    status.textContent = '';
+    const message = error && error.code === 'permission-denied'
+      ? 'Eksporten ble avvist. Handlingen krever Admin-rolle.'
+      : 'Sikkerhetskopien kunne ikke opprettes. Ingen filer ble lastet ned.';
+    showToast(message, 'error');
+  } finally {
+    downloads.forEach(download => URL.revokeObjectURL(download.url));
+    btn.disabled = false;
+    btn.innerHTML = originalButtonContent;
+  }
+}
+
+// ============================================================
 // APP-OPPDATERING
 // ============================================================
 
@@ -2350,6 +2549,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Admin add user
   document.getElementById('add-user-form').addEventListener('submit', handleAddUser);
   document.getElementById('btn-copy-invite-link').addEventListener('click', handleCopyInviteLink);
+  document.getElementById('btn-export-backup').addEventListener('click', handleExportBackup);
   document.getElementById('btn-toggle-categories').addEventListener('click', toggleCategoryPanel);
   document.getElementById('add-category-form').addEventListener('submit', handleAddCategory);
 
@@ -2373,4 +2573,3 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('task-modal').classList.contains('hidden')) closeTaskModal();
   });
 });
-

@@ -840,6 +840,23 @@ body {
 .admin-grid { display: flex; flex-direction: column; gap: 20px; }
 @media (min-width: 800px) { .admin-grid { flex-direction: row; } }
 
+.backup-export-card { margin-bottom: 20px; }
+.backup-export-help {
+  max-width: 760px;
+  margin: 0 0 14px;
+  color: var(--text-2);
+  font-size: .82rem;
+  line-height: 1.55;
+}
+.backup-export-status {
+  min-height: 20px;
+  margin: 12px 0 0;
+  color: var(--text-2);
+  font-size: .8rem;
+  line-height: 1.45;
+}
+.backup-export-status:empty { display: none; }
+
 .card {
   background: var(--white); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 24px; flex: 1;
@@ -1455,6 +1472,11 @@ body {
 
   .admin-grid {
     padding-bottom: 10px;
+  }
+
+  .backup-export-card .btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .user-item {

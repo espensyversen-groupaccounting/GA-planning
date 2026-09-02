@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.4.3`
+Gjeldende appversjon: `v1.5.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -233,6 +233,18 @@ Skjulte kategorier kan fortsatt vises på gamle oppgaver, men kan ikke velges so
 ## Deloppgaver og frister
 Deloppgaver kan ha egne deadlines. Disse brukes i dashboardets hasteberegning og i oppgavekortene. Deloppgaver med frist i dag eller denne uken kan løfte hovedoppgaven opp i dashboardet selv om hovedoppgavens egen frist er senere.
 
+## Eksport og sikkerhetskopi
+Admin har et eget kort under Administrasjon for å laste ned en manuell øyeblikkskopi. Eksporten henter ett rått snapshot fra hver av samlingene `tasks`, `todos`, `categories`, `users`, `allowedUsers` og `comments`. Soft-slettede oppgaver og ToDo-er er med; varsler utelates fordi de er avledede og forgjengelige.
+
+Ett knappetrykk klargjør tre filer:
+- `strawberry-plan-backup-YYYY-MM-DD.json`: autoritativ kopi for manuell gjenoppretting, med dokument-ID-er, metadata, tellinger og rekursivt ISO-konverterte Firestore-timestamps.
+- `strawberry-plan-oppgaver-YYYY-MM-DD.csv`: lesbart oppgaveuttrekk med norske kolonner.
+- `strawberry-plan-todos-YYYY-MM-DD.csv`: lesbart ToDo-uttrekk med norske kolonner.
+
+CSV-filene bruker semikolon, UTF-8 BOM og standard CSV-sitering for norsk Excel. Ansvarlige vises med navn når brukerprofilen finnes, og arkiverte rader merkes eksplisitt.
+
+Eksportkortet og handleren er avgrenset til Admin i klienten. Dagens Firestore-regler gir imidlertid alle allowlistede roller lesetilgang til de eksporterte samlingene, så Admin-avgrensningen er ikke en separat serverside-sikkerhetsgrense. En håndhevet Admin-only eksport krever senere endring av regler eller backendarkitektur.
+
 ## Synksikkerhet
 Appen skriver ikke hele datasett tilbake til Firestore. Oppgaver ligger som egne dokumenter og oppdateres feltvis. Direkte sletting av oppgaver er blokkert i rules; sletting i UI er soft-delete med `deletedAt`.
 
@@ -302,4 +314,3 @@ Rollback skjer via Firebase Console sin regelhistorikk og Git. Det skal ikke lag
 - **Rødt kryss på commit**: `.nojekyll` mangler trolig i repoet. Legg den til (tom fil) og commit på nytt.
 - **Appen viser gammel versjon etter oppdatering**: Åpne appen i inkognito-vindu for å bekrefte at nye filer er live. Bruk deretter `Oppdater app` i Administrasjon, eller slett nettstedsdata for domenet i nettleserinnstillingene.
 - **GitHub Pages deployment er «2 hours ago» eller eldre**: Gjør en triviell commit (f.eks. legg til blank linje i CLAUDE.md) for å tvinge en ny deployment.
-

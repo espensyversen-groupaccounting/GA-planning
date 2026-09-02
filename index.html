@@ -309,6 +309,21 @@
             </button>
           </div>
 
+          <!-- Eksport og sikkerhetskopi (kun Admin) -->
+          <div id="backup-export-card" class="card backup-export-card hidden">
+            <h2 class="card-title">Eksport og sikkerhetskopi</h2>
+            <p class="backup-export-help">
+              Last ned en komplett, manuell øyeblikkskopi av appdataene som JSON,
+              samt lesbare CSV-filer for oppgaver og ToDo-er. Ta en ny kopi jevnlig;
+              dette er ikke en automatisk sikkerhetskopi.
+            </p>
+            <button id="btn-export-backup" class="btn btn-secondary" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Last ned sikkerhetskopi</span>
+            </button>
+            <p id="backup-export-status" class="backup-export-status" role="status" aria-live="polite"></p>
+          </div>
+
           <div class="admin-grid">
             <!-- Legg til bruker -->
             <div id="add-user-card" class="card">
