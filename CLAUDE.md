@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.6.1`
+Gjeldende appversjon: `v1.6.2`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -189,6 +189,8 @@ Admin og Teamleder kan legge inn ToDo direkte fra sidepanelet på Dashboard og O
 - frist
 - prioritet: `Haster`, `Normal`, `Lav`
 
+Ansvarlig er alltid synlig som en kompakt valgbrikke under tittelfeltet. I `Mine` på Dashboard er innlogget bruker standard; i `Team` og Oppgaver er standarden `Ikke tildelt`. Et manuelt valg beholdes ved bytte mellom `Team` og `Mine` for den pågående registreringen, og tilbakestilles til gjeldende standard etter opprettelse.
+
 ToDo-er vises:
 - i et høyre sidepanel på brede skjermer, eller i et bunnark på smalere skjermer
 - i toppkortene på dashboardet der de påvirker `I dag`, `Denne uken`, `Uten ansvarlig` og `Høy prioritet`
@@ -200,6 +202,8 @@ Admin og Teamleder kan opprette og slette ToDo-er. Tildelt Medlem kan markere eg
 Panelet bruker samme `Team`/`Mine`-avgrensning som dashboardet, sorterer åpne ToDo-er etter eksisterende hastegrad og husker kollapstilstanden i `localStorage`. Når desktop-panelet kollapses, utvides hovedinnholdet jevnt inn i den frigjorte plassen mens panelstripen blir liggende ved høyre skjermkant. På skjermbredder opptil 1280 px erstattes sidekolonnen av en flytende ToDo-knapp. På mobil åpnes panelet nedenfra og stopper over bunnnavigasjonen. Hele ToDo-kortet kan åpnes med mus, Enter eller mellomrom; avkryssing og sletting åpner ikke redigeringsmodalen.
 
 Beskrivelse er valgfri. Eksisterende ToDo-er uten feltet behandles som tom tekst og trenger ingen migrering.
+
+Kort uten ansvarlig viser ett `Ikke tildelt`-signal fra den felles signalberegningen. Ansvarlig-brikken rendres bare når en faktisk bruker er tildelt.
 
 ## Legge til nye brukere
 1. Logg inn som en bruker med rollen `admin`.

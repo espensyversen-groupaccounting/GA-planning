@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.6.2';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -169,15 +169,18 @@ function taskNeedsAttention(task) {
 }
 
 function taskSignals(task) {
-  if (!task || isDoneItem(task)) return [];
+  if (!task) return [];
+  const isDone = isDoneItem(task);
   const days = taskDueDays(task);
   const signals = [];
-  if (days < 0) signals.push({ key: 'overdue', label: 'Forfalt' });
-  else if (days === 0) signals.push({ key: 'today', label: 'Frist i dag' });
-  else if (days <= 7) signals.push({ key: 'soon', label: 'Denne uken' });
-  else if (days <= 14) signals.push({ key: 'upcoming', label: 'Neste 14 d' });
+  if (!isDone) {
+    if (days < 0) signals.push({ key: 'overdue', label: 'Forfalt' });
+    else if (days === 0) signals.push({ key: 'today', label: 'Frist i dag' });
+    else if (days <= 7) signals.push({ key: 'soon', label: 'Denne uken' });
+    else if (days <= 14) signals.push({ key: 'upcoming', label: 'Neste 14 d' });
+  }
   if (!task.assignedTo) signals.push({ key: 'unassigned', label: 'Ikke tildelt' });
-  if (taskHasSoonSubtask(task)) signals.push({ key: 'subtask', label: 'Deloppgavefrist' });
+  if (!isDone && taskHasSoonSubtask(task)) signals.push({ key: 'subtask', label: 'Deloppgavefrist' });
   return signals;
 }
 
@@ -838,7 +841,7 @@ function taskCardHtml(task, compact = false) {
         ? `<img src="${esc(assignee.photoURL)}" class="assignee-avatar" alt="" />`
         : `<span class="assignee-avatar" style="background:var(--coral);font-size:.6rem;display:flex;align-items:center;justify-content:center;">${initials(assignee.displayName)}</span>`}
       <span>${esc(assignee.displayName || assignee.email)}</span>
-    </span>` : `<span class="unassigned-chip">Ikke tildelt</span>`;
+    </span>` : '';
 
   const relativeDue = dueDateRelativeLabel(task);
   const dueDateHtml = task.dueDate ? `
@@ -2211,6 +2214,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-add-task-dashboard').addEventListener('click', () => openTaskModal());
   document.getElementById('quick-todo-form').addEventListener('submit', handleAddTodo);
   document.getElementById('todo-panel-form').addEventListener('submit', handleAddTodo);
+  document.getElementById('todo-panel-assignee-chip').addEventListener('change', handleTodoPanelAssigneeChange);
+  document.getElementById('todo-panel-assignee').addEventListener('change', handleTodoPanelAssigneeChange);
   document.getElementById('todo-panel-more').addEventListener('click', toggleTodoPanelOptions);
   document.getElementById('todo-panel-collapse').addEventListener('click', toggleTodoPanelCollapsed);
   document.getElementById('todo-panel-launcher').addEventListener('click', openTodoPanel);

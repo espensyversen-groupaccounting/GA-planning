@@ -1,5 +1,27 @@
 # Development Log
 
+## v1.6.2 - 2026-09-02
+
+### Rettet
+- Fjernet den ekstra `unassigned-chip`-fallbacken fra både oppgave- og ToDo-kort, slik at `Ikke tildelt` bare kommer fra `taskSignals()`.
+- Beholder ett `Ikke tildelt`-signal også på fullførte kort uten ansvarlig, uten å endre telling, filter eller hastepoeng.
+- Fjernet den nå ubrukte `.unassigned-chip`-stylingen.
+
+### Standardtildeling i ToDo-panelet
+- La til en synlig, kompakt ansvarligbrikke som er synkronisert med ansvarlig-feltet under `Flere valg`.
+- Bruker innlogget bruker som standard i Dashboardets `Mine`-visning, og `Ikke tildelt` i `Team` og Oppgaver.
+- Bevarer manuell overstyring ved Team/Mine-bytte og går tilbake til gjeldende standard etter opprettelse, mens tittelfeltet beholder fokus.
+
+### Avgrensning og versjon
+- Ingen endringer i datamodell, eksport, toppkort, filtre, hasteberegning, kollapslogikk, Firestore-regler eller regeltester.
+- Versjon bumpet til `1.6.2` i `app.js`, `service-worker.js` og `firestore.js`; klientbuild er `1602`.
+
+### Kontroll
+- Firestore-emulatortestene består uendret: 19 av 19.
+- `node --check` består for `app.js`, `js/todos.js`, `firestore.js` og `service-worker.js`.
+- Isolert UI-test består med 24 assertions for én `Ikke tildelt`-markering, tildelt bruker, Mine/Team/Oppgaver-standarder, manuell overstyring, synkroniserte felt og reset/fokus etter opprettelse.
+- Kodekontroll bekrefter at toppkortets opptelling og hurtigfilterets `!assignedTo`-vilkår er uendret.
+
 ## v1.6.1 - 2026-09-02
 
 ### Rettet

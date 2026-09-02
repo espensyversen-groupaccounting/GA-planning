@@ -406,6 +406,12 @@
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 </button>
               </div>
+              <label class="todo-panel-assignee-chip" title="Velg ansvarlig">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                <select id="todo-panel-assignee-chip" aria-label="Standard ansvarlig for ny ToDo">
+                  <option value="">Ikke tildelt</option>
+                </select>
+              </label>
               <button id="todo-panel-more" class="btn-link todo-panel-more" type="button" aria-expanded="false">Flere valg</button>
               <div id="todo-panel-options" class="todo-panel-options hidden">
                 <select id="todo-panel-assignee" data-todo-assignee class="form-input" aria-label="Ansvarlig">

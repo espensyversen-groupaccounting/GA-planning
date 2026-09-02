@@ -1,7 +1,7 @@
 // ============================================================
 // VERSJON – Bump denne ved hver deploy for å tvinge oppdatering
 // ============================================================
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.6.2';
 const CACHE_NAME  = `strawberry-plan-v${APP_VERSION}`;
 
 const APP_FILES = [

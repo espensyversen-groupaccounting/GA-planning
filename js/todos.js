@@ -3,6 +3,8 @@
 // Klassisk script: delte hjelpere og state defineres i app.js.
 // ============================================================
 
+let todoPanelAssigneeOverridden = false;
+
 function scopedTodos() {
   return state.dashboardScope === 'mine'
     ? state.todos.filter(isMineItem)
@@ -25,7 +27,7 @@ function todoCardHtml(todo) {
         ? `<img src="${esc(assignee.photoURL)}" class="assignee-avatar" alt="" />`
         : `<span class="assignee-avatar">${initials(assignee.displayName || assignee.email)}</span>`}
       <span>${esc(assignee.displayName || assignee.email)}</span>
-    </span>` : `<span class="unassigned-chip">Ikke tildelt</span>`;
+    </span>` : '';
   const signalHtml = taskSignals(todo).map(s => `<span class="risk-badge ${s.key}">${s.label}</span>`).join('');
   const canChange = canEdit() || isMineItem(todo);
   const description = (todo.description || '').trim();
@@ -102,7 +104,12 @@ async function handleAddTodo(e) {
     });
     form.reset();
     if (priorityEl) priorityEl.value = 'medium';
-    if (form.id === 'quick-todo-form') form.classList.remove('is-open');
+    if (form.id === 'quick-todo-form') {
+      form.classList.remove('is-open');
+    } else if (form.id === 'todo-panel-form') {
+      todoPanelAssigneeOverridden = false;
+      syncTodoPanelAssigneeControls();
+    }
     titleEl.focus();
     showToast('ToDo lagt til');
   } catch(e) {
@@ -281,6 +288,53 @@ function todoPanelIsAvailable() {
   return canEdit() && ['dashboard', 'tasks'].includes(state.currentView);
 }
 
+function todoPanelDefaultAssigneeId() {
+  return state.currentView === 'dashboard' && state.dashboardScope === 'mine'
+    ? state.user?.uid || ''
+    : '';
+}
+
+function todoPanelAssigneeOptions(forChip = false) {
+  const currentUserId = state.user?.uid || '';
+  const users = [...state.users];
+  if (currentUserId && !users.some(user => user.id === currentUserId)) {
+    users.unshift({
+      id: currentUserId,
+      displayName: state.profile?.displayName || state.user?.displayName || state.user?.email || 'Meg'
+    });
+  }
+
+  return [
+    `<option value="">${forChip ? 'Ikke tildelt' : 'Ingen tildelt'}</option>`,
+    ...users.map(user => {
+      const label = user.id === currentUserId ? 'Meg' : (user.displayName || user.email);
+      return `<option value="${esc(user.id)}">${esc(label)}</option>`;
+    })
+  ].join('');
+}
+
+function syncTodoPanelAssigneeControls() {
+  const chip = document.getElementById('todo-panel-assignee-chip');
+  const field = document.getElementById('todo-panel-assignee');
+  if (!chip || !field) return;
+
+  const selected = todoPanelAssigneeOverridden
+    ? (field.value || chip.value || '')
+    : todoPanelDefaultAssigneeId();
+
+  chip.innerHTML = todoPanelAssigneeOptions(true);
+  field.innerHTML = todoPanelAssigneeOptions(false);
+  chip.value = selected;
+  field.value = selected;
+}
+
+function handleTodoPanelAssigneeChange(event) {
+  todoPanelAssigneeOverridden = true;
+  const selected = event.currentTarget.value;
+  document.getElementById('todo-panel-assignee-chip').value = selected;
+  document.getElementById('todo-panel-assignee').value = selected;
+}
+
 function renderTodoPanel() {
   const layer = document.getElementById('todo-panel-layer');
   const launcher = document.getElementById('todo-panel-launcher');
@@ -293,6 +347,7 @@ function renderTodoPanel() {
   const countText = `${openTodos.length} åpne`;
   document.getElementById('todo-panel-count').textContent = countText;
   document.getElementById('todo-panel-launcher-count').textContent = openTodos.length;
+  syncTodoPanelAssigneeControls();
 
   layer.classList.toggle('is-overlay', overlay);
   layer.classList.toggle('is-collapsed', !overlay && state.todoPanelCollapsed);
