@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.5.0`
+Gjeldende appversjon: `v1.5.1`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -241,7 +241,7 @@ Ett knappetrykk klargjør tre filer:
 - `strawberry-plan-oppgaver-YYYY-MM-DD.csv`: lesbart oppgaveuttrekk med norske kolonner.
 - `strawberry-plan-todos-YYYY-MM-DD.csv`: lesbart ToDo-uttrekk med norske kolonner.
 
-CSV-filene bruker semikolon, UTF-8 BOM og standard CSV-sitering for norsk Excel. Ansvarlige vises med navn når brukerprofilen finnes, og arkiverte rader merkes eksplisitt.
+CSV-filene begynner med UTF-8 BOM, deretter Excels `sep=;`-direktiv på egen linje, og bruker standard CSV-sitering. Dette gir norske tegn og riktige kolonner ved dobbeltklikk i Excel, uavhengig av Windows-brukerens regionale listeskilletegn. Ansvarlige vises med navn når brukerprofilen finnes, og arkiverte rader merkes eksplisitt.
 
 Eksportkortet og handleren er avgrenset til Admin i klienten. Dagens Firestore-regler gir imidlertid alle allowlistede roller lesetilgang til de eksporterte samlingene, så Admin-avgrensningen er ikke en separat serverside-sikkerhetsgrense. En håndhevet Admin-only eksport krever senere endring av regler eller backendarkitektur.
 

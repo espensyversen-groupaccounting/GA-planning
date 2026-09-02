@@ -1,5 +1,16 @@
 # Development Log
 
+## v1.5.1 - 2026-09-02
+
+### Rettet
+- Legger `sep=;` på første tekstlinje i begge CSV-eksportene, slik at Excel deler innholdet i riktige kolonner også når Windows er konfigurert med komma som listeskilletegn.
+- Beholder den kritiske rekkefølgen UTF-8 BOM, `sep=;`, kolonneoverskrifter og datarader, med `CRLF` som linjeskift.
+- JSON-eksport, CSV-kolonner, kolonnerekkefølge, datoformat, siteringslogikk og filnavn er uendret.
+
+### Avgrensning og versjon
+- Ingen endringer i Firestore-regler, tester, HTML, styling, datamodell eller øvrig funksjonalitet.
+- Versjon bumpet til `1.5.1` i `app.js`, `service-worker.js` og `firestore.js`; klientbuild er `1501`.
+
 ## v1.5.0 - 2026-09-02
 
 ### Eksport og sikkerhetskopi

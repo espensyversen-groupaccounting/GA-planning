@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -2200,7 +2200,7 @@ function createCsv(headers, rows) {
     headers.map(csvCell).join(';'),
     ...rows.map(row => row.map(csvCell).join(';'))
   ];
-  return `\uFEFF${lines.join('\r\n')}\r\n`;
+  return `\uFEFFsep=;\r\n${lines.join('\r\n')}\r\n`;
 }
 
 function exportDateStamp(date = new Date()) {
