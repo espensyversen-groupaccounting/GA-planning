@@ -1947,11 +1947,12 @@ body {
 .todo-panel-list .todo-description-preview span { -webkit-line-clamp: 1; }
 .todo-panel-see-all { align-self: center; margin-top: 8px; min-height: 32px; }
 
-.todo-panel-layer.is-collapsed { flex-basis: 56px; width: 56px; }
+.todo-panel-chevron { transform: rotate(180deg); }
+.todo-panel-layer.is-collapsed { flex-basis: 56px; width: 56px; margin-left: auto; }
 .todo-panel-layer.is-collapsed .todo-panel-header { justify-content: center; padding: 12px 8px; }
 .todo-panel-layer.is-collapsed .todo-panel-heading,
 .todo-panel-layer.is-collapsed .todo-panel-body { display: none; }
-.todo-panel-layer.is-collapsed .todo-panel-chevron { transform: rotate(180deg); }
+.todo-panel-layer.is-collapsed .todo-panel-chevron { transform: none; }
 
 .todo-panel-launcher {
   position: fixed;
@@ -1975,6 +1976,10 @@ body {
   font-weight: 800;
 }
 @media (min-width: 1281px) {
+  .content-area { transition: max-width .18s ease; }
+  .main-layout:has(.todo-panel-layer.is-collapsed:not(.hidden)) .content-area {
+    max-width: calc(100% - var(--sidebar-w) - 56px);
+  }
   .todo-panel-launcher { display: none !important; }
 }
 @media (max-width: 1280px) {

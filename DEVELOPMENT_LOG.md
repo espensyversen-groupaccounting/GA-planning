@@ -1,5 +1,23 @@
 # Development Log
 
+## v1.6.1 - 2026-09-02
+
+### Rettet
+- Lar hovedinnholdet utvide seg inn i plassen som frigjøres når desktop-panelet kollapses.
+- Holder den kollapsede panelstripen helt inntil høyre skjermkant uten et tomt område etter stripen.
+- Synkroniserer overgangene for innholdets maksimumsbredde og panelbredden, slik at kortene utvider seg jevnt.
+- Korrigerer pilretningen: innover når panelet er utvidet og utover når det er kollapset.
+
+### Avgrensning og versjon
+- Mobilarket, ToDo-funksjonalitet, `localStorage`, eksport, Dashboard, Oppgaver, hasteberegning, Firestore-regler og testfiler er uendret.
+- Versjon bumpet til `1.6.1` i `app.js`, `service-worker.js` og `firestore.js`; klientbuild er `1601`.
+
+### Kontroll
+- Firestore-emulatortestene består uendret: 19 av 19.
+- `node --check` består for `app.js`, `js/todos.js`, `firestore.js` og `service-worker.js`.
+- Hashkontroll mot v1.6.0 bekrefter at `index.html`, `js/todos.js`, `firestore.rules` og regeltesten er byte-for-byte uendret.
+- Desktopberegning bekrefter at innhold, sidebar og 56 px panelstripe fyller hele tilgjengelig bredde i kollapset tilstand.
+
 ## v1.6.0 - 2026-09-02
 
 ### ToDo-panel og arbeidsflyt

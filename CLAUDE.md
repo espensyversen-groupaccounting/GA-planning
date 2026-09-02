@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.6.0`
+Gjeldende appversjon: `v1.6.1`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -197,7 +197,7 @@ ToDo-er vises:
 
 Admin og Teamleder kan opprette og slette ToDo-er. Tildelt Medlem kan markere egne ToDo-er som fullført eller åpne dem igjen.
 
-Panelet bruker samme `Team`/`Mine`-avgrensning som dashboardet, sorterer åpne ToDo-er etter eksisterende hastegrad og husker kollapstilstanden i `localStorage`. På skjermbredder opptil 1280 px erstattes sidekolonnen av en flytende ToDo-knapp. På mobil åpnes panelet nedenfra og stopper over bunnnavigasjonen. Hele ToDo-kortet kan åpnes med mus, Enter eller mellomrom; avkryssing og sletting åpner ikke redigeringsmodalen.
+Panelet bruker samme `Team`/`Mine`-avgrensning som dashboardet, sorterer åpne ToDo-er etter eksisterende hastegrad og husker kollapstilstanden i `localStorage`. Når desktop-panelet kollapses, utvides hovedinnholdet jevnt inn i den frigjorte plassen mens panelstripen blir liggende ved høyre skjermkant. På skjermbredder opptil 1280 px erstattes sidekolonnen av en flytende ToDo-knapp. På mobil åpnes panelet nedenfra og stopper over bunnnavigasjonen. Hele ToDo-kortet kan åpnes med mus, Enter eller mellomrom; avkryssing og sletting åpner ikke redigeringsmodalen.
 
 Beskrivelse er valgfri. Eksisterende ToDo-er uten feltet behandles som tom tekst og trenger ingen migrering.
 
