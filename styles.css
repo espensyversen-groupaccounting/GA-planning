@@ -646,12 +646,16 @@ body {
 }
 .todo-card-main { min-width: 0; }
 .todo-title {
+  display: -webkit-box;
   color: var(--text);
   font-size: .9rem;
   font-weight: 800;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 .todo-meta {
   display: flex;

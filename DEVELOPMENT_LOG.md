@@ -1,5 +1,21 @@
 # Development Log
 
+## v1.7.1 - 2026-09-02
+
+### Ombrekking av ToDo-titler
+- Lar ToDo-titler brytes naturlig over opptil tre linjer i sidepanelet, ToDo-fanen, Oppgaver-fanen og mobilarket.
+- Bruker `-webkit-line-clamp: 3` med ellipse for svært lange titler og `overflow-wrap: anywhere` for lange ord og URL-er uten mellomrom.
+- Kort med korte titler beholder sin naturlige høyde. Kortstrukturen, drahåndtaket, avkryssingen, slettingen, beskrivelsesforhåndsvisningen og badges er uendret.
+
+### Avgrensning og versjon
+- Den eneste funksjonelle UI-endringen er i `.todo-title` i `styles.css`. `app.js`, `service-worker.js` og `firestore.js` har kun versjonsbump; `js/todos.js`, `index.html`, Firestore-regler og tester er urørt.
+- Versjon bumpet til `1.7.1` i alle tre versjonskilder; klientbuild er `1701`.
+
+### Kontroll
+- Isolert Chrome-layouttest består med 13 assertions for normal tittel, trelinjers clamp, ca. 470 tegn, langt ord/URL, naturlig korthøyde, kontrollplassering, mobil-/panelbredde, bred ToDo-visning og plassholderhøyde ved draging.
+- Hashkontroll mot v1.7.0 bekrefter at `js/todos.js`, `index.html`, `firestore.rules` og regeltestene er byte-for-byte uendret.
+- `node --check` består for alle fire JavaScript-filer, og Firestore-emulatortestene består 19 av 19.
+
 ## v1.7.0 - 2026-09-02
 
 ### Manuell ToDo-prioritering
