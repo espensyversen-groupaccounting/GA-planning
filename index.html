@@ -145,16 +145,6 @@
             </div>
           </div>
           <div class="stats-grid" id="stats-grid"></div>
-          <section class="dashboard-section dashboard-section-wide todo-dashboard-section">
-            <div class="section-header-row">
-              <h2 class="section-title">Korte ToDo's</h2>
-              <div class="section-header-actions">
-                <span id="todo-count-label" class="section-count-label"></span>
-                <button class="btn-link" type="button" onclick="showView('todos')">Se alle →</button>
-              </div>
-            </div>
-            <div id="todos-list" class="todos-list"></div>
-          </section>
           <div class="dashboard-sections">
             <section class="dashboard-section dashboard-section-wide">
               <div class="section-header-row">
@@ -249,12 +239,12 @@
             </button>
           </div>
           <form id="quick-todo-form" class="quick-todo-form todo-view-form" autocomplete="off">
-            <input type="text" id="todo-title" class="form-input todo-title-input" placeholder="Legg til kort ToDo..." required />
-            <select id="todo-assignee" class="form-input todo-assignee-select">
+            <input type="text" id="todo-title" data-todo-title class="form-input todo-title-input" placeholder="Legg til kort ToDo..." required />
+            <select id="todo-assignee" data-todo-assignee class="form-input todo-assignee-select">
               <option value="">Ingen ansvarlig</option>
             </select>
-            <input type="date" id="todo-due-date" class="form-input todo-date-input" aria-label="Frist" />
-            <select id="todo-priority" class="form-input todo-priority-select">
+            <input type="date" id="todo-due-date" data-todo-due-date class="form-input todo-date-input" aria-label="Frist" />
+            <select id="todo-priority" data-todo-priority class="form-input todo-priority-select">
               <option value="medium">Normal</option>
               <option value="høy">Haster</option>
               <option value="lav">Lav</option>
@@ -394,7 +384,53 @@
         </div>
 
       </main>
+
+      <!-- ToDo-sidepanel / responsivt bunnark -->
+      <div id="todo-panel-layer" class="todo-panel-layer hidden" aria-hidden="true">
+        <aside id="todo-panel" class="todo-panel" aria-labelledby="todo-panel-title">
+          <div class="todo-panel-header">
+            <div class="todo-panel-heading">
+              <h2 id="todo-panel-title">ToDo-er</h2>
+              <span id="todo-panel-count" class="todo-panel-count">0 åpne</span>
+            </div>
+            <button id="todo-panel-collapse" class="icon-btn todo-panel-collapse" type="button" aria-label="Kollaps ToDo-panel" title="Kollaps ToDo-panel">
+              <svg class="todo-panel-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              <svg class="todo-panel-close-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="todo-panel-body">
+            <form id="todo-panel-form" class="todo-panel-form" autocomplete="off">
+              <div class="todo-panel-title-row">
+                <input type="text" id="todo-panel-title-input" data-todo-title class="form-input" placeholder="Legg til ToDo..." aria-label="Tittel på ny ToDo" required />
+                <button class="btn btn-primary todo-panel-add" type="submit" aria-label="Legg til ToDo" title="Legg til ToDo">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+              </div>
+              <button id="todo-panel-more" class="btn-link todo-panel-more" type="button" aria-expanded="false">Flere valg</button>
+              <div id="todo-panel-options" class="todo-panel-options hidden">
+                <select id="todo-panel-assignee" data-todo-assignee class="form-input" aria-label="Ansvarlig">
+                  <option value="">Ingen ansvarlig</option>
+                </select>
+                <input type="date" id="todo-panel-due-date" data-todo-due-date class="form-input" aria-label="Frist" />
+                <select id="todo-panel-priority" data-todo-priority class="form-input" aria-label="Prioritet">
+                  <option value="medium">Normal</option>
+                  <option value="høy">Haster</option>
+                  <option value="lav">Lav</option>
+                </select>
+              </div>
+            </form>
+            <div id="todo-panel-list" class="todos-list todo-panel-list"></div>
+            <button id="todo-panel-see-all" class="btn-link todo-panel-see-all" type="button">Se alle →</button>
+          </div>
+        </aside>
+      </div>
     </div>
+
+    <button id="todo-panel-launcher" class="btn btn-primary todo-panel-launcher hidden" type="button">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      ToDo
+      <span id="todo-panel-launcher-count" class="todo-panel-launcher-count">0</span>
+    </button>
 
     <!-- Bunnnavigasjon (mobil) -->
     <nav class="bottom-nav">
@@ -577,6 +613,10 @@
         <input type="text" id="todo-edit-title-input" class="form-input" placeholder="Hva skal gjøres?" required />
       </div>
       <div class="form-group">
+        <label class="form-label" for="todo-edit-description">Beskrivelse</label>
+        <textarea id="todo-edit-description" class="form-input todo-edit-description" rows="4" placeholder="Legg til detaljer eller kontekst..."></textarea>
+      </div>
+      <div class="form-group">
         <label class="form-label" for="todo-edit-assignee">Ansvarlig</label>
         <select id="todo-edit-assignee" class="form-input">
           <option value="">Ingen tildelt</option>
@@ -614,6 +654,7 @@
   <!-- App -->
   <script src="firebase-config.js"></script>
   <script src="firestore.js"></script>
+  <script src="js/todos.js"></script>
   <script src="app.js"></script>
 
 </body>

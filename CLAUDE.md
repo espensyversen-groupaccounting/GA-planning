@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.5.1`
+Gjeldende appversjon: `v1.6.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -29,6 +29,8 @@ Planning/
 ├── TESTING.md          # Lokal testing og sjekkliste før publisering
 ├── DEVELOPMENT_LOG.md  # Endrings- og utrullingslogg
 ├── app.js              # UI-logikk, routing og hendelseshåndtering
+├── js/
+│   └── todos.js        # ToDo-visning, panel og handlinger
 ├── manifest.json       # PWA-manifest
 ├── service-worker.js   # Caching og app-oppdatering
 ├── .nojekyll           # Hindrer GitHub Pages fra å kjøre Jekyll-prosessering
@@ -108,7 +110,7 @@ Opprettes eller oppdateres automatisk ved første innlogging etter at brukeren f
 ### `todos/{todoId}`
 Lettvektsoppgaver for ad hoc-arbeid som ikke trenger full prosjektstruktur.
 
-- `title`
+- `title`, `description`
 - `priority`: `høy` | `medium` | `lav`
 - `status`: `apen` | `fullfort`
 - `assignedTo`, `assignedToName`
@@ -153,13 +155,12 @@ Toppkort:
 - `Høy prioritet`: åpne oppgaver eller ToDo-er med høy prioritet.
 
 Dashboardseksjoner:
-- `Korte ToDo's`: topp 5 åpne ToDo-er i valgt Team/Mine-visning, sortert etter hastegrad.
 - `Prioriter i dag`: forfalte oppgaver og oppgaver/deloppgaver med frist i dag, gruppert etter `Høy`, `Medium`, `Lav`.
 - `Planlegg denne uken`: kommende oppgaver/deloppgaver innen 1-7 dager, gruppert etter prioritet.
 - `Uten ansvarlig`: åpne oppgaver som må delegeres.
 - `Teamoversikt`: viser åpne oppgaver/ToDo-er og risikopunkter per person. I `Mine`-visning skjules denne og brukeren får beskjed om å bytte til Team for teamfordeling.
 
-På mobil er dashboardet komprimert: toppkortene vises som horisontale chips, ToDo-skjemaet åpnes først når brukeren trykker `+ ToDo`, og kort/spacing er strammet inn slik at prioriterte oppgaver kommer tidligere på skjermen. Desktop-layouten er beholdt bred og mer informasjonsrik.
+På mobil er dashboardet komprimert: toppkortene vises som horisontale chips og kort/spacing er strammet inn slik at prioriterte oppgaver kommer tidligere på skjermen. Desktop-layouten er beholdt bred og mer informasjonsrik.
 
 Hasteberegningen i `app.js` tar hensyn til frist, om fristen er passert, prioritet, om oppgaven mangler ansvarlig, status og deloppgavefrister.
 
@@ -182,19 +183,23 @@ Standard sortering er etter hastegrad, ikke bare prioritet. Oppgavekort og ToDo-
 ## Korte ToDo-er
 ToDo-er er ment for korte ad hoc-oppgaver som må følges opp, men som ikke trenger full prosjektstruktur med deloppgaver og kommentarer.
 
-ToDo legges inn direkte fra dashboardet med:
+Admin og Teamleder kan legge inn ToDo direkte fra sidepanelet på Dashboard og Oppgaver med:
 - tittel
 - ansvarlig
 - frist
 - prioritet: `Haster`, `Normal`, `Lav`
 
 ToDo-er vises:
-- som egen `Korte ToDo's`-seksjon på dashboardet
+- i et høyre sidepanel på brede skjermer, eller i et bunnark på smalere skjermer
 - i toppkortene på dashboardet der de påvirker `I dag`, `Denne uken`, `Uten ansvarlig` og `Høy prioritet`
 - i Oppgaver-fanen under `Alle` og hurtigfilteret `ToDo`
 - i Team/Mine-visningen på dashboardet
 
 Admin og Teamleder kan opprette og slette ToDo-er. Tildelt Medlem kan markere egne ToDo-er som fullført eller åpne dem igjen.
+
+Panelet bruker samme `Team`/`Mine`-avgrensning som dashboardet, sorterer åpne ToDo-er etter eksisterende hastegrad og husker kollapstilstanden i `localStorage`. På skjermbredder opptil 1280 px erstattes sidekolonnen av en flytende ToDo-knapp. På mobil åpnes panelet nedenfra og stopper over bunnnavigasjonen. Hele ToDo-kortet kan åpnes med mus, Enter eller mellomrom; avkryssing og sletting åpner ikke redigeringsmodalen.
+
+Beskrivelse er valgfri. Eksisterende ToDo-er uten feltet behandles som tom tekst og trenger ingen migrering.
 
 ## Legge til nye brukere
 1. Logg inn som en bruker med rollen `admin`.

@@ -1,5 +1,31 @@
 # Development Log
 
+## v1.6.0 - 2026-09-02
+
+### ToDo-panel og arbeidsflyt
+- La til et vedvarende ToDo-panel på Dashboard og Oppgaver for Admin og Teamleder, med rask opprettelse via tittel og Enter.
+- La ansvarlig, frist og prioritet ligge i en kompakt «Flere valg»-utvidelse, og behold fokus i tittelfeltet etter opprettelse.
+- Panelet følger `Team`/`Mine`, bruker eksisterende hastegradssortering og husker kollapstilstand i `localStorage`.
+- Bruker responsivt panel på mellomstore skjermer og bunnark på mobil, med X, Escape og beskyttet backdrop-lukking over bunnnavigasjonen.
+- Fjernet den tidligere `Korte ToDo's`-seksjonen fra dashboardet. ToDo-bidrag til toppkort og prioriteringsvisning er uendret.
+
+### ToDo-kort og data
+- Gjorde hele ToDo-kortet klikkbart og tastaturtilgjengelig; avkryssing og sletting stopper hendelsespropagering.
+- La til valgfri, escapet beskrivelse med kompakt forhåndsvisning og støtte for eldre ToDo-er uten feltet.
+- La til `Beskrivelse` etter `Tittel` i ToDo-CSV. JSON-eksporten får feltet automatisk.
+
+### Arkitektur og versjon
+- Flyttet eksisterende ToDo-funksjoner rent ut av `app.js` før funksjonelle endringer og samlet dem med ny panellogikk i `js/todos.js`.
+- La `js/todos.js` inn i klassisk scriptrekkefølge etter `firestore.js` og før `app.js`, og i service workerens app-cache.
+- Ingen endringer i Firestore-regler, regeltester, oppgavedatamodell eller hasteberegning.
+- Versjon bumpet til `1.6.0` i `app.js`, `service-worker.js` og `firestore.js`; klientbuild er `1600`.
+
+### Kontroll
+- Firestore-emulatortestene består uendret: 19 av 19.
+- `node --check` består for `app.js`, `js/todos.js`, `firestore.js` og `service-worker.js`.
+- Isolert UI-/DOM-test består med 24 assertions for panel, scope, kollaps, kortinteraksjon, escaping, beskrivelse, rask opprettelse, CSV og script/cache-rekkefølge.
+- Lokal HTTP-kontroll returnerer 200 for `index.html`, `js/todos.js` og `service-worker.js`.
+
 ## v1.5.1 - 2026-09-02
 
 ### Rettet

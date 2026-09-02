@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.6.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -29,6 +29,8 @@ const state = {
   todoViewFilter: 'open',
   todoViewPriority: '',
   todoViewAssignee: '',
+  todoPanelCollapsed: localStorage.getItem('todoPanelCollapsed') === 'true',
+  todoPanelOpen: false,
 };
 
 let activeConfirmCancel = null;
@@ -108,12 +110,6 @@ function scopedTasks() {
   return state.dashboardScope === 'mine'
     ? state.tasks.filter(isMineItem)
     : state.tasks;
-}
-
-function scopedTodos() {
-  return state.dashboardScope === 'mine'
-    ? state.todos.filter(isMineItem)
-    : state.todos;
 }
 
 function dueDateRelativeLabel(task) {
@@ -398,6 +394,7 @@ function showView(name) {
   if (name === 'todos')         renderTodosView();
   if (name === 'notifications') renderNotifications();
   if (name === 'admin')         renderAdmin();
+  renderTodoPanel();
 }
 
 // ============================================================
@@ -536,6 +533,7 @@ function setupUI() {
   document.getElementById('btn-add-task')?.classList.toggle('hidden', !showCreate);
   document.getElementById('btn-add-task-dashboard')?.classList.toggle('hidden', !showCreate);
   document.getElementById('btn-toggle-todo-form')?.classList.toggle('hidden', !showCreate);
+  renderTodoPanel();
 }
 
 function subscribeToRealtime() {
@@ -557,6 +555,7 @@ function subscribeToRealtime() {
       state.todos = todos;
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'todos')     renderTodosView();
+      renderTodoPanel();
     }, onRealtimeError('todos', 'Kunne ikke laste ToDo-listen. Firestore-reglene må trolig oppdateres.')),
     subscribeToUsers(users => {
       state.users = users;
@@ -564,6 +563,7 @@ function subscribeToRealtime() {
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'tasks') renderTasksList();
       if (state.currentView === 'admin') renderAdmin();
+      renderTodoPanel();
     }, onRealtimeError('users', 'Kunne ikke laste teammedlemmer. Prøv å oppdatere appen.')),
     subscribeToAllowedUsers(allowedUsers => {
       state.allowedUsers = allowedUsers;
@@ -615,10 +615,6 @@ function renderDashboard() {
     t.status === 'i_gang' && t.priority === 'høy' && !dueTodayOrOverdue(t)
   ).sort(compareTasksByUrgency);
 
-  // "Korte ToDo's" – kun todos som IKKE er i fokus
-  const fokusTodoIds = new Set([...fokusOverdueTodos, ...fokusTodayTodos].map(t => t.id));
-  const queueTodos = openTodos.filter(t => !fokusTodoIds.has(t.id)).sort(compareTasksByUrgency).slice(0, 5);
-
   // "Planlegg denne uken" – 14 dagers vindu for høy prioritet, 7 dager for øvrige
   const fokusIds = new Set([...today, ...fokusInProgress].map(t => t.id));
   const weekPriority = open.filter(t => {
@@ -651,11 +647,11 @@ function renderDashboard() {
     </button>
   `;
 
-  renderTodosList(queueTodos, fokusTodoIds.size);
   renderFokusNa(fokusOverdue, fokusToday, fokusInProgress);
   renderPriorityGroups('week-priority-list', weekPriority, 'Ingen oppgaver planlagt de neste 14 dagene');
   renderCompactList('unassigned-tasks-list', unassigned.sort(compareTasksByUrgency).slice(0, 6), 'Alle åpne oppgaver har ansvarlig');
   renderTeamWorkload([...open, ...openTodos]);
+  renderTodoPanel();
 }
 
 function updateDashboardScopeButtons() {
@@ -715,78 +711,6 @@ function renderCompactList(containerId, tasks, emptyMsg) {
     return;
   }
   el.innerHTML = tasks.map(t => taskCardHtml(t, true)).join('');
-}
-
-function renderTodosList(todos, fokusCount = 0) {
-  const el = document.getElementById('todos-list');
-  const countEl = document.getElementById('todo-count-label');
-  if (!el) return;
-  if (countEl) {
-    const total = scopedTodos().filter(t => !isDoneItem(t)).length;
-    countEl.textContent = total ? `${total} åpne` : '';
-  }
-
-  if (!todos.length) {
-    const msg = fokusCount > 0
-      ? `${fokusCount === 1 ? '1 ToDo vises' : fokusCount + ' ToDo-er vises'} i Fokus nå`
-      : 'Ingen korte ToDo\'s i denne visningen';
-    el.innerHTML = `<div class="empty-state compact-empty"><p>${msg}</p></div>`;
-    return;
-  }
-
-  el.innerHTML = todos.map(todoCardHtml).join('');
-}
-
-function todoCardHtml(todo) {
-  const dateClass = dueDateClass(todo.dueDate);
-  const assignee = state.users.find(u => u.id === todo.assignedTo);
-  const relativeDue = dueDateRelativeLabel(todo);
-  const dueDateHtml = todo.dueDate ? `
-    <span class="due-date ${dateClass}">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      ${formatDate(todo.dueDate)}${relativeDue ? ` · ${relativeDue}` : ''}
-    </span>` : '';
-  const assigneeHtml = assignee ? `
-    <span class="assignee-chip">
-      ${assignee.photoURL
-        ? `<img src="${esc(assignee.photoURL)}" class="assignee-avatar" alt="" />`
-        : `<span class="assignee-avatar">${initials(assignee.displayName || assignee.email)}</span>`}
-      <span>${esc(assignee.displayName || assignee.email)}</span>
-    </span>` : `<span class="unassigned-chip">Ikke tildelt</span>`;
-  const signalHtml = taskSignals(todo).map(s => `<span class="risk-badge ${s.key}">${s.label}</span>`).join('');
-  const canChange = canEdit() || isMineItem(todo);
-
-  return `
-    <div class="todo-card priority-${todo.priority || 'medium'}">
-      <button class="todo-check-btn ${isDoneItem(todo) ? 'checked' : ''}"
-        type="button"
-        onclick="toggleTodoDone('${todo.id}', event)"
-        ${!canChange ? 'disabled' : ''}
-        title="${isDoneItem(todo) ? 'Angre fullført' : 'Marker som fullført'}">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      </button>
-      <div class="todo-card-main">
-        <div class="todo-title">${esc(todo.title)}</div>
-        <div class="todo-meta">
-          ${signalHtml}
-          <span class="priority-badge ${todo.priority || 'medium'}">
-            <span class="priority-dot ${todo.priority || 'medium'}"></span>
-            ${todo.priority === 'høy' ? 'Haster' : todo.priority === 'lav' ? 'Lav' : 'Normal'}
-          </span>
-          ${assigneeHtml}
-          ${dueDateHtml}
-        </div>
-      </div>
-      ${canEdit() ? `
-        <div class="todo-actions">
-          <button class="todo-edit-btn" type="button" onclick="openTodoEditModal('${todo.id}', event)" title="Rediger ToDo">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <button class="btn-icon-danger todo-delete-btn" type="button" onclick="handleDeleteTodo('${todo.id}', event)" title="Slett ToDo">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>` : ''}
-    </div>`;
 }
 
 function renderFokusNa(overdue, today, inProgress) {
@@ -1063,6 +987,7 @@ function populateAssigneeSelects() {
   );
   replaceSelectOptions(document.getElementById('task-assignee'), formOpts, isCurrentUser);
   replaceSelectOptions(document.getElementById('todo-assignee'), formOpts, isCurrentUser);
+  replaceSelectOptions(document.getElementById('todo-panel-assignee'), formOpts, isCurrentUser);
   replaceSelectOptions(document.getElementById('todo-edit-assignee'), formOpts, isCurrentUser);
   replaceSelectOptions(
     document.getElementById('todo-filter-assignee'),
@@ -1374,196 +1299,6 @@ async function handleDeleteTask() {
 
 // ============================================================
 // TODOS
-// ============================================================
-
-async function handleAddTodo(e) {
-  e.preventDefault();
-  if (!canEdit()) {
-    showToast('Du må være Admin eller Teamleder for å legge til ToDo.', 'error');
-    return;
-  }
-
-  const titleEl = document.getElementById('todo-title');
-  const assigneeId = document.getElementById('todo-assignee').value;
-  const dueStr = document.getElementById('todo-due-date').value;
-  const priority = document.getElementById('todo-priority').value;
-  const title = titleEl.value.trim();
-  if (!title) return;
-
-  const assignee = state.users.find(u => u.id === assigneeId);
-  const btn = e.target.querySelector('button[type=submit]');
-  btn.disabled = true;
-
-  try {
-    await createTodo({
-      title,
-      priority,
-      assignedTo: assigneeId || null,
-      assignedToName: assignee ? (assignee.displayName || assignee.email) : null,
-      dueDate: dueStr ? firebase.firestore.Timestamp.fromDate(new Date(dueStr)) : null,
-    });
-    e.target.reset();
-    document.getElementById('todo-priority').value = 'medium';
-    e.target.classList.remove('is-open');
-    showToast('ToDo lagt til');
-  } catch(e) {
-    console.error('Todo create error:', e);
-    const message = e && e.code === 'permission-denied'
-      ? 'Kunne ikke lagre ToDo. Firestore-reglene må oppdateres først.'
-      : 'Feil ved lagring av ToDo.';
-    showToast(message, 'error');
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-async function toggleTodoDone(todoId, event) {
-  if (event) event.stopPropagation();
-  const todo = state.todos.find(t => t.id === todoId);
-  if (!todo) return;
-  if (!canEdit() && todo.assignedTo !== state.user.uid) return;
-
-  try {
-    await updateTodo(todoId, {
-      status: isDoneItem(todo) ? 'apen' : 'fullfort',
-      completedAt: isDoneItem(todo) ? null : firebase.firestore.FieldValue.serverTimestamp(),
-      completedBy: isDoneItem(todo) ? null : state.user.uid,
-    });
-    showToast(isDoneItem(todo) ? 'ToDo åpnet igjen' : 'ToDo fullført');
-  } catch(e) {
-    console.error('Todo status error:', e);
-    showToast('Feil ved oppdatering av ToDo.', 'error');
-  }
-}
-
-async function handleDeleteTodo(todoId, event) {
-  if (event) event.stopPropagation();
-  const todo = state.todos.find(t => t.id === todoId);
-  const confirmed = await showConfirm('Slett ToDo', `Er du sikker på at du vil slette "${todo ? todo.title : 'denne ToDo-en'}"?`);
-  if (!confirmed) return;
-
-  try {
-    await deleteTodo(todoId);
-    showToast('ToDo slettet');
-  } catch(e) {
-    console.error('Todo delete error:', e);
-    showToast('Feil ved sletting av ToDo.', 'error');
-  }
-}
-
-function renderTodosView() {
-  document.querySelectorAll('.todo-tab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.todoStatus === state.todoViewFilter);
-  });
-
-  const priorityEl = document.getElementById('todo-filter-priority');
-  const assigneeEl = document.getElementById('todo-filter-assignee');
-  if (priorityEl) priorityEl.value = state.todoViewPriority;
-  if (assigneeEl) assigneeEl.value = state.todoViewAssignee;
-
-  let todos = state.todos;
-  if (state.todoViewFilter === 'open') {
-    todos = todos.filter(t => !isDoneItem(t));
-  } else {
-    todos = todos.filter(t => isDoneItem(t));
-  }
-  if (state.todoViewPriority) todos = todos.filter(t => t.priority === state.todoViewPriority);
-  if (state.todoViewAssignee) todos = todos.filter(t => t.assignedTo === state.todoViewAssignee);
-  todos.sort(compareTasksByUrgency);
-
-  const el = document.getElementById('todos-view-list');
-  if (!el) return;
-
-  if (!todos.length) {
-    const hasFilters = state.todoViewPriority || state.todoViewAssignee;
-    el.innerHTML = hasFilters
-      ? `<div class="empty-state">
-           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-           <strong>Ingen treff</strong>
-           <p>Ingen ToDo-er matcher filteret. Prøv å endre filter.</p>
-         </div>`
-      : state.todoViewFilter === 'done'
-        ? `<div class="empty-state"><p>Ingen fullførte ToDo-er ennå</p></div>`
-        : `<div class="empty-state">
-             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-             <strong>Ingen åpne ToDo-er</strong>
-             <p>Legg til en ny kort ToDo for å komme i gang.</p>
-             ${canEdit() ? `<button class="btn btn-primary" onclick="document.getElementById('quick-todo-form').classList.add('is-open');document.getElementById('todo-title').focus()">+ Legg til ToDo</button>` : ''}
-           </div>`;
-    return;
-  }
-  el.innerHTML = todos.map(todoCardHtml).join('');
-}
-
-function openTodoEditModal(todoId, event) {
-  if (event) event.stopPropagation();
-  const todo = state.todos.find(t => t.id === todoId);
-  if (!todo) return;
-
-  document.getElementById('todo-edit-id').value = todoId;
-  document.getElementById('todo-edit-title-input').value = todo.title || '';
-
-  const formOpts = ['<option value="">Ingen tildelt</option>',
-    ...state.users.map(u => `<option value="${u.id}">${esc(u.displayName || u.email)}</option>`)
-  ].join('');
-  const assigneeEl = document.getElementById('todo-edit-assignee');
-  assigneeEl.innerHTML = formOpts;
-  assigneeEl.value = todo.assignedTo || '';
-
-  const dueDate = toDate(todo.dueDate);
-  document.getElementById('todo-edit-due-date').value = dueDate
-    ? dueDate.toISOString().slice(0, 10)
-    : '';
-
-  document.getElementById('todo-edit-priority').value = todo.priority || 'medium';
-
-  document.getElementById('todo-edit-modal').classList.remove('hidden');
-  document.getElementById('todo-edit-title-input').focus();
-}
-
-function closeTodoEditModal() {
-  document.getElementById('todo-edit-modal').classList.add('hidden');
-}
-
-async function handleSaveTodoEdit() {
-  const todoId = document.getElementById('todo-edit-id').value;
-  const title = document.getElementById('todo-edit-title-input').value.trim();
-  if (!title) {
-    showToast('Tittel kan ikke være tom.', 'error');
-    return;
-  }
-
-  const assigneeId = document.getElementById('todo-edit-assignee').value;
-  const dueStr = document.getElementById('todo-edit-due-date').value;
-  const priority = document.getElementById('todo-edit-priority').value;
-  const assignee = state.users.find(u => u.id === assigneeId);
-
-  const saveBtn = document.getElementById('todo-edit-save');
-  saveBtn.disabled = true;
-
-  try {
-    await updateTodo(todoId, {
-      title,
-      priority,
-      assignedTo: assigneeId || null,
-      assignedToName: assignee ? (assignee.displayName || assignee.email) : null,
-      dueDate: dueStr ? firebase.firestore.Timestamp.fromDate(new Date(dueStr)) : null,
-    });
-    closeTodoEditModal();
-    showToast('ToDo oppdatert');
-  } catch (e) {
-    console.error('Todo update error:', e);
-    const message = e && e.code === 'permission-denied'
-      ? 'Ingen tilgang til å redigere ToDo.'
-      : 'Feil ved lagring av ToDo.';
-    showToast(message, 'error');
-  } finally {
-    saveBtn.disabled = false;
-  }
-}
-
-// ============================================================
-// TABS
 // ============================================================
 
 function switchTab(name) {
@@ -2255,12 +1990,13 @@ function buildTasksCsv(collections) {
 function buildTodosCsv(collections) {
   const assigneeNames = buildAssigneeNames(collections);
   const headers = [
-    'ID', 'Tittel', 'Prioritet', 'Status', 'Ansvarlig', 'Frist',
+    'ID', 'Tittel', 'Beskrivelse', 'Prioritet', 'Status', 'Ansvarlig', 'Frist',
     'Fullført dato', 'Arkivert', 'Opprettet', 'Sist oppdatert'
   ];
   const rows = collections.todos.map(todo => [
     todo.id,
     todo.title,
+    todo.description || '',
     { høy: 'Haster', medium: 'Normal', lav: 'Lav' }[todo.priority] || todo.priority,
     { apen: 'Åpen', fullfort: 'Fullført' }[todo.status] || todo.status,
     assigneeName(todo, assigneeNames),
@@ -2474,9 +2210,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-add-task').addEventListener('click', () => openTaskModal());
   document.getElementById('btn-add-task-dashboard').addEventListener('click', () => openTaskModal());
   document.getElementById('quick-todo-form').addEventListener('submit', handleAddTodo);
-  document.getElementById('toggle-quick-todo')?.addEventListener('click', () => {
-    document.getElementById('quick-todo-form')?.classList.toggle('is-open');
-  });
+  document.getElementById('todo-panel-form').addEventListener('submit', handleAddTodo);
+  document.getElementById('todo-panel-more').addEventListener('click', toggleTodoPanelOptions);
+  document.getElementById('todo-panel-collapse').addEventListener('click', toggleTodoPanelCollapsed);
+  document.getElementById('todo-panel-launcher').addEventListener('click', openTodoPanel);
+  document.getElementById('todo-panel-see-all').addEventListener('click', openTodosViewFromPanel);
+  setupBackdropClose(document.getElementById('todo-panel-layer'), closeTodoPanel);
+  window.addEventListener('resize', renderTodoPanel);
   document.querySelectorAll('.scope-btn').forEach(btn => {
     btn.addEventListener('click', () => setDashboardScope(btn.dataset.dashboardScope || 'team'));
   });
@@ -2566,6 +2306,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!document.getElementById('confirm-dialog').classList.contains('hidden')) return;
+    if (isTodoPanelOverlayOpen()) {
+      closeTodoPanel();
+      return;
+    }
     if (!document.getElementById('todo-edit-modal').classList.contains('hidden')) {
       closeTodoEditModal();
       return;
