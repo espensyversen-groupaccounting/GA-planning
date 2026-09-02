@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.6.2';
-const CLIENT_BUILD = 1602;
+const CLIENT_APP_VERSION = '1.7.0';
+const CLIENT_BUILD = 1700;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -305,6 +305,28 @@ async function updateTodo(todoId, data) {
     lastEditedBy: auth.currentUser.uid,
     ...writeMeta()
   });
+}
+
+async function updateTodoSortOrder(todoId, sortOrder) {
+  await db.collection('todos').doc(todoId).update({
+    sortOrder,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastEditedBy: auth.currentUser.uid,
+    ...writeMeta()
+  });
+}
+
+async function normalizeTodoSortOrders(orderedTodoIds, step = 1000) {
+  const batch = db.batch();
+  orderedTodoIds.forEach((todoId, index) => {
+    batch.update(db.collection('todos').doc(todoId), {
+      sortOrder: (index + 1) * step,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastEditedBy: auth.currentUser.uid,
+      ...writeMeta()
+    });
+  });
+  await batch.commit();
 }
 
 async function deleteTodo(todoId) {

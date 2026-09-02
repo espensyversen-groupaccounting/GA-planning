@@ -1,5 +1,28 @@
 # Development Log
 
+## v1.7.0 - 2026-09-02
+
+### Manuell ToDo-prioritering
+- La til én delt `sortOrder`-rekkefølge for åpne ToDo-er i sidepanelet og ToDo-fanen. Hastesignaler beholdes som fakta på kortene, men styrer ikke lenger rekkefølgen i disse listene.
+- La Admin og Teamleder flytte åpne kort fra et eget 44 x 44 px drahåndtak med Pointer Events, 200 ms trykk-og-hold på berøring, automatisk rulling og dempet visuell plassholder.
+- La Enter/mellomrom aktivere tastaturflytting, pil opp/ned endre plass, Enter bekrefte og Escape avbryte. Flyttestatus annonseres i en `aria-live`-region.
+- Fullførte ToDo-er beholder tidligere sortering og kan ikke flyttes. Klikk på kort, avkryssing, sletting og redigering er ellers uendret.
+
+### Lagring og synkronisering
+- La første flytting normalisere alle åpne ToDo-er i den globale teamrekkefølgen når ett eller flere dokumenter mangler `sortOrder`. Dette unngår kollisjoner mellom synlige og skjulte elementer i filtrerte visninger.
+- Senere flyttinger skriver kun det flyttede ToDo-dokumentet ved å plassere det mellom de faktiske globale naboene. Listen normaliseres på nytt bare når tallavstanden er blitt for liten.
+- Holder aktiv draoperasjon stabil mot sanntids-rerender, viser endringen optimistisk og gjenoppretter forrige rekkefølge med norsk feilmelding dersom lagringen feiler.
+
+### Avgrensning og versjon
+- Ingen endringer i Firestore-regler, regeltester, oppgaver, dashboardtall, tellevilkår, filtre eller eksportlogikk. JSON-eksporten inkluderer `sortOrder` automatisk som del av rådataene.
+- Versjon bumpet til `1.7.0` i `app.js`, `service-worker.js` og `firestore.js`; klientbuild er `1700`.
+
+### Kontroll
+- Firestore-emulatortestene består uendret: 19 av 19.
+- `node --check` består for `app.js`, `js/todos.js`, `firestore.js` og `service-worker.js`.
+- Isolert Chrome-test består med 24 assertions for mus, 200 ms berøringsforsinkelse, mobilrulling, berøringsflytting, tastatur, Escape, slipp utenfor listen, fullførte kort, global rekkefølge fra filtrert visning, normalisering, én-dokumentskriving og rollback etter simulert state-erstatning.
+- Visuell mobilkontroll bekrefter at 44 x 44 px-håndtaket ikke overlapper tittel, metadata, avkryssing eller sletting.
+
 ## v1.6.2 - 2026-09-02
 
 ### Rettet

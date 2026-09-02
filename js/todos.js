@@ -4,6 +4,33 @@
 // ============================================================
 
 let todoPanelAssigneeOverridden = false;
+const TODO_SORT_STEP = 1000;
+const TODO_SORT_MIN_GAP = 0.001;
+const TODO_TOUCH_HOLD_MS = 200;
+let todoDragState = null;
+let todoOrderSaving = false;
+let todoOrderRenderDeferred = false;
+let todoAutoScrollFrame = null;
+
+function todoCreatedAtMillis(todo) {
+  const createdAt = todo && todo.createdAt;
+  if (!createdAt) return 0;
+  if (typeof createdAt.toMillis === 'function') return createdAt.toMillis();
+  const date = toDate(createdAt);
+  return date ? date.getTime() : 0;
+}
+
+function compareTodosByManualOrder(a, b) {
+  const aHasOrder = Number.isFinite(a && a.sortOrder);
+  const bHasOrder = Number.isFinite(b && b.sortOrder);
+  if (aHasOrder && bHasOrder && a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+  if (aHasOrder !== bHasOrder) return aHasOrder ? -1 : 1;
+  return todoCreatedAtMillis(b) - todoCreatedAtMillis(a) || String(a.id).localeCompare(String(b.id));
+}
+
+function todoOrderInteractionActive() {
+  return Boolean(todoOrderSaving || (todoDragState && todoDragState.active));
+}
 
 function scopedTodos() {
   return state.dashboardScope === 'mine'
@@ -30,6 +57,7 @@ function todoCardHtml(todo) {
     </span>` : '';
   const signalHtml = taskSignals(todo).map(s => `<span class="risk-badge ${s.key}">${s.label}</span>`).join('');
   const canChange = canEdit() || isMineItem(todo);
+  const canReorder = canEdit() && !isDoneItem(todo);
   const description = (todo.description || '').trim();
   const descriptionHtml = description ? `
     <div class="todo-description-preview">
@@ -38,7 +66,7 @@ function todoCardHtml(todo) {
     </div>` : '';
 
   return `
-    <div class="todo-card priority-${priority}" role="button" tabindex="0"
+    <div class="todo-card priority-${priority}" role="button" tabindex="0" data-todo-id="${esc(todo.id)}"
       onclick="openTodoEditModal(${inlineJsArg(todo.id)}, event)"
       onkeydown="handleTodoCardKey(event, ${inlineJsArg(todo.id)})"
       aria-label="Åpne ToDo: ${esc(todo.title)}">
@@ -64,6 +92,13 @@ function todoCardHtml(todo) {
       </div>
       ${canEdit() ? `
         <div class="todo-actions">
+          ${canReorder ? `
+            <button class="todo-drag-handle" type="button"
+              onclick="handleTodoDragHandleClick(event)"
+              onkeydown="handleTodoDragHandleKey(event, ${inlineJsArg(todo.id)})"
+              aria-label="Flytt ToDo: ${esc(todo.title)}" title="Flytt ToDo">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>
+            </button>` : ''}
           <button class="btn-icon-danger todo-delete-btn" type="button" onclick="handleDeleteTodo(${inlineJsArg(todo.id)}, event)" title="Slett ToDo">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
@@ -158,6 +193,10 @@ async function handleDeleteTodo(todoId, event) {
 }
 
 function renderTodosView() {
+  if (todoOrderInteractionActive()) {
+    todoOrderRenderDeferred = true;
+    return;
+  }
   document.querySelectorAll('.todo-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.todoStatus === state.todoViewFilter);
   });
@@ -175,7 +214,7 @@ function renderTodosView() {
   }
   if (state.todoViewPriority) todos = todos.filter(t => t.priority === state.todoViewPriority);
   if (state.todoViewAssignee) todos = todos.filter(t => t.assignedTo === state.todoViewAssignee);
-  todos.sort(compareTasksByUrgency);
+  todos.sort(state.todoViewFilter === 'open' ? compareTodosByManualOrder : compareTasksByUrgency);
 
   const el = document.getElementById('todos-view-list');
   if (!el) return;
@@ -336,6 +375,10 @@ function handleTodoPanelAssigneeChange(event) {
 }
 
 function renderTodoPanel() {
+  if (todoOrderInteractionActive()) {
+    todoOrderRenderDeferred = true;
+    return;
+  }
   const layer = document.getElementById('todo-panel-layer');
   const launcher = document.getElementById('todo-panel-launcher');
   const list = document.getElementById('todo-panel-list');
@@ -343,7 +386,7 @@ function renderTodoPanel() {
 
   const available = todoPanelIsAvailable();
   const overlay = todoPanelIsOverlay();
-  const openTodos = scopedTodos().filter(todo => !isDoneItem(todo)).sort(compareTasksByUrgency);
+  const openTodos = scopedTodos().filter(todo => !isDoneItem(todo)).sort(compareTodosByManualOrder);
   const countText = `${openTodos.length} åpne`;
   document.getElementById('todo-panel-count').textContent = countText;
   document.getElementById('todo-panel-launcher-count').textContent = openTodos.length;
@@ -410,6 +453,447 @@ function handleTodoCardKey(event, todoId) {
   event.preventDefault();
   openTodoEditModal(todoId, event);
 }
+
+// ============================================================
+// MANUELL TODO-REKKEFØLGE
+// ============================================================
+
+function todoListCards(list) {
+  return list
+    ? Array.from(list.children).filter(child => child.classList.contains('todo-card') && child.dataset.todoId)
+    : [];
+}
+
+function todoListIds(list) {
+  return todoListCards(list).map(card => card.dataset.todoId);
+}
+
+function sameTodoOrder(a, b) {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
+function announceTodoOrder(message) {
+  const live = document.getElementById('todo-order-live');
+  if (!live) return;
+  live.textContent = '';
+  window.setTimeout(() => { live.textContent = message; }, 20);
+}
+
+function animateTodoListMutation(list, mutate) {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const before = new Map(todoListCards(list).map(card => [card, card.getBoundingClientRect().top]));
+  mutate();
+  if (reduceMotion) return;
+
+  todoListCards(list).forEach(card => {
+    if (card.classList.contains('is-dragging')) return;
+    const previousTop = before.get(card);
+    if (previousTop == null) return;
+    const delta = previousTop - card.getBoundingClientRect().top;
+    if (Math.abs(delta) < 1) return;
+    card.animate(
+      [{ transform: `translateY(${delta}px)` }, { transform: 'translateY(0)' }],
+      { duration: 140, easing: 'ease-out' }
+    );
+  });
+}
+
+function restoreTodoListOrder(list, orderedIds) {
+  const cards = new Map(todoListCards(list).map(card => [card.dataset.todoId, card]));
+  orderedIds.forEach(id => {
+    const card = cards.get(id);
+    if (card) list.appendChild(card);
+  });
+}
+
+function renderTodoOrderingSurfaces() {
+  todoOrderRenderDeferred = false;
+  if (state.currentView === 'todos') renderTodosView();
+  renderTodoPanel();
+}
+
+function setLocalTodoSortOrders(orderedIds) {
+  orderedIds.forEach((id, index) => {
+    const todo = state.todos.find(item => item.id === id);
+    if (todo) todo.sortOrder = (index + 1) * TODO_SORT_STEP;
+  });
+}
+
+async function normalizeOpenTodoOrder() {
+  const ordered = state.todos.filter(todo => !isDoneItem(todo)).sort(compareTodosByManualOrder);
+  const orderedIds = ordered.map(todo => todo.id);
+  await normalizeTodoSortOrders(orderedIds, TODO_SORT_STEP);
+  setLocalTodoSortOrders(orderedIds);
+  return orderedIds;
+}
+
+function todoSortAnchors(todoId, visibleOrderIds) {
+  const globalIds = state.todos
+    .filter(todo => !isDoneItem(todo) && todo.id !== todoId)
+    .sort(compareTodosByManualOrder)
+    .map(todo => todo.id);
+  const visibleIndex = visibleOrderIds.indexOf(todoId);
+  const previousVisibleId = visibleIndex > 0 ? visibleOrderIds[visibleIndex - 1] : null;
+  const nextVisibleId = visibleIndex >= 0 && visibleIndex < visibleOrderIds.length - 1
+    ? visibleOrderIds[visibleIndex + 1]
+    : null;
+
+  if (nextVisibleId && globalIds.includes(nextVisibleId)) {
+    const nextIndex = globalIds.indexOf(nextVisibleId);
+    return {
+      previousId: nextIndex > 0 ? globalIds[nextIndex - 1] : null,
+      nextId: nextVisibleId
+    };
+  }
+  if (previousVisibleId && globalIds.includes(previousVisibleId)) {
+    const previousIndex = globalIds.indexOf(previousVisibleId);
+    return {
+      previousId: previousVisibleId,
+      nextId: globalIds[previousIndex + 1] || null
+    };
+  }
+  return { previousId: null, nextId: globalIds[0] || null };
+}
+
+function todoOrderFromAnchors(anchors) {
+  const previous = anchors.previousId
+    ? state.todos.find(todo => todo.id === anchors.previousId)
+    : null;
+  const next = anchors.nextId
+    ? state.todos.find(todo => todo.id === anchors.nextId)
+    : null;
+  const previousOrder = Number.isFinite(previous && previous.sortOrder) ? previous.sortOrder : null;
+  const nextOrder = Number.isFinite(next && next.sortOrder) ? next.sortOrder : null;
+
+  if (previousOrder != null && nextOrder != null) return (previousOrder + nextOrder) / 2;
+  if (previousOrder != null) return previousOrder + TODO_SORT_STEP;
+  if (nextOrder != null) return nextOrder - TODO_SORT_STEP;
+  return TODO_SORT_STEP;
+}
+
+function todoAnchorGapTooSmall(anchors) {
+  if (!anchors.previousId || !anchors.nextId) return false;
+  const previous = state.todos.find(todo => todo.id === anchors.previousId);
+  const next = state.todos.find(todo => todo.id === anchors.nextId);
+  return !Number.isFinite(previous && previous.sortOrder)
+    || !Number.isFinite(next && next.sortOrder)
+    || next.sortOrder - previous.sortOrder <= TODO_SORT_MIN_GAP;
+}
+
+async function persistTodoReorder(todoId, visibleOrderIds) {
+  const openTodos = state.todos.filter(todo => !isDoneItem(todo));
+  if (openTodos.some(todo => !Number.isFinite(todo.sortOrder))) {
+    await normalizeOpenTodoOrder();
+  }
+
+  let anchors = todoSortAnchors(todoId, visibleOrderIds);
+  if (todoAnchorGapTooSmall(anchors)) {
+    await normalizeOpenTodoOrder();
+    anchors = todoSortAnchors(todoId, visibleOrderIds);
+  }
+
+  const todo = state.todos.find(item => item.id === todoId);
+  if (!todo || isDoneItem(todo)) throw new Error('todo-not-available');
+  const previousOrder = todo.sortOrder;
+  const nextOrder = todoOrderFromAnchors(anchors);
+  todo.sortOrder = nextOrder;
+
+  try {
+    await updateTodoSortOrder(todoId, nextOrder);
+  } catch (error) {
+    const currentTodo = state.todos.find(item => item.id === todoId);
+    if (currentTodo) currentTodo.sortOrder = previousOrder;
+    throw error;
+  }
+}
+
+async function commitTodoReorder(todoId, originalIds, visibleOrderIds) {
+  if (sameTodoOrder(originalIds, visibleOrderIds)) {
+    todoDragState = null;
+    if (todoOrderRenderDeferred) renderTodoOrderingSurfaces();
+    announceTodoOrder('Rekkefølgen er uendret.');
+    return;
+  }
+
+  todoOrderSaving = true;
+  todoDragState = null;
+  try {
+    await persistTodoReorder(todoId, visibleOrderIds);
+    announceTodoOrder(`ToDo flyttet til plass ${visibleOrderIds.indexOf(todoId) + 1}.`);
+  } catch (error) {
+    console.error('Todo reorder error:', error);
+    showToast('Kunne ikke lagre ny rekkefølge. Forrige rekkefølge er gjenopprettet.', 'error');
+    announceTodoOrder('Flyttingen mislyktes. Forrige rekkefølge er gjenopprettet.');
+  } finally {
+    todoOrderSaving = false;
+    renderTodoOrderingSurfaces();
+  }
+}
+
+function handleTodoDragHandleClick(event) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function cancelPendingTodoDrag() {
+  if (!todoDragState || todoDragState.active) return;
+  window.clearTimeout(todoDragState.holdTimer);
+  todoDragState = null;
+}
+
+function beginPointerTodoDrag(event) {
+  const drag = todoDragState;
+  if (!drag || drag.active) return;
+  const rect = drag.card.getBoundingClientRect();
+  const placeholder = document.createElement('div');
+  placeholder.className = 'todo-drag-placeholder';
+  placeholder.style.height = `${rect.height}px`;
+
+  drag.active = true;
+  drag.placeholder = placeholder;
+  drag.offsetX = event.clientX - rect.left;
+  drag.offsetY = event.clientY - rect.top;
+  drag.width = rect.width;
+  drag.height = rect.height;
+  drag.lastClientX = event.clientX;
+  drag.lastClientY = event.clientY;
+
+  drag.list.replaceChild(placeholder, drag.card);
+  document.body.appendChild(drag.card);
+  drag.card.classList.add('is-dragging');
+  drag.card.setAttribute('aria-hidden', 'true');
+  drag.card.style.width = `${rect.width}px`;
+  drag.card.style.height = `${rect.height}px`;
+  positionPointerTodoCard(event.clientX, event.clientY);
+  document.body.classList.add('todo-is-dragging');
+  try { drag.handle.setPointerCapture(event.pointerId); } catch (_) {}
+  announceTodoOrder(`Flytter ${drag.title}. Dra opp eller ned og slipp for å plassere.`);
+}
+
+function positionPointerTodoCard(clientX, clientY) {
+  const drag = todoDragState;
+  if (!drag || !drag.active || drag.mode !== 'pointer') return;
+  drag.card.style.left = `${clientX - drag.offsetX}px`;
+  drag.card.style.top = `${clientY - drag.offsetY}px`;
+}
+
+function updatePointerTodoTarget(clientY) {
+  const drag = todoDragState;
+  if (!drag || !drag.active || drag.mode !== 'pointer') return;
+  const siblings = Array.from(drag.list.children).filter(child => child.classList.contains('todo-card'));
+  const target = siblings.find(card => clientY < card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2);
+  const currentNext = drag.placeholder.nextElementSibling;
+  if ((target && currentNext === target) || (!target && !currentNext)) return;
+  animateTodoListMutation(drag.list, () => {
+    drag.list.insertBefore(drag.placeholder, target || null);
+  });
+}
+
+function todoAutoScrollSpeed(clientY) {
+  const drag = todoDragState;
+  if (!drag || !drag.active || drag.mode !== 'pointer') return { target: null, speed: 0 };
+  const threshold = 52;
+  const listRect = drag.list.getBoundingClientRect();
+  if (drag.list.scrollHeight > drag.list.clientHeight + 1) {
+    if (clientY < listRect.top + threshold && drag.list.scrollTop > 0) return { target: drag.list, speed: -12 };
+    if (clientY > listRect.bottom - threshold && drag.list.scrollTop + drag.list.clientHeight < drag.list.scrollHeight) {
+      return { target: drag.list, speed: 12 };
+    }
+  }
+  if (clientY < threshold && window.scrollY > 0) return { target: window, speed: -12 };
+  if (clientY > window.innerHeight - threshold) return { target: window, speed: 12 };
+  return { target: null, speed: 0 };
+}
+
+function runTodoAutoScroll() {
+  todoAutoScrollFrame = null;
+  const drag = todoDragState;
+  if (!drag || !drag.active || drag.mode !== 'pointer') return;
+  const scroll = todoAutoScrollSpeed(drag.lastClientY);
+  if (!scroll.target || !scroll.speed) return;
+  if (scroll.target === window) window.scrollBy(0, scroll.speed);
+  else scroll.target.scrollTop += scroll.speed;
+  updatePointerTodoTarget(drag.lastClientY);
+  todoAutoScrollFrame = window.requestAnimationFrame(runTodoAutoScroll);
+}
+
+function ensureTodoAutoScroll() {
+  if (todoAutoScrollFrame == null) todoAutoScrollFrame = window.requestAnimationFrame(runTodoAutoScroll);
+}
+
+function cleanupPointerTodoDrag(commit, event) {
+  const drag = todoDragState;
+  if (!drag || !drag.active || drag.mode !== 'pointer') return;
+  if (todoAutoScrollFrame != null) window.cancelAnimationFrame(todoAutoScrollFrame);
+  todoAutoScrollFrame = null;
+  try { drag.handle.releasePointerCapture(drag.pointerId); } catch (_) {}
+
+  drag.placeholder.replaceWith(drag.card);
+  drag.card.classList.remove('is-dragging');
+  drag.card.removeAttribute('aria-hidden');
+  drag.card.removeAttribute('style');
+  document.body.classList.remove('todo-is-dragging');
+
+  if (!commit) {
+    restoreTodoListOrder(drag.list, drag.originalIds);
+    todoDragState = null;
+    if (todoOrderRenderDeferred) renderTodoOrderingSurfaces();
+    announceTodoOrder('Flyttingen ble avbrutt.');
+    drag.handle.focus();
+    return;
+  }
+
+  const visibleOrderIds = todoListIds(drag.list);
+  commitTodoReorder(drag.todoId, drag.originalIds, visibleOrderIds);
+  event?.preventDefault();
+}
+
+function handleTodoPointerDown(event) {
+  const handle = event.target.closest('.todo-drag-handle');
+  if (!handle || event.button !== 0 || !event.isPrimary || todoOrderInteractionActive() || todoDragState) return;
+  const card = handle.closest('.todo-card');
+  const list = card && card.parentElement;
+  const todo = card && state.todos.find(item => item.id === card.dataset.todoId);
+  if (!card || !list || !list.matches('[data-todo-sort-list]') || !todo || isDoneItem(todo) || !canEdit()) return;
+
+  event.stopPropagation();
+  todoDragState = {
+    mode: 'pointer',
+    active: false,
+    pointerId: event.pointerId,
+    pointerType: event.pointerType,
+    handle,
+    card,
+    list,
+    todoId: todo.id,
+    title: todo.title || 'ToDo',
+    originalIds: todoListIds(list),
+    startX: event.clientX,
+    startY: event.clientY,
+    holdTimer: null
+  };
+
+  if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+    todoDragState.holdTimer = window.setTimeout(() => beginPointerTodoDrag(event), TODO_TOUCH_HOLD_MS);
+  } else {
+    event.preventDefault();
+    beginPointerTodoDrag(event);
+  }
+}
+
+function handleTodoPointerMove(event) {
+  const drag = todoDragState;
+  if (!drag || drag.mode !== 'pointer' || event.pointerId !== drag.pointerId) return;
+  if (!drag.active) {
+    const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+    if (distance > 10) cancelPendingTodoDrag();
+    return;
+  }
+  event.preventDefault();
+  drag.lastClientX = event.clientX;
+  drag.lastClientY = event.clientY;
+  positionPointerTodoCard(event.clientX, event.clientY);
+  updatePointerTodoTarget(event.clientY);
+  ensureTodoAutoScroll();
+}
+
+function handleTodoPointerUp(event) {
+  const drag = todoDragState;
+  if (!drag || drag.mode !== 'pointer' || event.pointerId !== drag.pointerId) return;
+  if (!drag.active) {
+    cancelPendingTodoDrag();
+    return;
+  }
+  const rect = drag.list.getBoundingClientRect();
+  const insideList = event.clientX >= rect.left && event.clientX <= rect.right
+    && event.clientY >= rect.top && event.clientY <= rect.bottom;
+  cleanupPointerTodoDrag(insideList, event);
+}
+
+function handleTodoPointerCancel(event) {
+  const drag = todoDragState;
+  if (!drag || drag.mode !== 'pointer' || event.pointerId !== drag.pointerId) return;
+  if (drag.active) cleanupPointerTodoDrag(false, event);
+  else cancelPendingTodoDrag();
+}
+
+function beginKeyboardTodoDrag(handle, todoId) {
+  const card = handle.closest('.todo-card');
+  const list = card && card.parentElement;
+  const todo = state.todos.find(item => item.id === todoId);
+  if (!card || !list || !todo || isDoneItem(todo) || !canEdit()) return;
+  todoDragState = {
+    mode: 'keyboard',
+    active: true,
+    handle,
+    card,
+    list,
+    todoId,
+    title: todo.title || 'ToDo',
+    originalIds: todoListIds(list)
+  };
+  card.classList.add('is-keyboard-dragging');
+  handle.setAttribute('aria-pressed', 'true');
+  announceTodoOrder(`Flyttemodus for ${todoDragState.title}. Bruk pil opp eller ned, Enter for å lagre, Escape for å avbryte.`);
+}
+
+function finishKeyboardTodoDrag(commit) {
+  const drag = todoDragState;
+  if (!drag || !drag.active || drag.mode !== 'keyboard') return;
+  if (!commit) restoreTodoListOrder(drag.list, drag.originalIds);
+  drag.card.classList.remove('is-keyboard-dragging');
+  drag.handle.removeAttribute('aria-pressed');
+  const visibleOrderIds = todoListIds(drag.list);
+  if (!commit) {
+    todoDragState = null;
+    if (todoOrderRenderDeferred) renderTodoOrderingSurfaces();
+    announceTodoOrder('Flyttingen ble avbrutt.');
+    drag.handle.focus();
+    return;
+  }
+  commitTodoReorder(drag.todoId, drag.originalIds, visibleOrderIds);
+}
+
+function handleTodoDragHandleKey(event, todoId) {
+  if (!['Enter', ' ', 'ArrowUp', 'ArrowDown', 'Escape'].includes(event.key)) return;
+  event.preventDefault();
+  event.stopPropagation();
+
+  if (!todoDragState) {
+    if (event.key === 'Enter' || event.key === ' ') beginKeyboardTodoDrag(event.currentTarget, todoId);
+    return;
+  }
+  if (todoDragState.mode !== 'keyboard' || todoDragState.todoId !== todoId) return;
+  if (event.key === 'Escape') {
+    finishKeyboardTodoDrag(false);
+    return;
+  }
+  if (event.key === 'Enter' || event.key === ' ') {
+    finishKeyboardTodoDrag(true);
+    return;
+  }
+
+  const drag = todoDragState;
+  const cards = todoListCards(drag.list);
+  const index = cards.indexOf(drag.card);
+  const nextIndex = event.key === 'ArrowUp' ? index - 1 : index + 1;
+  if (nextIndex < 0 || nextIndex >= cards.length) {
+    announceTodoOrder(`ToDo-en er allerede ${event.key === 'ArrowUp' ? 'øverst' : 'nederst'}.`);
+    return;
+  }
+  const target = cards[nextIndex];
+  animateTodoListMutation(drag.list, () => {
+    if (event.key === 'ArrowUp') drag.list.insertBefore(drag.card, target);
+    else drag.list.insertBefore(drag.card, target.nextSibling);
+  });
+  drag.handle.focus();
+  announceTodoOrder(`Plass ${todoListCards(drag.list).indexOf(drag.card) + 1} av ${cards.length}.`);
+}
+
+document.addEventListener('pointerdown', handleTodoPointerDown);
+document.addEventListener('pointermove', handleTodoPointerMove, { passive: false });
+document.addEventListener('pointerup', handleTodoPointerUp);
+document.addEventListener('pointercancel', handleTodoPointerCancel);
 
 // ============================================================
 // TABS

@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.6.2`
+Gjeldende appversjon: `v1.7.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -115,6 +115,7 @@ Lettvektsoppgaver for ad hoc-arbeid som ikke trenger full prosjektstruktur.
 - `status`: `apen` | `fullfort`
 - `assignedTo`, `assignedToName`
 - `dueDate`: Firestore Timestamp eller null
+- `sortOrder`: number eller utelatt; felles manuell teamrekkefølge for åpne ToDo-er
 - `completedAt`, `completedBy`
 - `deletedAt`, `deletedBy`: soft-delete/arkivering
 - `createdBy`, `createdAt`, `updatedAt`, `lastEditedBy`
@@ -199,7 +200,11 @@ ToDo-er vises:
 
 Admin og Teamleder kan opprette og slette ToDo-er. Tildelt Medlem kan markere egne ToDo-er som fullført eller åpne dem igjen.
 
-Panelet bruker samme `Team`/`Mine`-avgrensning som dashboardet, sorterer åpne ToDo-er etter eksisterende hastegrad og husker kollapstilstanden i `localStorage`. Når desktop-panelet kollapses, utvides hovedinnholdet jevnt inn i den frigjorte plassen mens panelstripen blir liggende ved høyre skjermkant. På skjermbredder opptil 1280 px erstattes sidekolonnen av en flytende ToDo-knapp. På mobil åpnes panelet nedenfra og stopper over bunnnavigasjonen. Hele ToDo-kortet kan åpnes med mus, Enter eller mellomrom; avkryssing og sletting åpner ikke redigeringsmodalen.
+Panelet bruker samme `Team`/`Mine`-avgrensning som dashboardet og husker kollapstilstanden i `localStorage`. Åpne ToDo-er i panelet og ToDo-fanen følger én felles, manuell teamrekkefølge via `sortOrder`; hastegradsmerker vises fortsatt, men påvirker ikke denne rekkefølgen. Admin og Teamleder kan flytte åpne kort med et eget drahåndtak ved hjelp av mus, berøring eller tastatur. Filtrerte visninger endrer samme globale rekkefølge, og fullførte ToDo-er kan ikke flyttes.
+
+Ved første flytting normaliseres alle åpne ToDo-er i én batch dersom noen mangler `sortOrder`. Senere flyttinger skriver bare det flyttede dokumentet, med mindre tallavstanden mellom naboene er blitt for liten og en ny normalisering kreves. Pågående flytting skjermer listen mot sanntids-rerender; lagringsfeil gjenoppretter forrige rekkefølge.
+
+Når desktop-panelet kollapses, utvides hovedinnholdet jevnt inn i den frigjorte plassen mens panelstripen blir liggende ved høyre skjermkant. På skjermbredder opptil 1280 px erstattes sidekolonnen av en flytende ToDo-knapp. På mobil åpnes panelet nedenfra og stopper over bunnnavigasjonen. Hele ToDo-kortet kan åpnes med mus, Enter eller mellomrom; avkryssing, drahåndtak og sletting åpner ikke redigeringsmodalen.
 
 Beskrivelse er valgfri. Eksisterende ToDo-er uten feltet behandles som tom tekst og trenger ingen migrering.
 

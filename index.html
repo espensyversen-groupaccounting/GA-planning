@@ -268,7 +268,7 @@
               </select>
             </div>
           </div>
-          <div id="todos-view-list" class="todos-list"></div>
+          <div id="todos-view-list" class="todos-list" data-todo-sort-list="view"></div>
         </div>
 
         <!-- ADMINISTRASJON -->
@@ -425,12 +425,14 @@
                 </select>
               </div>
             </form>
-            <div id="todo-panel-list" class="todos-list todo-panel-list"></div>
+            <div id="todo-panel-list" class="todos-list todo-panel-list" data-todo-sort-list="panel"></div>
             <button id="todo-panel-see-all" class="btn-link todo-panel-see-all" type="button">Se alle →</button>
           </div>
         </aside>
       </div>
     </div>
+
+    <div id="todo-order-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
     <button id="todo-panel-launcher" class="btn btn-primary todo-panel-launcher hidden" type="button">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
