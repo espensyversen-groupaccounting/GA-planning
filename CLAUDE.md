@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.4.2`
+Gjeldende appversjon: `v1.4.3`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -235,6 +235,12 @@ Deloppgaver kan ha egne deadlines. Disse brukes i dashboardets hasteberegning og
 
 ## Synksikkerhet
 Appen skriver ikke hele datasett tilbake til Firestore. Oppgaver ligger som egne dokumenter og oppdateres feltvis. Direkte sletting av oppgaver er blokkert i rules; sletting i UI er soft-delete med `deletedAt`.
+
+Valgt ansvarlig i åpne oppgave- og ToDo-skjemaer, samt ansvarligfilteret, bevares når `users`-collectionen oppdateres i sanntid. Dette hindrer at en annen brukers innlogging nullstiller en pågående tildeling eller et aktivt filter.
+
+Bekreftelsesdialoger har én aktiv instans og én felles oppryddingsvei for OK, Avbryt og Escape. Escape lukker bare den øverste dialogen, slik at en underliggende oppgave- eller ToDo-modal ikke lukkes samtidig.
+
+Deloppgaveendringer har felles feiltilbakemelding og laster oppgaven på nytt ved feil. Brukere uten redigeringsrett får ikke aktive deloppgavekontroller.
 
 Full redigering av en eksisterende oppgave bruker transaksjon med `updatedAt`-sjekk. Hvis en bruker har hatt en gammel modal åpen og en annen allerede har lagret endringer, stoppes overskrivingen og brukeren må åpne oppgaven på nytt.
 

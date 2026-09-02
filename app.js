@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.4.2';
+const APP_VERSION = '1.4.3';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -31,6 +31,8 @@ const state = {
   todoViewAssignee: '',
 };
 
+let activeConfirmCancel = null;
+
 // ============================================================
 // UTILITIES
 // ============================================================
@@ -39,7 +41,12 @@ function esc(str) {
   if (!str) return '';
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+function inlineJsArg(value) {
+  return esc(JSON.stringify(value ?? ''));
 }
 
 function formatDate(ts) {
@@ -312,21 +319,42 @@ function hideLoading() { document.getElementById('loading-overlay').classList.ad
 // ============================================================
 
 function showConfirm(title, message) {
+  if (activeConfirmCancel) activeConfirmCancel();
+
   return new Promise(resolve => {
     document.getElementById('confirm-title').textContent = title;
     document.getElementById('confirm-message').textContent = message;
     const dialog = document.getElementById('confirm-dialog');
+    const okButton = document.getElementById('confirm-ok');
+    const cancelButton = document.getElementById('confirm-cancel');
+    let settled = false;
     dialog.classList.remove('hidden');
 
-    const onOk = () => { cleanup(); resolve(true); };
-    const onCancel = () => { cleanup(); resolve(false); };
+    const finish = result => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+    const onOk = () => finish(true);
+    const onCancel = () => finish(false);
+    const onEscape = event => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      finish(false);
+    };
     function cleanup() {
       dialog.classList.add('hidden');
-      document.getElementById('confirm-ok').removeEventListener('click', onOk);
-      document.getElementById('confirm-cancel').removeEventListener('click', onCancel);
+      okButton.removeEventListener('click', onOk);
+      cancelButton.removeEventListener('click', onCancel);
+      document.removeEventListener('keydown', onEscape, true);
+      if (activeConfirmCancel === onCancel) activeConfirmCancel = null;
     }
-    document.getElementById('confirm-ok').addEventListener('click', onOk);
-    document.getElementById('confirm-cancel').addEventListener('click', onCancel);
+    activeConfirmCancel = onCancel;
+    okButton.addEventListener('click', onOk);
+    cancelButton.addEventListener('click', onCancel);
+    document.addEventListener('keydown', onEscape, true);
   });
 }
 
@@ -488,7 +516,7 @@ function setupUI() {
   const avatarEl = document.getElementById('user-avatar');
   if (avatarEl) avatarEl.src = photoURL;
 
-  const nameEl = document.getElementById('user-name-short');
+  const nameEl = document.getElementById('user-name');
   if (nameEl) nameEl.textContent = displayName.split(' ')[0];
 
   const dropdownNameEl = document.getElementById('dropdown-name');
@@ -1010,43 +1038,37 @@ function renderTasksList() {
   el.innerHTML = items.map(t => t.itemType === 'todo' ? todoCardHtml(t) : taskCardHtml(t, false)).join('');
 }
 
+function replaceSelectOptions(select, options, canRestore) {
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = options;
+  if (current && canRestore(current)) select.value = current;
+}
+
 function populateAssigneeSelects() {
   const opts = ['<option value="">Alle ansvarlige</option>',
     '<option value="__unassigned">Uten ansvarlig</option>',
     ...state.users.map(u => `<option value="${u.id}">${esc(u.displayName || u.email)}</option>`)
   ].join('');
-  const filterEl = document.getElementById('filter-assignee');
-  if (filterEl) filterEl.innerHTML = opts;
 
   const formOpts = ['<option value="">Ingen tildelt</option>',
     ...state.users.map(u => `<option value="${u.id}">${esc(u.displayName || u.email)}</option>`)
   ].join('');
-  const formEl = document.getElementById('task-assignee');
-  if (formEl) formEl.innerHTML = formOpts;
 
-  const todoAssigneeEl = document.getElementById('todo-assignee');
-  if (todoAssigneeEl) {
-    const current = todoAssigneeEl.value;
-    todoAssigneeEl.innerHTML = formOpts;
-    if (current && state.users.some(u => u.id === current)) todoAssigneeEl.value = current;
-  }
-
-  const todoEditAssigneeEl = document.getElementById('todo-edit-assignee');
-  if (todoEditAssigneeEl) {
-    const current = todoEditAssigneeEl.value;
-    todoEditAssigneeEl.innerHTML = formOpts;
-    if (current && state.users.some(u => u.id === current)) todoEditAssigneeEl.value = current;
-  }
-
-  const filterOpts = ['<option value="">Alle ansvarlige</option>',
-    ...state.users.map(u => `<option value="${u.id}">${esc(u.displayName || u.email)}</option>`)
-  ].join('');
-  const todoFilterAssigneeEl = document.getElementById('todo-filter-assignee');
-  if (todoFilterAssigneeEl) {
-    const current = todoFilterAssigneeEl.value;
-    todoFilterAssigneeEl.innerHTML = filterOpts;
-    if (current && state.users.some(u => u.id === current)) todoFilterAssigneeEl.value = current;
-  }
+  const isCurrentUser = value => state.users.some(u => u.id === value);
+  replaceSelectOptions(
+    document.getElementById('filter-assignee'),
+    opts,
+    value => value === '__unassigned' || isCurrentUser(value)
+  );
+  replaceSelectOptions(document.getElementById('task-assignee'), formOpts, isCurrentUser);
+  replaceSelectOptions(document.getElementById('todo-assignee'), formOpts, isCurrentUser);
+  replaceSelectOptions(document.getElementById('todo-edit-assignee'), formOpts, isCurrentUser);
+  replaceSelectOptions(
+    document.getElementById('todo-filter-assignee'),
+    ['<option value="">Alle ansvarlige</option>', ...state.users.map(u => `<option value="${u.id}">${esc(u.displayName || u.email)}</option>`)].join(''),
+    isCurrentUser
+  );
 }
 
 function populateCategorySelects() {
@@ -1607,8 +1629,10 @@ function renderSubtaskTimeline(subtasks) {
 }
 
 function renderSubtasks(subtasks) {
+  const editable = canEdit();
   const el = document.getElementById('subtasks-list');
   const countEl = document.getElementById('subtasks-tab-count');
+  document.getElementById('add-subtask-wrap').classList.toggle('hidden', !editable);
   if (!subtasks.length) {
     el.innerHTML = '<p style="color:var(--text-3);font-size:.875rem;text-align:center;padding:20px 0">Ingen deloppgaver ennå</p>';
     countEl.textContent = '';
@@ -1621,71 +1645,97 @@ function renderSubtasks(subtasks) {
   el.innerHTML = subtasks.map((s, i) => `
     <div class="subtask-item ${subtaskDueClass(s)}">
       <input type="checkbox" class="subtask-checkbox" ${s.completed ? 'checked' : ''}
-        onchange="toggleSubtask(${i}, this.checked)" />
+        ${editable ? `onchange="toggleSubtask(${i}, this.checked)"` : 'disabled'} />
       <div class="subtask-content">
         <span class="subtask-title ${s.completed ? 'done' : ''}">${esc(s.title)}</span>
         <div class="subtask-meta">
           ${s.dueDate ? `<span class="subtask-due ${subtaskDueClass(s)}">${formatDateString(s.dueDate)}${subtaskDueClass(s) === 'overdue' ? ' · Forfalt' : subtaskDueClass(s) === 'soon' ? ' · Snart' : ''}</span>` : '<span class="subtask-due muted">Ingen frist</span>'}
         </div>
       </div>
-      ${canEdit() ? `<input type="date" class="subtask-date-input" value="${esc(s.dueDate || '')}" onchange="updateSubtaskDueDate(${i}, this.value)" aria-label="Frist for ${esc(s.title)}" />` : ''}
-      ${canEdit() ? `<button class="btn-remove-subtask" onclick="removeSubtask(${i})" title="Fjern">
+      ${editable ? `<input type="date" class="subtask-date-input" value="${esc(s.dueDate || '')}" onchange="updateSubtaskDueDate(${i}, this.value)" aria-label="Frist for ${esc(s.title)}" />` : ''}
+      ${editable ? `<button class="btn-remove-subtask" onclick="removeSubtask(${i})" title="Fjern">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>` : ''}
     </div>`).join('');
 
-  document.getElementById('add-subtask-wrap').classList.toggle('hidden', !canEdit());
   renderSubtaskTimeline(subtasks);
+}
+
+async function updateSubtasksWithFeedback(taskId, transform, errorMessage) {
+  try {
+    const subtasks = await updateSubtasksSafely(taskId, transform);
+    if (state.activeTaskId === taskId) renderSubtasks(subtasks);
+    return subtasks;
+  } catch (error) {
+    console.error('Subtask update error:', error);
+    showToast(errorMessage, 'error');
+
+    let task = state.tasks.find(item => item.id === taskId) || null;
+    try {
+      task = await getTask(taskId) || task;
+    } catch (refreshError) {
+      console.error('Subtask refresh error:', refreshError);
+    }
+    if (state.activeTaskId === taskId) renderSubtasks(task?.subtasks || []);
+    return null;
+  }
 }
 
 async function toggleSubtask(index, completed) {
   const taskId = state.activeTaskId;
-  if (!taskId) return;
-  const subtasks = await updateSubtasksSafely(taskId, current => {
+  if (!taskId || !canEdit()) {
+    const task = state.tasks.find(item => item.id === taskId);
+    renderSubtasks(task?.subtasks || []);
+    return;
+  }
+  const subtasks = await updateSubtasksWithFeedback(taskId, current => {
     const next = [...current];
     if (!next[index]) return current;
     next[index] = { ...next[index], completed };
     return next;
-  });
-  renderSubtasks(subtasks);
+  }, 'Kunne ikke oppdatere deloppgaven. Prøv igjen.');
+  if (!subtasks) return;
   // Update progress in task card if dashboard/tasks view visible
   if (state.currentView === 'dashboard') renderDashboard();
   if (state.currentView === 'tasks') renderTasksList();
 }
 
 async function handleAddSubtask() {
+  if (!canEdit()) return;
   const input = document.getElementById('new-subtask-input');
   const dueInput = document.getElementById('new-subtask-due-date');
   const title = input.value.trim();
   if (!title) return;
   const taskId = state.activeTaskId;
   if (!taskId) return;
-  const subtasks = await updateSubtasksSafely(taskId, current => [
+  const subtasks = await updateSubtasksWithFeedback(taskId, current => [
     ...current,
     { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, title, completed: false, dueDate: dueInput.value || null }
-  ]);
+  ], 'Kunne ikke legge til deloppgaven. Prøv igjen.');
+  if (!subtasks) return;
   input.value = '';
   dueInput.value = '';
-  renderSubtasks(subtasks);
 }
 
 async function updateSubtaskDueDate(index, dueDate) {
   const taskId = state.activeTaskId;
   if (!taskId || !canEdit()) return;
-  const subtasks = await updateSubtasksSafely(taskId, current => {
+  await updateSubtasksWithFeedback(taskId, current => {
     const next = [...current];
     if (!next[index]) return current;
     next[index] = { ...next[index], dueDate: dueDate || null };
     return next;
-  });
-  renderSubtasks(subtasks);
+  }, 'Kunne ikke oppdatere fristen. Prøv igjen.');
 }
 
 async function removeSubtask(index) {
   const taskId = state.activeTaskId;
-  if (!taskId) return;
-  const subtasks = await updateSubtasksSafely(taskId, current => current.filter((_, i) => i !== index));
-  renderSubtasks(subtasks);
+  if (!taskId || !canEdit()) return;
+  await updateSubtasksWithFeedback(
+    taskId,
+    current => current.filter((_, i) => i !== index),
+    'Kunne ikke fjerne deloppgaven. Prøv igjen.'
+  );
 }
 
 // ============================================================
@@ -1869,13 +1919,13 @@ function renderAdmin() {
       <div class="user-item-actions">
         ${u.pending ? '<span class="pending-user-badge">Invitert</span>' : ''}
         ${isAdmin() ? `
-          <select class="role-select" onchange="handleRoleChange('${u.userId || ''}', '${u.email}', this.value, ${u.pending ? 'true' : 'false'})">
+          <select class="role-select" onchange="handleRoleChange(${inlineJsArg(u.userId || '')}, ${inlineJsArg(u.email)}, this.value, ${u.pending ? 'true' : 'false'})">
             <option value="admin"     ${u.role==='admin'     ?'selected':''}>Admin</option>
             <option value="teamleder" ${u.role==='teamleder' ?'selected':''}>Teamleder</option>
             <option value="medlem"    ${u.role==='medlem'    ?'selected':''}>Medlem</option>
           </select>
           ${u.userId !== state.user.uid ? `
-          <button class="btn-icon-danger" onclick="handleRemoveUser('${u.userId || ''}','${u.email}', ${u.pending ? 'true' : 'false'})" title="Fjern bruker">
+          <button class="btn-icon-danger" onclick="handleRemoveUser(${inlineJsArg(u.userId || '')}, ${inlineJsArg(u.email)}, ${u.pending ? 'true' : 'false'})" title="Fjern bruker">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
           </button>` : ''}
         ` : `<span class="role-badge ${u.role}">${roleLabel(u.role)}</span>`}
@@ -2312,14 +2362,15 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => setQuickFilter(btn.dataset.quickFilter || ''));
   });
 
-  // Keyboard: Escape closes modal
+  // Keyboard: close only the topmost non-confirmation modal.
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      if (!document.getElementById('task-modal').classList.contains('hidden')) closeTaskModal();
-      if (!document.getElementById('confirm-dialog').classList.contains('hidden')) {
-        document.getElementById('confirm-dialog').classList.add('hidden');
-      }
+    if (e.key !== 'Escape') return;
+    if (!document.getElementById('confirm-dialog').classList.contains('hidden')) return;
+    if (!document.getElementById('todo-edit-modal').classList.contains('hidden')) {
+      closeTodoEditModal();
+      return;
     }
+    if (!document.getElementById('task-modal').classList.contains('hidden')) closeTaskModal();
   });
 });
 

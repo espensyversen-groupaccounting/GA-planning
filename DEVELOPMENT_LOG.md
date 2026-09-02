@@ -1,5 +1,27 @@
 # Development Log
 
+## v1.4.3 - 2026-09-02
+
+### Rettet
+- Bevarer valgt ansvarlig i oppgavemodal, ToDo-skjemaer og ansvarligfiltre når brukerlisten oppdateres i sanntid, inkludert filterverdien `__unassigned`.
+- Samler oppdatering av select-alternativer i én hjelper og fjerner den ubrukte `filterOpts`-variabelen.
+- Gjør bekreftelsesdialogen til en enkelt aktiv instans og rydder alle lyttere ved OK, Avbryt og Escape.
+- Behandler Escape som en dialogstabel: bekreftelsesdialog først, deretter ToDo- eller oppgavemodal.
+- Gir norsk feiltilbakemelding for alle deloppgaveoperasjoner og gjenoppretter UI fra oppdatert oppgavetilstand ved feil.
+- Deaktiverer deloppgaveavkryssing og skjuler redigeringskontroller for brukere uten `canEdit()`.
+- Korrigerer headeroppslaget slik at brukerens fornavn vises.
+- Sikrer inline admin-handlere med `JSON.stringify()` før HTML-escaping, og utvider vanlig HTML-escaping med apostrof.
+
+### Avgrensning
+- Ingen endringer i Firestore-regler, datamodell, feltnavn, dashboardlogikk, hasteberegning, filtre eller sorteringsrekkefølge.
+- `firestore.js` er bare endret i klientversjon og buildnummer.
+- Ingen endringer i `index.html`, `styles.css` eller `firebase-config.js`.
+
+### Kontroll
+- Versjon bumpet til `1.4.3` i `app.js`, `service-worker.js` og `firestore.js`; klientbuild er `1403`.
+- Eksisterende Firestore-emulatortester skal fortsatt kjøres uendret.
+- Målrettede tester dekker select-bevaring, dialogopprydding/Escape-stabel, deloppgavefeil og trygg inline-argumentkoding.
+
 ## v1.4.2 - 2026-08-31
 
 ### Sikkerhet
