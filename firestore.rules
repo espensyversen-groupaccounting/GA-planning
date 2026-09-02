@@ -1,24 +1,46 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isAuth() {
-      return request.auth != null;
+    function isSignedIn() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true;
     }
 
-    function userDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    function emailKey() {
+      return request.auth.token.email.lower()
+        .replace('[.]', '_dot_')
+        .replace('@', '_at_');
     }
 
-    function getRole() {
-      return userDoc().data.role;
+    function allowedUserPath() {
+      return /databases/$(database)/documents/allowedUsers/$(emailKey());
+    }
+
+    function isAllowed() {
+      return isSignedIn() && exists(allowedUserPath());
+    }
+
+    function allowedRole() {
+      return get(allowedUserPath()).data.role;
     }
 
     function isAdmin() {
-      return getRole() == 'admin';
+      return isAllowed() && allowedRole() == 'admin';
     }
 
     function isAdminOrTeamleder() {
-      return getRole() in ['admin', 'teamleder'];
+      return isAllowed() && allowedRole() in ['admin', 'teamleder'];
+    }
+
+    function isMedlem() {
+      return isAllowed() && allowedRole() == 'medlem';
+    }
+
+    function ownProfileMatchesAllowlist() {
+      return request.resource.data.role == allowedRole()
+        && request.resource.data.email is string
+        && request.resource.data.email.lower() == request.auth.token.email.lower();
     }
 
     function isOwnAssignedTask() {
@@ -30,34 +52,37 @@ service cloud.firestore {
     }
 
     match /allowedUsers/{doc} {
-      allow read: if isAuth();
-      allow create, update, delete: if isAuth() && isAdmin();
+      allow read: if isAllowed();
+      allow create, update, delete: if isAdmin();
     }
 
     match /users/{userId} {
-      allow read: if isAuth();
-      allow create: if isAuth() && request.auth.uid == userId;
-      allow update: if isAuth() && (request.auth.uid == userId || isAdmin());
-      allow delete: if isAuth() && isAdmin();
+      allow read: if isAllowed();
+      allow create: if isAllowed() && (
+        isAdmin()
+        || (request.auth.uid == userId && ownProfileMatchesAllowlist())
+      );
+      allow update: if isAllowed() && (
+        isAdmin()
+        || (request.auth.uid == userId && ownProfileMatchesAllowlist())
+      );
+      allow delete: if isAdmin();
     }
 
     match /categories/{categoryId} {
-      allow read: if isAuth();
-      allow create: if isAuth()
-        && isAdminOrTeamleder()
+      allow read: if isAllowed();
+      allow create: if isAdminOrTeamleder()
         && request.resource.data.name is string
         && request.resource.data.active == true;
-      allow update: if isAuth() && isAdminOrTeamleder();
-      allow delete: if isAuth() && isAdminOrTeamleder();
+      allow update, delete: if isAdminOrTeamleder();
     }
 
     match /tasks/{taskId} {
-      allow read: if isAuth();
-      allow create: if isAuth() && isAdminOrTeamleder();
-      allow update: if isAuth() && (
-        isAdminOrTeamleder()
+      allow read: if isAllowed();
+      allow create: if isAdminOrTeamleder();
+      allow update: if isAdminOrTeamleder()
         || (
-          getRole() == 'medlem'
+          isMedlem()
           && isOwnAssignedTask()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status',
@@ -68,18 +93,16 @@ service cloud.firestore {
             'clientWriteId',
             'writeSchemaVersion'
           ])
-        )
-      );
+        );
       allow delete: if false;
     }
 
     match /todos/{todoId} {
-      allow read: if isAuth();
-      allow create: if isAuth() && isAdminOrTeamleder();
-      allow update: if isAuth() && (
-        isAdminOrTeamleder()
+      allow read: if isAllowed();
+      allow create: if isAdminOrTeamleder();
+      allow update: if isAdminOrTeamleder()
         || (
-          getRole() == 'medlem'
+          isMedlem()
           && isOwnAssignedTodo()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status',
@@ -92,22 +115,23 @@ service cloud.firestore {
             'clientWriteId',
             'writeSchemaVersion'
           ])
-        )
-      );
+        );
       allow delete: if false;
     }
 
     match /comments/{commentId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update: if isAuth() &&
-        (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isAllowed();
+      allow create: if isAllowed()
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if isAllowed()
+        && (resource.data.userId == request.auth.uid || isAdmin());
       allow delete: if false;
     }
 
     match /users/{userId}/notifications/{notifId} {
-      allow read, update, delete: if isAuth() && request.auth.uid == userId;
-      allow create: if isAuth();
+      allow read, update, delete: if isAllowed()
+        && request.auth.uid == userId;
+      allow create: if isAllowed();
     }
   }
 }

@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.4.1`
+Gjeldende appversjon: `v1.4.2`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -23,6 +23,11 @@ Planning/
 ├── firebase-config.js  # Firebase config og INITIAL_USERS
 ├── firestore.js        # Firestore CRUD, subscriptions og write metadata
 ├── firestore.rules     # Firestore Security Rules - kilde for rules som deployes
+├── firebase.json       # Firestore-emulatorkonfigurasjon
+├── package.json        # Dev-avhengigheter og testkommando
+├── tests/              # Automatiserte Firestore Rules-tester
+├── TESTING.md          # Lokal testing og sjekkliste før publisering
+├── DEVELOPMENT_LOG.md  # Endrings- og utrullingslogg
 ├── app.js              # UI-logikk, routing og hendelseshåndtering
 ├── manifest.json       # PWA-manifest
 ├── service-worker.js   # Caching og app-oppdatering
@@ -42,13 +47,18 @@ Planning/
 4. Aktiver Google Sign-In under Authentication.
 5. Legg til GitHub Pages-domenet under Authorized domains.
 6. Lim inn web app-konfigurasjon i `firebase-config.js`.
-7. Publiser innholdet i `firestore.rules` i Firebase Console.
+7. Seed første Admin manuelt i `allowedUsers` hvis collectionen er tom.
+8. Publiser innholdet i `firestore.rules` i Firebase Console.
 
 `firestore.rules` i repoet er kilde til gjeldende rules. Når rules endres, kopier hele innholdet derfra til Firebase Console -> Firestore -> Rules og publiser.
 
 ## Rollemodell og regler
-- `allowedUsers`: alle innloggede kan lese; kun Admin kan opprette, endre og slette.
-- `users`: alle innloggede kan lese; bruker kan opprette/oppdatere egen profil; Admin kan oppdatere/slette brukere.
+Firestore Rules er sikkerhetsgrensen. Klientsjekker styrer bare hva UI-et viser.
+
+- Alle operasjoner krever en innlogget bruker med verifisert e-post og en matchende oppføring i `allowedUsers`.
+- Rollen utledes utelukkende fra `allowedUsers`, aldri fra `users/{uid}`.
+- `allowedUsers`: alle allowlistede brukere kan lese; kun Admin kan opprette, endre og slette.
+- `users`: allowlistede brukere kan lese. Brukeren kan opprette/oppdatere egen profil bare når e-post og rolle matcher allowlisten; Admin kan oppdatere/slette.
 - `categories`: Admin og Teamleder kan opprette, endre, skjule og slette.
 - `tasks`: Admin og Teamleder kan opprette og oppdatere; direkte delete er blokkert. Oppgaver arkiveres med soft-delete.
 - `todos`: Admin og Teamleder kan opprette, oppdatere og arkivere; Medlem kan fullføre/åpne egne tildelte ToDo-er.
@@ -66,7 +76,7 @@ Admin-panelet er synlig for Admin og Teamleder fordi kategorier administreres de
 ## Datamodell
 
 ### `allowedUsers/{sanitizedEmail}`
-Brukes som allowlist for hvem som slipper inn i appen. Email sanitisert: `.` -> `_dot_`, `@` -> `_at_`.
+Brukes som autoritativ allowlist og rollekilde. E-post trimmes og konverteres til lowercase før `.` -> `_dot_` og `@` -> `_at_`.
 
 - `email`: string
 - `role`: `admin` | `teamleder` | `medlem`
@@ -75,7 +85,7 @@ Brukes som allowlist for hvem som slipper inn i appen. Email sanitisert: `.` -> 
 - write metadata: `clientAppVersion`, `clientBuild`, `clientWriteId`, `writeSchemaVersion`
 
 ### `users/{uid}`
-Opprettes eller oppdateres automatisk ved første innlogging etter at brukeren finnes i `allowedUsers`.
+Opprettes eller oppdateres automatisk ved første innlogging etter at brukeren finnes i `allowedUsers`. Dokumentet er en profilkopi og gir aldri rettigheter. Ved egen skriving må `email` og `role` samsvare med auth-tokenet og allowlisten.
 
 - `email`, `displayName`, `photoURL`, `role`
 - `createdAt`, `lastLogin`
@@ -204,7 +214,8 @@ Inviterte brukere vises med status `Invitert`. Når personen logger inn første 
 
 Hvis innlogging feiler:
 - Sjekk at e-posten i `allowedUsers` matcher Google-kontoen brukeren logger inn med.
-- Sjekk at innlogget admin faktisk har `role: "admin"` i `users/{uid}`.
+- Sjekk at dokument-ID-en i `allowedUsers` er lowercase og bruker `_dot_`/`_at_`.
+- Sjekk at innlogget admin har `role: "admin"` i sin `allowedUsers`-oppføring.
 - Sjekk at `firestore.rules` er publisert.
 - Sjekk at GitHub Pages-domenet ligger i Firebase Authentication -> Authorized domains.
 
@@ -232,6 +243,8 @@ Alle skriver legger på `clientAppVersion`, `clientBuild`, `clientWriteId` og `w
 ## Oppstart og caching
 App-skallet vises så snart brukerens tilgang er bekreftet. Realtime subscriptions for oppgaver, ToDo-er, brukere, inviterte brukere, kategorier og varsler startes før bakgrunnssynk av profil fullføres, slik at en profil-write ikke skal stoppe datalasting.
 
+`checkAllowedUser()` behandler `permission-denied` som manglende tilgang. Rollen i `state.profile` overstyres alltid med rollen fra allowlisten. En tom allowlist kan ikke lenger seedes av klienten etter at de herdede reglene er publisert; første Admin må opprettes manuelt i Firebase Console.
+
 Service worker cacher appfiler. Ved ny release må `APP_VERSION` i `app.js` og `service-worker.js`, samt `CLIENT_APP_VERSION`/`CLIENT_BUILD` i `firestore.js`, holdes i sync.
 
 ## Merkevarefarger
@@ -245,7 +258,7 @@ Service worker cacher appfiler. Ved ny release må `APP_VERSION` i `app.js` og `
 | Light Pink | `#ffd7d7` |
 
 ## Første brukere
-Hardkodet i `firebase-config.js` under `INITIAL_USERS`. Disse seedes til `allowedUsers` første gang appen kjører hvis allowlisten er tom.
+Hardkodet i `firebase-config.js` under `INITIAL_USERS`. Klientseeding beholdes av hensyn til eldre oppsett, men vil være en feiltolerant no-op med de herdede reglene dersom allowlisten er tom. Første Admin må da seedes manuelt i Firebase Console.
 
 | E-post | Rolle |
 |--------|-------|
@@ -268,6 +281,16 @@ Hardkodet i `firebase-config.js` under `INITIAL_USERS`. Disse seedes til `allowe
 2. Last opp alle endrede filer til GitHub (inkl. `.nojekyll` hvis den mangler).
 3. Sjekk at deployment får grønn hake under **Deployments** i repoet (tar 1–3 min). Rødt kryss betyr at Jekyll-prosessering har feilet — dobbeltsjekk at `.nojekyll` ligger i repoet.
 4. Åpne appen og trykk **Administrasjon → Oppdater app** for å tvinge ny PWA-versjon på enheten.
+
+### Sikker utrulling av v1.4.2-reglene
+1. Kontroller manuelt i Firebase Console at ingen dokument-ID-er i `allowedUsers` inneholder store bokstaver.
+2. Kjør emulator-testene som beskrevet i `TESTING.md`.
+3. Verifiser `email_verified` på to faktiske produksjonskontoer.
+4. Deploy klientversjon `1.4.2` og bekreft at eksisterende Admin kan logge inn.
+5. Publiser først deretter `firestore.rules` i Firebase Console.
+6. Verifiser Admin, Teamleder, Medlem og en konto uten allowlist-tilgang i separate økter.
+
+Rollback skjer via Firebase Console sin regelhistorikk og Git. Det skal ikke lagres en deployklar kopi av de gamle, sårbare reglene i repoet.
 
 ### Feilsøking ved deployment-problemer
 - **Rødt kryss på commit**: `.nojekyll` mangler trolig i repoet. Legg den til (tom fil) og commit på nytt.

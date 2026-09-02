@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.4.1';
-const CLIENT_BUILD = 1401;
+const CLIENT_APP_VERSION = '1.4.2';
+const CLIENT_BUILD = 1402;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -16,33 +16,42 @@ function writeMeta() {
 }
 
 function sanitizeEmail(email) {
-  return email.replace(/\./g, '_dot_').replace('@', '_at_');
+  return email.trim().toLowerCase().replace(/[.]/g, '_dot_').replace('@', '_at_');
 }
 
 // ---- Allowed Users (tilgangskontroll) ----
 
 async function initializeAllowedUsers(initialUsers) {
-  const snap = await db.collection('allowedUsers').limit(1).get();
-  if (!snap.empty) return;
-  const batch = db.batch();
-  initialUsers.forEach(u => {
-    const ref = db.collection('allowedUsers').doc(sanitizeEmail(u.email));
-    batch.set(ref, {
-      email: u.email,
-      role: u.role,
-      invitedBy: 'system',
-      invitedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      ...writeMeta()
+  try {
+    const snap = await db.collection('allowedUsers').limit(1).get();
+    if (!snap.empty) return;
+    const batch = db.batch();
+    initialUsers.forEach(u => {
+      const normalizedEmail = u.email.trim().toLowerCase();
+      const ref = db.collection('allowedUsers').doc(sanitizeEmail(normalizedEmail));
+      batch.set(ref, {
+        email: normalizedEmail,
+        role: u.role,
+        invitedBy: 'system',
+        invitedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        ...writeMeta()
+      });
     });
-  });
-  await batch.commit();
+    await batch.commit();
+  } catch (e) {
+    if (e && e.code === 'permission-denied') return;
+    throw e;
+  }
 }
 
 async function checkAllowedUser(email) {
-  const doc = await db.collection('allowedUsers').doc(sanitizeEmail(email)).get();
-  if (doc.exists) return doc.data();
-  const snap = await db.collection('allowedUsers').where('email', '==', email).limit(1).get();
-  return snap.empty ? null : snap.docs[0].data();
+  try {
+    const doc = await db.collection('allowedUsers').doc(sanitizeEmail(email)).get();
+    return doc.exists ? doc.data() : null;
+  } catch (e) {
+    if (e && e.code === 'permission-denied') return null;
+    throw e;
+  }
 }
 
 async function getAllowedUsers() {
@@ -57,8 +66,9 @@ function subscribeToAllowedUsers(callback, onError) {
 }
 
 async function addAllowedUser(email, role) {
-  await db.collection('allowedUsers').doc(sanitizeEmail(email)).set({
-    email,
+  const normalizedEmail = email.trim().toLowerCase();
+  await db.collection('allowedUsers').doc(sanitizeEmail(normalizedEmail)).set({
+    email: normalizedEmail,
     role,
     invitedBy: auth.currentUser.uid,
     invitedAt: firebase.firestore.FieldValue.serverTimestamp(),

@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.4.2';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -418,7 +418,7 @@ async function finishAppStartup(user, allowed) {
 
     const freshProfile = await getUser(user.uid);
     if (freshProfile && state.user && state.user.uid === user.uid) {
-      state.profile = freshProfile;
+      state.profile = { ...freshProfile, role: allowed.role };
       setupUI();
     }
   } catch (e) {
@@ -2100,8 +2100,8 @@ async function handleAddUser(e) {
 
 async function handleRoleChange(uid, email, newRole, pending = false) {
   try {
-    if (!pending && uid) await updateUserRole(uid, newRole);
     await updateAllowedUserRole(email, newRole);
+    if (!pending && uid) await updateUserRole(uid, newRole);
     showToast('Rolle oppdatert');
   } catch(e) {
     showToast('Feil ved rolleendring.', 'error');

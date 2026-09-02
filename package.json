@@ -1,0 +1,14 @@
+{
+  "name": "strawberry-plan-firestore-rules",
+  "version": "1.4.2",
+  "private": true,
+  "scripts": {
+    "test": "firebase emulators:exec --project demo-strawberry-plan --only firestore \"node --test tests/firestore.rules.test.js\""
+  },
+  "devDependencies": {
+    "@firebase/app": "0.16.1",
+    "@firebase/rules-unit-testing": "5.0.2",
+    "firebase": "12.18.0",
+    "firebase-tools": "15.28.2"
+  }
+}
