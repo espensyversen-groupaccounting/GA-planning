@@ -182,8 +182,6 @@
           </div>
           <div class="quick-filters" id="quick-filters" aria-label="Hurtigfiltre">
             <button class="quick-filter active" type="button" data-quick-filter="">Alle</button>
-            <button class="quick-filter" type="button" data-quick-filter="projects">Prosjekter</button>
-            <button class="quick-filter" type="button" data-quick-filter="todos">ToDo</button>
             <button class="quick-filter" type="button" data-quick-filter="attention">Må følges opp</button>
             <button class="quick-filter" type="button" data-quick-filter="unassigned">Uten ansvarlig</button>
             <button class="quick-filter" type="button" data-quick-filter="week">Denne uken</button>
@@ -645,8 +643,14 @@
         </div>
       </div>
       <div class="todo-edit-footer">
-        <button id="todo-edit-cancel" class="btn btn-secondary">Avbryt</button>
-        <button id="todo-edit-save" class="btn btn-primary">Lagre endringer</button>
+        <button id="todo-edit-convert" class="btn btn-secondary" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15h6"/><path d="M12 12v6"/></svg>
+          Konverter til oppgave
+        </button>
+        <div class="todo-edit-footer-actions">
+          <button id="todo-edit-cancel" class="btn btn-secondary" type="button">Avbryt</button>
+          <button id="todo-edit-save" class="btn btn-primary" type="button">Lagre endringer</button>
+        </div>
       </div>
     </div>
   </div>

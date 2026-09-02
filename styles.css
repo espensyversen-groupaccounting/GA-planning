@@ -1301,8 +1301,14 @@ body {
 }
 .todo-edit-header h3 { font-size: 1.05rem; font-weight: 700; }
 .todo-edit-footer {
-  display: flex; gap: 10px; justify-content: flex-end;
+  display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap;
   margin-top: 4px;
+}
+.todo-edit-footer-actions { display: flex; gap: 10px; justify-content: flex-end; }
+@media (max-width: 560px) {
+  .todo-edit-footer { align-items: stretch; flex-direction: column; }
+  .todo-edit-footer-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .todo-edit-footer .btn { justify-content: center; min-width: 0; }
 }
 .todo-actions {
   display: flex;

@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.7.1';
-const CLIENT_BUILD = 1701;
+const CLIENT_APP_VERSION = '1.8.0';
+const CLIENT_BUILD = 1800;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -195,8 +195,8 @@ async function getTask(taskId) {
   return { id: doc.id, ...doc.data() };
 }
 
-async function createTask(data) {
-  const ref = await db.collection('tasks').add({
+function taskCreateData(data) {
+  return {
     ...data,
     subtasks: data.subtasks || [],
     createdBy: auth.currentUser.uid,
@@ -205,7 +205,21 @@ async function createTask(data) {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     lastEditedBy: auth.currentUser.uid,
     ...writeMeta()
-  });
+  };
+}
+
+function todoArchiveData() {
+  return {
+    deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    deletedBy: auth.currentUser.uid,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastEditedBy: auth.currentUser.uid,
+    ...writeMeta()
+  };
+}
+
+async function createTask(data) {
+  const ref = await db.collection('tasks').add(taskCreateData(data));
   return ref.id;
 }
 
@@ -330,13 +344,29 @@ async function normalizeTodoSortOrders(orderedTodoIds, step = 1000) {
 }
 
 async function deleteTodo(todoId) {
-  await db.collection('todos').doc(todoId).update({
-    deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    deletedBy: auth.currentUser.uid,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    lastEditedBy: auth.currentUser.uid,
-    ...writeMeta()
+  await db.collection('todos').doc(todoId).update(todoArchiveData());
+}
+
+async function convertTodoToTask(todoId, taskData) {
+  const todoRef = db.collection('todos').doc(todoId);
+  const taskRef = db.collection('tasks').doc();
+  const newTaskData = taskCreateData(taskData);
+  const archiveData = todoArchiveData();
+
+  await db.runTransaction(async tx => {
+    const todoDoc = await tx.get(todoRef);
+    if (!todoDoc.exists || todoDoc.data().deletedAt) {
+      throw new Error('TODO_NOT_FOUND');
+    }
+    if (todoDoc.data().status === 'fullfort') {
+      throw new Error('TODO_NOT_OPEN');
+    }
+
+    tx.set(taskRef, newTaskData);
+    tx.update(todoRef, archiveData);
   });
+
+  return taskRef.id;
 }
 
 // ---- Comments ----

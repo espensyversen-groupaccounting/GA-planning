@@ -1,5 +1,31 @@
 # Development Log
 
+## v1.8.0 - 2026-09-02
+
+### Tydelig arbeidsdeling
+- Oppgaver-fanen viser nå kun ordinære oppgaver fra `tasks`; ToDo-er forblir tilgjengelige i sidepanelet, ToDo-fanen og dashboardets eksisterende tellinger og prioriteringer.
+- Fjernet hurtigfiltrene `Prosjekter` og `ToDo`. De syv gjenværende filtrene beholder rekkefølge og virkemåte.
+- Eldre filterverdier `projects`, `todos` og den defensive varianten `todo` faller tilbake til `Alle`, slik at ingen blir stående i en tom visning uten aktiv filterknapp.
+
+### Atomisk konvertering
+- La til `Konverter til oppgave` i ToDo-redigeringsmodalen for Admin og Teamleder. Fullførte ToDo-er kan ikke konverteres.
+- Modalens nåværende feltverdier er autoritative, slik at ulagrede endringer i tittel, beskrivelse, ansvarlig, frist og prioritet tas med.
+- `convertTodoToTask()` leser ToDo-en, oppretter oppgaven og soft-sletter ToDo-en i én Firestore-transaksjon. Enten gjennomføres begge skrivningene, eller ingen.
+- Transaksjonen avviser en ToDo som allerede er fullført, slettet eller konvertert. Knappen deaktiveres samtidig i klienten som tydelig signal og ekstra vern mot dobbelttrykk.
+- Den nye oppgaven åpnes automatisk i den eksisterende redigeringsmodalen etter vellykket commit.
+
+### Dialog, avgrensning og versjon
+- Utvidet `showConfirm()` med valgfri bekreftelsestekst og primærstil. Standard er fortsatt rød `Slett`, og eksisterende kall er uendret. Escape bruker fortsatt samme `cleanup()`-vei og løser promise-en med `false`.
+- Ingen endringer i Firestore-regler, regeltester, eksport, dashboardberegninger eller ToDo-rangering.
+- Versjon bumpet til `1.8.0` i alle tre versjonskilder; klientbuild er `1800`.
+
+### Kontroll
+- `node --check` består for `app.js`, `js/todos.js`, `firestore.js` og `service-worker.js`.
+- Firestore-emulatortestene består uendret: 19 av 19.
+- Isolert transaksjonstest består med 14 av 14 assertions for feltmapping fra modalverdier, atomisk rollback, manglende/slettet ToDo, fullført ToDo og nytt konverteringsforsøk etter commit.
+- Headless Chrome-kontroll består med 46 assertions for tasks-only-visning, syv hurtigfiltre, filterfallback, knappesynlighet, dialogstil og Escape-opprydding, avbrutt konvertering, dobbeltklikkvern, eksplisitt `getTask()`-henting, tom frist/ansvarlig, foreldet ToDo, åpne/fullførte ToDo-visninger og responsiv modalbredde.
+- Kildesammenligning mot v1.7.1 bekrefter at dashboardberegningene, eksportfunksjonen og dra-og-slipp-implementasjonen er uendret.
+
 ## v1.7.1 - 2026-09-02
 
 ### Ombrekking av ToDo-titler

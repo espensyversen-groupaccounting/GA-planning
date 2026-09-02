@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.7.1';
+const APP_VERSION = '1.8.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -317,7 +317,7 @@ function hideLoading() { document.getElementById('loading-overlay').classList.ad
 // CONFIRM DIALOG
 // ============================================================
 
-function showConfirm(title, message) {
+function showConfirm(title, message, options = {}) {
   if (activeConfirmCancel) activeConfirmCancel();
 
   return new Promise(resolve => {
@@ -326,7 +326,12 @@ function showConfirm(title, message) {
     const dialog = document.getElementById('confirm-dialog');
     const okButton = document.getElementById('confirm-ok');
     const cancelButton = document.getElementById('confirm-cancel');
+    const confirmText = options.confirmText || 'Slett';
+    const confirmClass = options.confirmStyle === 'primary' ? 'btn-primary' : 'btn-danger';
     let settled = false;
+    okButton.textContent = confirmText;
+    okButton.classList.remove('btn-primary', 'btn-danger');
+    okButton.classList.add(confirmClass);
     dialog.classList.remove('hidden');
 
     const finish = result => {
@@ -348,6 +353,9 @@ function showConfirm(title, message) {
       okButton.removeEventListener('click', onOk);
       cancelButton.removeEventListener('click', onCancel);
       document.removeEventListener('keydown', onEscape, true);
+      okButton.textContent = 'Slett';
+      okButton.classList.remove('btn-primary');
+      okButton.classList.add('btn-danger');
       if (activeConfirmCancel === onCancel) activeConfirmCancel = null;
     }
     activeConfirmCancel = onCancel;
@@ -907,29 +915,20 @@ function renderTasksList() {
   const assignee = document.getElementById('filter-assignee').value;
   const category = document.getElementById('filter-category').value;
   const search   = (document.getElementById('task-search').value || '').toLowerCase();
+  if (['projects', 'todos', 'todo'].includes(state.quickFilter)) state.quickFilter = '';
   updateQuickFilterButtons();
 
-  let items = [
-    ...state.tasks.map(t => ({ ...t, itemType: 'task' })),
-    ...state.todos.map(t => ({ ...t, itemType: 'todo' }))
-  ];
-  if (status) {
-    items = items.filter(t => {
-      if (t.itemType === 'todo') return status === 'fullfort' ? isDoneItem(t) : false;
-      return t.status === status;
-    });
-  }
+  let items = [...state.tasks];
+  if (status) items = items.filter(t => t.status === status);
   if (priority) items = items.filter(t => t.priority === priority);
   if (assignee === '__unassigned') items = items.filter(t => !t.assignedTo);
   else if (assignee) items = items.filter(t => t.assignedTo === assignee);
-  if (category) items = items.filter(t => t.itemType === 'task' && t.categoryId === category);
+  if (category) items = items.filter(t => t.categoryId === category);
   if (search) items = items.filter(t =>
     (t.title || '').toLowerCase().includes(search) ||
     (t.description || '').toLowerCase().includes(search) ||
     (t.categoryName || '').toLowerCase().includes(search));
 
-  if (state.quickFilter === 'projects') items = items.filter(t => t.itemType === 'task');
-  if (state.quickFilter === 'todos') items = items.filter(t => t.itemType === 'todo');
   if (state.quickFilter === 'attention') items = items.filter(t => !isDoneItem(t) && (dueTodayOrOverdue(t) || dueThisWeek(t) || !t.assignedTo || t.priority === 'høy'));
   if (state.quickFilter === 'today') items = items.filter(t => !isDoneItem(t) && dueTodayOrOverdue(t));
   if (state.quickFilter === 'week') items = items.filter(t => !isDoneItem(t) && (dueTodayOrOverdue(t) || dueThisWeek(t)));
@@ -962,7 +961,7 @@ function renderTasksList() {
          </div>`;
     return;
   }
-  el.innerHTML = items.map(t => t.itemType === 'todo' ? todoCardHtml(t) : taskCardHtml(t, false)).join('');
+  el.innerHTML = items.map(t => taskCardHtml(t, false)).join('');
 }
 
 function replaceSelectOptions(select, options, canRestore) {
@@ -1079,7 +1078,7 @@ async function handleMarkAllRead() {
 // TASK MODAL
 // ============================================================
 
-async function openTaskModal(taskId = null) {
+async function openTaskModal(taskId = null, prefetchedTask = null) {
   state.activeTaskId = taskId;
   state.editMode = !taskId;
 
@@ -1092,7 +1091,7 @@ async function openTaskModal(taskId = null) {
   document.getElementById('comments-tab-count').textContent = '';
 
   if (taskId) {
-    const task = state.tasks.find(t => t.id === taskId) || await getTask(taskId);
+    const task = prefetchedTask || state.tasks.find(t => t.id === taskId) || await getTask(taskId);
     if (!task) {
       showToast('Oppgaven finnes ikke lenger.', 'error');
       closeTaskModal();
@@ -2256,6 +2255,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('todo-edit-close').addEventListener('click', closeTodoEditModal);
   document.getElementById('todo-edit-cancel').addEventListener('click', closeTodoEditModal);
   document.getElementById('todo-edit-save').addEventListener('click', handleSaveTodoEdit);
+  document.getElementById('todo-edit-convert').addEventListener('click', handleConvertTodoToTask);
   setupBackdropClose(document.getElementById('todo-edit-modal'), closeTodoEditModal);
   document.getElementById('todo-edit-title-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); handleSaveTodoEdit(); }

@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.7.1`
+Gjeldende appversjon: `v1.8.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -170,8 +170,6 @@ Oppgaver-fanen har ordinære filtre og hurtigfiltre.
 
 Hurtigfiltre:
 - `Alle`
-- `Prosjekter`
-- `ToDo`
 - `Må følges opp`
 - `Uten ansvarlig`
 - `Denne uken`: frist i dag eller innen 7 dager, inkludert deloppgaver.
@@ -179,7 +177,7 @@ Hurtigfiltre:
 - `Mine`
 - `Høy prioritet`
 
-Standard sortering er etter hastegrad, ikke bare prioritet. Oppgavekort og ToDo-kort viser signaler som `Forfalt`, `Frist i dag`, `Denne uken`, `Neste 14 d`, `Ikke tildelt` og `Deloppgavefrist`.
+Oppgaver-fanen viser bare dokumenter fra `tasks`; ToDo-er håndteres i sidepanelet og ToDo-fanen. Standard sortering er etter hastegrad, ikke bare prioritet. Oppgavekort viser signaler som `Forfalt`, `Frist i dag`, `Denne uken`, `Neste 14 d`, `Ikke tildelt` og `Deloppgavefrist`.
 
 ## Korte ToDo-er
 ToDo-er er ment for korte ad hoc-oppgaver som må følges opp, men som ikke trenger full prosjektstruktur med deloppgaver og kommentarer.
@@ -195,8 +193,8 @@ Ansvarlig er alltid synlig som en kompakt valgbrikke under tittelfeltet. I `Mine
 ToDo-er vises:
 - i et høyre sidepanel på brede skjermer, eller i et bunnark på smalere skjermer
 - i toppkortene på dashboardet der de påvirker `I dag`, `Denne uken`, `Uten ansvarlig` og `Høy prioritet`
-- i Oppgaver-fanen under `Alle` og hurtigfilteret `ToDo`
 - i Team/Mine-visningen på dashboardet
+- i ToDo-fanen med åpne/fullførte filtre og manuell rangering
 
 Admin og Teamleder kan opprette og slette ToDo-er. Tildelt Medlem kan markere egne ToDo-er som fullført eller åpne dem igjen.
 
@@ -211,6 +209,8 @@ Beskrivelse er valgfri. Eksisterende ToDo-er uten feltet behandles som tom tekst
 Kort uten ansvarlig viser ett `Ikke tildelt`-signal fra den felles signalberegningen. Ansvarlig-brikken rendres bare når en faktisk bruker er tildelt.
 
 ToDo-titler brytes over opptil tre linjer på alle flater. Lengre titler klampes med ellipse, og lange ord eller URL-er brytes slik at de ikke utvider kortet. Hele tittelen er fortsatt tilgjengelig når kortet åpnes.
+
+Admin og Teamleder kan konvertere en åpen ToDo til en full oppgave fra redigeringsmodalen. Konverteringen bruker modalens nåværende verdier, også ulagrede endringer, for tittel, beskrivelse, ansvarlig, frist og prioritet. Firestore oppretter oppgaven og soft-sletter ToDo-en i én transaksjon. Dermed gjennomføres begge skrivningene eller ingen, og en ToDo som allerede er fullført, slettet eller konvertert kan ikke gi en duplikatoppgave. Den nye oppgaven åpnes direkte for videre utfylling av kategori, startdato, deloppgaver og avhengigheter.
 
 ## Legge til nye brukere
 1. Logg inn som en bruker med rollen `admin`.

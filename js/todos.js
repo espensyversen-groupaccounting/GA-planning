@@ -11,6 +11,7 @@ let todoDragState = null;
 let todoOrderSaving = false;
 let todoOrderRenderDeferred = false;
 let todoAutoScrollFrame = null;
+let todoConversionInProgress = false;
 
 function todoCreatedAtMillis(todo) {
   const createdAt = todo && todo.createdAt;
@@ -270,6 +271,9 @@ function openTodoEditModal(todoId, event) {
   document.getElementById('todo-edit-due-date').disabled = !editable;
   document.getElementById('todo-edit-priority').disabled = !editable;
   document.getElementById('todo-edit-save').classList.toggle('hidden', !editable);
+  const convertButton = document.getElementById('todo-edit-convert');
+  convertButton.classList.toggle('hidden', !editable || isDoneItem(todo));
+  convertButton.disabled = false;
 
   document.getElementById('todo-edit-modal').classList.remove('hidden');
   document.getElementById('todo-edit-title-input').focus();
@@ -316,6 +320,76 @@ async function handleSaveTodoEdit() {
     showToast(message, 'error');
   } finally {
     saveBtn.disabled = false;
+  }
+}
+
+async function handleConvertTodoToTask() {
+  if (!canEdit() || todoConversionInProgress) return;
+
+  const todoId = document.getElementById('todo-edit-id').value;
+  const title = document.getElementById('todo-edit-title-input').value.trim();
+  const description = document.getElementById('todo-edit-description').value.trim();
+  if (!title) {
+    showToast('Tittel kan ikke være tom.', 'error');
+    return;
+  }
+
+  const assigneeId = document.getElementById('todo-edit-assignee').value;
+  const assignee = state.users.find(user => user.id === assigneeId);
+  const dueStr = document.getElementById('todo-edit-due-date').value;
+  const priority = document.getElementById('todo-edit-priority').value;
+  const convertButton = document.getElementById('todo-edit-convert');
+
+  todoConversionInProgress = true;
+  convertButton.disabled = true;
+  let conversionCommitted = false;
+
+  try {
+    const confirmed = await showConfirm(
+      'Konverter til oppgave',
+      `Vil du konvertere "${title}" til en oppgave? ToDo-en arkiveres når oppgaven er opprettet.`,
+      { confirmText: 'Konverter', confirmStyle: 'primary' }
+    );
+    if (!confirmed) return;
+
+    const taskId = await convertTodoToTask(todoId, {
+      title,
+      description,
+      priority,
+      categoryId: null,
+      categoryName: null,
+      categoryColor: null,
+      status: 'ikke_startet',
+      assignedTo: assigneeId || null,
+      assignedToName: assignee ? (assignee.displayName || assignee.email) : null,
+      startDate: null,
+      dueDate: dueStr ? firebase.firestore.Timestamp.fromDate(new Date(dueStr)) : null,
+      dependencies: '',
+      subtasks: [],
+    });
+    conversionCommitted = true;
+
+    closeTodoEditModal();
+    showToast('ToDo konvertert til oppgave');
+    const createdTask = await getTask(taskId);
+    if (!createdTask) throw new Error('CREATED_TASK_NOT_FOUND');
+    await openTaskModal(taskId, createdTask);
+  } catch (error) {
+    console.error('Todo conversion error:', error);
+    if (conversionCommitted) {
+      showToast('ToDo-en ble konvertert, men oppgaven kunne ikke åpnes automatisk.', 'error');
+    } else if (error && error.message === 'TODO_NOT_FOUND') {
+      closeTodoEditModal();
+      showToast('ToDo-en finnes ikke lenger. Ingen oppgave ble opprettet.', 'error');
+    } else if (error && error.message === 'TODO_NOT_OPEN') {
+      closeTodoEditModal();
+      showToast('ToDo-en er allerede fullført og kan ikke konverteres.', 'error');
+    } else {
+      showToast('Kunne ikke konvertere ToDo-en. Ingen endringer ble lagret.', 'error');
+    }
+  } finally {
+    todoConversionInProgress = false;
+    convertButton.disabled = false;
   }
 }
 
