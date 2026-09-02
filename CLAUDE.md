@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.8.0`
+Gjeldende appversjon: `v1.8.1`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -158,7 +158,7 @@ Toppkort:
 Dashboardseksjoner:
 - `Prioriter i dag`: forfalte oppgaver og oppgaver/deloppgaver med frist i dag, gruppert etter `Høy`, `Medium`, `Lav`.
 - `Planlegg denne uken`: kommende oppgaver/deloppgaver innen 1-7 dager, gruppert etter prioritet.
-- `Uten ansvarlig`: åpne oppgaver som må delegeres.
+- `Uten ansvarlig`: åpne oppgaver og ToDo-er som må delegeres. Listen viser alle elementene i samme hastegradssortering som ellers, men ruller internt når den blir høyere enn omtrent seks til syv kort.
 - `Teamoversikt`: viser åpne oppgaver/ToDo-er og risikopunkter per person. I `Mine`-visning skjules denne og brukeren får beskjed om å bytte til Team for teamfordeling.
 
 På mobil er dashboardet komprimert: toppkortene vises som horisontale chips og kort/spacing er strammet inn slik at prioriterte oppgaver kommer tidligere på skjermen. Desktop-layouten er beholdt bred og mer informasjonsrik.
@@ -196,7 +196,7 @@ ToDo-er vises:
 - i Team/Mine-visningen på dashboardet
 - i ToDo-fanen med åpne/fullførte filtre og manuell rangering
 
-Admin og Teamleder kan opprette og slette ToDo-er. Tildelt Medlem kan markere egne ToDo-er som fullført eller åpne dem igjen.
+Admin og Teamleder kan opprette og slette ToDo-er. Sletting er tilgjengelig med søppelbøtte både på kort og i redigeringsmodalen. Hver sletting får en egen kortvarig `Angre`-handling som gjenoppretter akkurat den aktuelle ToDo-en uten å endre `sortOrder`. Tildelt Medlem kan markere egne ToDo-er som fullført eller åpne dem igjen.
 
 Panelet bruker samme `Team`/`Mine`-avgrensning som dashboardet og husker kollapstilstanden i `localStorage`. Åpne ToDo-er i panelet og ToDo-fanen følger én felles, manuell teamrekkefølge via `sortOrder`; hastegradsmerker vises fortsatt, men påvirker ikke denne rekkefølgen. Admin og Teamleder kan flytte åpne kort med et eget drahåndtak ved hjelp av mus, berøring eller tastatur. Filtrerte visninger endrer samme globale rekkefølge, og fullførte ToDo-er kan ikke flyttes.
 
@@ -211,6 +211,8 @@ Kort uten ansvarlig viser ett `Ikke tildelt`-signal fra den felles signalberegni
 ToDo-titler brytes over opptil tre linjer på alle flater. Lengre titler klampes med ellipse, og lange ord eller URL-er brytes slik at de ikke utvider kortet. Hele tittelen er fortsatt tilgjengelig når kortet åpnes.
 
 Admin og Teamleder kan konvertere en åpen ToDo til en full oppgave fra redigeringsmodalen. Konverteringen bruker modalens nåværende verdier, også ulagrede endringer, for tittel, beskrivelse, ansvarlig, frist og prioritet. Firestore oppretter oppgaven og soft-sletter ToDo-en i én transaksjon. Dermed gjennomføres begge skrivningene eller ingen, og en ToDo som allerede er fullført, slettet eller konvertert kan ikke gi en duplikatoppgave. Den nye oppgaven åpnes direkte for videre utfylling av kategori, startdato, deloppgaver og avhengigheter.
+
+Dashboardrendering av ToDo-kort bruker en ikke-sorterbar variant uten drahåndtak. Sidepanelet og ToDo-fanen bruker fortsatt standardvarianten med uendret manuell rangering.
 
 ## Legge til nye brukere
 1. Logg inn som en bruker med rollen `admin`.

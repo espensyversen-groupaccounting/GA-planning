@@ -39,7 +39,8 @@ function scopedTodos() {
     : state.todos;
 }
 
-function todoCardHtml(todo) {
+function todoCardHtml(todo, options = {}) {
+  const sortable = options.sortable !== false;
   const priority = ['høy', 'medium', 'lav'].includes(todo.priority) ? todo.priority : 'medium';
   const dateClass = dueDateClass(todo.dueDate);
   const assignee = state.users.find(u => u.id === todo.assignedTo);
@@ -58,7 +59,7 @@ function todoCardHtml(todo) {
     </span>` : '';
   const signalHtml = taskSignals(todo).map(s => `<span class="risk-badge ${s.key}">${s.label}</span>`).join('');
   const canChange = canEdit() || isMineItem(todo);
-  const canReorder = canEdit() && !isDoneItem(todo);
+  const canReorder = sortable && canEdit() && !isDoneItem(todo);
   const description = (todo.description || '').trim();
   const descriptionHtml = description ? `
     <div class="todo-description-preview">
@@ -101,7 +102,7 @@ function todoCardHtml(todo) {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>
             </button>` : ''}
           <button class="btn-icon-danger todo-delete-btn" type="button" onclick="handleDeleteTodo(${inlineJsArg(todo.id)}, event)" title="Slett ToDo">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
           </button>
         </div>` : ''}
     </div>`;
@@ -186,11 +187,26 @@ async function handleDeleteTodo(todoId, event) {
 
   try {
     await deleteTodo(todoId);
-    showToast('ToDo slettet');
+    showTodoDeletedToast(todoId);
   } catch(e) {
     console.error('Todo delete error:', e);
     showToast('Feil ved sletting av ToDo.', 'error');
   }
+}
+
+function showTodoDeletedToast(todoId) {
+  showToast('ToDo slettet', 'success', {
+    actionLabel: 'Angre',
+    onAction: async () => {
+      try {
+        await restoreTodo(todoId);
+        showToast('ToDo gjenopprettet');
+      } catch (error) {
+        console.error('Todo restore error:', error);
+        showToast('Kunne ikke gjenopprette ToDo-en.', 'error');
+      }
+    }
+  });
 }
 
 function renderTodosView() {
@@ -271,6 +287,9 @@ function openTodoEditModal(todoId, event) {
   document.getElementById('todo-edit-due-date').disabled = !editable;
   document.getElementById('todo-edit-priority').disabled = !editable;
   document.getElementById('todo-edit-save').classList.toggle('hidden', !editable);
+  const deleteButton = document.getElementById('todo-edit-delete');
+  deleteButton.classList.toggle('hidden', !editable);
+  deleteButton.disabled = false;
   const convertButton = document.getElementById('todo-edit-convert');
   convertButton.classList.toggle('hidden', !editable || isDoneItem(todo));
   convertButton.disabled = false;
@@ -320,6 +339,27 @@ async function handleSaveTodoEdit() {
     showToast(message, 'error');
   } finally {
     saveBtn.disabled = false;
+  }
+}
+
+async function handleDeleteTodoFromModal() {
+  if (!canEdit()) return;
+  const todoId = document.getElementById('todo-edit-id').value;
+  const todo = state.todos.find(item => item.id === todoId);
+  const confirmed = await showConfirm('Slett ToDo', `Er du sikker på at du vil slette "${todo ? todo.title : 'denne ToDo-en'}"?`);
+  if (!confirmed) return;
+
+  const deleteButton = document.getElementById('todo-edit-delete');
+  deleteButton.disabled = true;
+  try {
+    await deleteTodo(todoId);
+    closeTodoEditModal();
+    showTodoDeletedToast(todoId);
+  } catch (error) {
+    console.error('Todo modal delete error:', error);
+    showToast('Feil ved sletting av ToDo.', 'error');
+  } finally {
+    deleteButton.disabled = false;
   }
 }
 

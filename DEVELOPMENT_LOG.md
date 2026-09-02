@@ -1,5 +1,31 @@
 # Development Log
 
+## v1.8.1 - 2026-09-02
+
+### Tydelig sletting og umiddelbar angre
+- La til en rød `Slett ToDo`-knapp i redigeringsmodalen for Admin og Teamleder, med eksisterende bekreftelsesdialog og soft-delete.
+- Byttet kortenes X-symbol til samme søppelbøtteikon som øvrige slettehandlinger. `title` er fortsatt `Slett ToDo`.
+- Utvidet `showToast()` bakoverkompatibelt med valgfri handlingsknapp. Eksisterende kallsteder bruker fortsatt samme signatur og oppførsel.
+- Hver slettetoast lukker over sitt eget `todoId` og har egen timeout. Flere raske slettinger kan derfor angres uavhengig og gjenoppretter riktig dokument.
+- `restoreTodo()` fjerner `deletedAt` og `deletedBy`, oppdaterer skrivemetadata og lar `sortOrder` stå urørt.
+
+### Konsistent dashboard
+- `Uten ansvarlig` viser nå både åpne oppgaver og åpne ToDo-er uten ansvarlig, samlet sortert etter eksisterende hastegrad. Grensen på seks elementer er fjernet, så antallet synlige kort samsvarer med toppkortet.
+- Listen har `overflow-y: auto` og en maksimumshøyde tilsvarende omtrent seks til syv kort. Ved få elementer aktiveres ingen intern rulling; på mobil begrenses høyden også relativt til viewporten.
+- `todoCardHtml()` har fått `sortable: true` som standard. Dashboardet bruker `{ sortable: false }`, mens sidepanelet og ToDo-fanen beholder eksisterende kall og fungerende drahåndtak.
+
+### Avgrensning og versjon
+- Toppkortenes tellelogikk, konvertering, eksport, Firestore-regler, regeltester og manuell ToDo-rekkefølge er uendret.
+- Versjon bumpet til `1.8.1` i alle tre versjonskilder; klientbuild er `1801`.
+
+### Kontroll
+- `node --check` bestått for `app.js`, `js/todos.js`, `firestore.js` og `service-worker.js`.
+- Firestore-emulatortestene består: 19/19.
+- Isolert test av `restoreTodo()` består: 11/11 kontroller, inkludert `FieldValue.delete()`, skrivemetadata, uendret `sortOrder` og feilhåndtering.
+- Lokal Chrome-test består: 27/27 desktopkontroller og 6/6 mobilkontroller for modal-/kortsletting, angre, parallelle toast-er, tilgangsstyring, dashboardkonsistens og intern rulling.
+- Direkte sammenligning mot v1.8.0 bekrefter at toppkortenes tellekode, CSV-eksport, konverteringsflyt, ToDo-fanens renderer, sidepanelrenderer og dra-og-slipp-kode er uendret.
+- `git diff --check` bestått (kun forventede advarsler om linjeskift på Windows).
+
 ## v1.8.0 - 2026-09-02
 
 ### Tydelig arbeidsdeling

@@ -572,6 +572,13 @@ body {
   border: 1px dashed var(--border);
 }
 .compact-empty p { margin: 0; font-size: .85rem; }
+.unassigned-dashboard-list {
+  max-height: min(560px, 60dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 4px;
+}
 
 .section-header-row {
   display: flex;
@@ -1291,7 +1298,7 @@ body {
   background: var(--white);
   border-radius: var(--radius-lg);
   padding: 24px;
-  max-width: 440px; width: 100%;
+  max-width: 600px; width: 100%;
   box-shadow: var(--shadow-md);
   display: flex; flex-direction: column; gap: 16px;
 }
@@ -1301,13 +1308,19 @@ body {
 }
 .todo-edit-header h3 { font-size: 1.05rem; font-weight: 700; }
 .todo-edit-footer {
-  display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center;
   margin-top: 4px;
 }
-.todo-edit-footer-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.todo-edit-footer-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  justify-content: end;
+}
 @media (max-width: 560px) {
-  .todo-edit-footer { align-items: stretch; flex-direction: column; }
+  .todo-edit-footer { grid-template-columns: 1fr; align-items: stretch; }
   .todo-edit-footer-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  #todo-edit-convert { grid-column: 1 / -1; }
   .todo-edit-footer .btn { justify-content: center; min-width: 0; }
 }
 .todo-actions {
@@ -1359,6 +1372,21 @@ body {
   animation: slideUp .25s ease;
   display: flex; align-items: center; gap: 8px;
 }
+.toast-message { min-width: 0; flex: 1; }
+.toast-action {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.toast-action:hover { background: rgba(255,255,255,.5); }
+.toast-action:disabled { opacity: .55; cursor: wait; }
 .toast.success { background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; }
 .toast.error   { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
 .toast.info    { background: var(--light-pink); color: var(--red); border: 1px solid #FECACA; }

@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.8.1';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -297,13 +297,42 @@ function subtaskDueClass(subtask) {
 // TOAST
 // ============================================================
 
-function showToast(msg, type = 'success') {
+function showToast(msg, type = 'success', options = {}) {
   const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.textContent = msg;
+  const message = document.createElement('span');
+  message.className = 'toast-message';
+  message.textContent = msg;
+  toast.appendChild(message);
+
+  let dismissed = false;
+  const dismiss = () => {
+    if (dismissed) return;
+    dismissed = true;
+    toast.remove();
+  };
+  const timeoutId = setTimeout(dismiss, 3500);
+
+  if (options.actionLabel && typeof options.onAction === 'function') {
+    const actionButton = document.createElement('button');
+    actionButton.type = 'button';
+    actionButton.className = 'toast-action';
+    actionButton.textContent = options.actionLabel;
+    actionButton.addEventListener('click', async () => {
+      if (dismissed) return;
+      clearTimeout(timeoutId);
+      actionButton.disabled = true;
+      try {
+        await options.onAction();
+      } finally {
+        dismiss();
+      }
+    }, { once: true });
+    toast.appendChild(actionButton);
+  }
+
   container.appendChild(toast);
-  setTimeout(() => toast.remove(), 3500);
 }
 
 // ============================================================
@@ -660,7 +689,11 @@ function renderDashboard() {
 
   renderFokusNa(fokusOverdue, fokusToday, fokusInProgress);
   renderPriorityGroups('week-priority-list', weekPriority, 'Ingen oppgaver planlagt de neste 14 dagene');
-  renderCompactList('unassigned-tasks-list', unassigned.sort(compareTasksByUrgency).slice(0, 6), 'Alle åpne oppgaver har ansvarlig');
+  const unassignedItems = [
+    ...unassigned,
+    ...unassignedTodos.map(todo => ({ ...todo, _isTodo: true }))
+  ].sort(compareTasksByUrgency);
+  renderCompactList('unassigned-tasks-list', unassignedItems, 'Alle åpne oppgaver og ToDo-er har ansvarlig');
   renderTeamWorkload([...open, ...openTodos]);
   renderTodoPanel();
 }
@@ -721,7 +754,10 @@ function renderCompactList(containerId, tasks, emptyMsg) {
     el.innerHTML = `<div class="empty-state compact-empty"><p>${emptyMsg}</p></div>`;
     return;
   }
-  el.innerHTML = tasks.map(t => taskCardHtml(t, true)).join('');
+  el.innerHTML = tasks.map(t => t._isTodo
+    ? todoCardHtml(t, { sortable: false })
+    : taskCardHtml(t, true)
+  ).join('');
 }
 
 function renderFokusNa(overdue, today, inProgress) {
@@ -745,7 +781,7 @@ function renderFokusNa(overdue, today, inProgress) {
         <span class="priority-group-count">${g.items.length}</span>
       </div>
       <div class="task-list-compact">
-        ${g.items.map(t => t._isTodo ? todoCardHtml(t) : taskCardHtml(t, true)).join('')}
+        ${g.items.map(t => t._isTodo ? todoCardHtml(t, { sortable: false }) : taskCardHtml(t, true)).join('')}
       </div>
     </div>`).join('');
 }
@@ -2255,6 +2291,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('todo-edit-close').addEventListener('click', closeTodoEditModal);
   document.getElementById('todo-edit-cancel').addEventListener('click', closeTodoEditModal);
   document.getElementById('todo-edit-save').addEventListener('click', handleSaveTodoEdit);
+  document.getElementById('todo-edit-delete').addEventListener('click', handleDeleteTodoFromModal);
   document.getElementById('todo-edit-convert').addEventListener('click', handleConvertTodoToTask);
   setupBackdropClose(document.getElementById('todo-edit-modal'), closeTodoEditModal);
   document.getElementById('todo-edit-title-input').addEventListener('keydown', (e) => {
