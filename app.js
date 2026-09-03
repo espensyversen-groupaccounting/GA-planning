@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.8.1';
+const APP_VERSION = '1.8.2';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -112,14 +112,17 @@ function scopedTasks() {
     : state.tasks;
 }
 
-function dueDateRelativeLabel(task) {
-  const days = taskDueDays(task);
+function relativeDueDateLabel(days, options = {}) {
   if (!Number.isFinite(days)) return '';
-  if (days < 0) return `${Math.abs(days)} d over frist`;
+  if (days < 0) return options.genericOverdue ? 'Forfalt' : `${Math.abs(days)} d over frist`;
   if (days === 0) return 'I dag';
   if (days === 1) return 'I morgen';
   if (days <= 14) return `Om ${days} d`;
   return '';
+}
+
+function dueDateRelativeLabel(task) {
+  return relativeDueDateLabel(taskDueDays(task));
 }
 
 function taskHasSoonSubtask(task, threshold = 7) {
@@ -281,16 +284,40 @@ function formatDateString(value) {
   return d.toLocaleDateString('no-NO', { day:'2-digit', month:'2-digit', year:'numeric' });
 }
 
-function subtaskDueClass(subtask) {
-  if (!subtask || subtask.completed || !subtask.dueDate) return '';
+function subtaskDueDays(subtask) {
+  if (!subtask || !subtask.dueDate) return Infinity;
   const d = parseDateString(subtask.dueDate);
-  if (!d) return '';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil((d.getTime() - today.getTime()) / 86400000);
-  if (diffDays < 0) return 'overdue';
-  if (diffDays <= 3) return 'soon';
+  if (!d) return Infinity;
+  d.setHours(0, 0, 0, 0);
+  return Math.ceil((d.getTime() - startOfToday().getTime()) / 86400000);
+}
+
+function subtaskDueLabel(subtask) {
+  if (subtask.completed) return 'Fullført';
+  if (!subtask.dueDate) return 'Ingen frist';
+  const relative = relativeDueDateLabel(subtaskDueDays(subtask), { genericOverdue: true });
+  return `${formatDateString(subtask.dueDate)}${relative ? ` · ${relative}` : ''}`;
+}
+
+function subtaskDueClass(subtask) {
+  if (!subtask || subtask.completed) return '';
+  const days = subtaskDueDays(subtask);
+  if (days < 0) return 'overdue';
+  if (days <= 3) return 'soon';
   return '';
+}
+
+function subtasksForDisplay(subtasks) {
+  return subtasks
+    .map((subtask, storedIndex) => ({ subtask, storedIndex }))
+    .sort((a, b) => {
+      const aDate = a.subtask.dueDate || '';
+      const bDate = b.subtask.dueDate || '';
+      if (aDate && bDate) return aDate.localeCompare(bDate) || a.storedIndex - b.storedIndex;
+      if (aDate) return -1;
+      if (bDate) return 1;
+      return a.storedIndex - b.storedIndex;
+    });
 }
 
 // ============================================================
@@ -1363,22 +1390,19 @@ function renderSubtaskTimeline(subtasks) {
   }
 
   const progress = subtaskProgress(subtasks);
-  const withDates = subtasks
-    .filter(s => s.dueDate)
-    .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)));
-  const next = withDates.find(s => !s.completed);
+  const displaySubtasks = subtasksForDisplay(subtasks);
+  const next = displaySubtasks.find(({ subtask }) => subtask.dueDate && !subtask.completed)?.subtask;
   const overdue = subtasks.filter(s => subtaskDueClass(s) === 'overdue').length;
 
-  const rows = subtasks.map((s, i) => {
+  const rows = displaySubtasks.map(({ subtask: s }, i) => {
     const dueClass = subtaskDueClass(s);
-    const stateLabel = s.completed ? 'Fullført' : dueClass === 'overdue' ? 'Forfalt' : dueClass === 'soon' ? 'Snart' : s.dueDate ? formatDateString(s.dueDate) : 'Ingen frist';
     return `
       <div class="subtask-timeline-row ${s.completed ? 'done' : ''} ${dueClass}">
         <div class="subtask-timeline-main">
           <span class="subtask-timeline-index">${i + 1}</span>
           <span class="subtask-timeline-title">${esc(s.title)}</span>
         </div>
-        <span class="subtask-timeline-date">${stateLabel}</span>
+        <span class="subtask-timeline-date">${subtaskDueLabel(s)}</span>
       </div>`;
   }).join('');
 
@@ -1415,18 +1439,19 @@ function renderSubtasks(subtasks) {
   const done = subtasks.filter(s => s.completed).length;
   countEl.textContent = `${done}/${subtasks.length}`;
 
-  el.innerHTML = subtasks.map((s, i) => `
+  const displaySubtasks = subtasksForDisplay(subtasks);
+  el.innerHTML = displaySubtasks.map(({ subtask: s, storedIndex }) => `
     <div class="subtask-item ${subtaskDueClass(s)}">
       <input type="checkbox" class="subtask-checkbox" ${s.completed ? 'checked' : ''}
-        ${editable ? `onchange="toggleSubtask(${i}, this.checked)"` : 'disabled'} />
+        ${editable ? `onchange="toggleSubtask(${storedIndex}, this.checked)"` : 'disabled'} />
       <div class="subtask-content">
         <span class="subtask-title ${s.completed ? 'done' : ''}">${esc(s.title)}</span>
         <div class="subtask-meta">
-          ${s.dueDate ? `<span class="subtask-due ${subtaskDueClass(s)}">${formatDateString(s.dueDate)}${subtaskDueClass(s) === 'overdue' ? ' · Forfalt' : subtaskDueClass(s) === 'soon' ? ' · Snart' : ''}</span>` : '<span class="subtask-due muted">Ingen frist</span>'}
+          <span class="subtask-due ${subtaskDueClass(s)} ${s.dueDate ? '' : 'muted'}">${subtaskDueLabel(s)}</span>
         </div>
       </div>
-      ${editable ? `<input type="date" class="subtask-date-input" value="${esc(s.dueDate || '')}" onchange="updateSubtaskDueDate(${i}, this.value)" aria-label="Frist for ${esc(s.title)}" />` : ''}
-      ${editable ? `<button class="btn-remove-subtask" onclick="removeSubtask(${i})" title="Fjern">
+      ${editable ? `<input type="date" class="subtask-date-input" value="${esc(s.dueDate || '')}" onchange="updateSubtaskDueDate(${storedIndex}, this.value)" aria-label="Frist for ${esc(s.title)}" />` : ''}
+      ${editable ? `<button class="btn-remove-subtask" onclick="removeSubtask(${storedIndex})" title="Fjern">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>` : ''}
     </div>`).join('');

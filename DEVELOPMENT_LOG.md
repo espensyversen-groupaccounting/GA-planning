@@ -1,5 +1,29 @@
 # Development Log
 
+## v1.8.2 - 2026-09-03
+
+### Deloppgaver i fristrekkefølge
+- Begge fanene i oppgavemodalen sorterer deloppgaver stigende etter `dueDate`, med udaterte deloppgaver sist og stabil intern rekkefølge ved lik eller manglende dato.
+- Sorteringen skjer kun på en visningskopi som bærer med seg opprinnelig arrayindeks. Alle endringshandlinger fortsetter derfor å operere på Firestore-arrayets lagrede rekkefølge.
+
+### Entydig datovisning
+- Begge fanene viser alltid absolutt frist sammen med relativ etikett når relevant: `Forfalt`, `I dag`, `I morgen` eller `Om N d`.
+- Relativ skala er samlet i `relativeDueDateLabel()`. Oppgave- og ToDo-kort beholder dagens detaljerte tekst for passert frist, mens deloppgaver bruker den kompakte etiketten `Forfalt`.
+- Fullførte deloppgaver viser fortsatt `Fullført`, og deloppgaver uten frist viser `Ingen frist`.
+
+### Avgrensning og versjon
+- Datamodell, lagret deloppgaverekkefølge, Firestore-transaksjoner, eksport, dashboard, oppgavekort, ToDo-modul, regler og regeltester er uendret.
+- Versjon bumpet til `1.8.2` i alle tre versjonskilder; klientbuild er `1802`.
+
+### Kontroll
+- Lokal Chrome-test består: 19/19 kontroller som dekker begge modal-faner, alle relative etiketter, datorekkefølge, stabile udaterte elementer og bevarte fargeklasser.
+- Avkryssing, tillegg, fristendring og sletting er testet fra den sorterte visningen. Riktig lagret element oppdateres, og arrayet omorganiseres ikke.
+- JSON-normalisering beholder deloppgave-arrayets lagrede rekkefølge.
+- Direkte sammenligning mot v1.8.1 bekrefter at dashboard-rendering, oppgavekort, eksport, `updateSubtasksSafely()` og hele `js/todos.js` er uendret.
+- `node --check` bestått for `app.js`, `js/todos.js`, `firestore.js` og `service-worker.js`.
+- Firestore-emulatortestene består: 19/19.
+- `git diff --check` bestått (kun forventede advarsler om linjeskift på Windows).
+
 ## v1.8.1 - 2026-09-02
 
 ### Tydelig sletting og umiddelbar angre

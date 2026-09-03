@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.8.1`
+Gjeldende appversjon: `v1.8.2`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -250,6 +250,8 @@ Skjulte kategorier kan fortsatt vises på gamle oppgaver, men kan ikke velges so
 
 ## Deloppgaver og frister
 Deloppgaver kan ha egne deadlines. Disse brukes i dashboardets hasteberegning og i oppgavekortene. Deloppgaver med frist i dag eller denne uken kan løfte hovedoppgaven opp i dashboardet selv om hovedoppgavens egen frist er senere.
+
+I oppgavemodalen vises deloppgaver stigende etter frist, med deloppgaver uten frist sist. Sorteringen skjer bare på en visningskopi som beholder indeks til det lagrede arrayet; avkryssing, fristendring og sletting oppdaterer derfor riktig element uten å endre rekkefølgen i Firestore. Begge modal-fanene viser alltid absolutt dato sammen med den relative etiketten `Forfalt`, `I dag`, `I morgen` eller `Om N d` når den er relevant. Fullførte deloppgaver viser `Fullført`, og udaterte viser `Ingen frist`.
 
 ## Eksport og sikkerhetskopi
 Admin har et eget kort under Administrasjon for å laste ned en manuell øyeblikkskopi. Eksporten henter ett rått snapshot fra hver av samlingene `tasks`, `todos`, `categories`, `users`, `allowedUsers` og `comments`. Soft-slettede oppgaver og ToDo-er er med; varsler utelates fordi de er avledede og forgjengelige.
