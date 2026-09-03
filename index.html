@@ -148,24 +148,36 @@
           <div class="dashboard-sections">
             <section class="dashboard-section dashboard-section-wide">
               <div class="section-header-row">
-                <h2 class="section-title">Fokus nå</h2>
-                <span class="section-subtitle">Forfalt · Frist i dag · Pågår med høy prioritet</span>
+                <h2 class="section-title">Forfalt og i dag <span id="overdue-today-count" class="dashboard-section-count">0</span></h2>
               </div>
-              <div id="today-priority-list" class="priority-group-list"></div>
+              <div id="overdue-today-list" class="priority-group-list"></div>
             </section>
             <section class="dashboard-section dashboard-section-wide">
               <div class="section-header-row">
-                <h2 class="section-title">Planlegg denne uken</h2>
-                <span class="section-subtitle">Høy prioritet vises 14 dager frem</span>
+                <h2 class="section-title">Neste 7 dager <span id="next-seven-count" class="dashboard-section-count">0</span></h2>
               </div>
-              <div id="week-priority-list" class="priority-group-list"></div>
+              <div id="next-seven-list" class="priority-group-list"></div>
+            </section>
+            <section id="dashboard-in-progress-section" class="dashboard-section dashboard-section-wide dashboard-collapsible-section">
+              <button class="dashboard-section-toggle" type="button" onclick="toggleDashboardSection('inProgress')" aria-expanded="true" aria-controls="in-progress-list">
+                <span class="section-title">I gang <span id="in-progress-count" class="dashboard-section-count">0</span></span>
+                <svg class="dashboard-section-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div id="in-progress-list" class="priority-group-list dashboard-collapsible-content"></div>
+            </section>
+            <section id="dashboard-later-section" class="dashboard-section dashboard-section-wide dashboard-collapsible-section">
+              <button class="dashboard-section-toggle" type="button" onclick="toggleDashboardSection('later')" aria-expanded="false" aria-controls="later-list">
+                <span class="section-title">Kommer senere <span id="later-count" class="dashboard-section-count">0</span></span>
+                <svg class="dashboard-section-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div id="later-list" class="priority-group-list dashboard-collapsible-content"></div>
             </section>
             <section class="dashboard-section">
-              <h2 class="section-title">Uten ansvarlig</h2>
+              <h2 class="section-title">Uten ansvarlig <span id="unassigned-section-count" class="dashboard-section-count">0</span></h2>
               <div id="unassigned-tasks-list" class="task-list-compact unassigned-dashboard-list"></div>
             </section>
             <section class="dashboard-section">
-              <h2 class="section-title">Teamoversikt</h2>
+              <h2 class="section-title">Teamoversikt <span id="team-overview-count" class="dashboard-section-count">0</span></h2>
               <div id="team-workload-list" class="team-workload-list"></div>
             </section>
           </div>

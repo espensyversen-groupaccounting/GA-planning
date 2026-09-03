@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.8.2`
+Gjeldende appversjon: `v1.9.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -156,10 +156,16 @@ Toppkort:
 - `Høy prioritet`: åpne oppgaver eller ToDo-er med høy prioritet.
 
 Dashboardseksjoner:
-- `Prioriter i dag`: forfalte oppgaver og oppgaver/deloppgaver med frist i dag, gruppert etter `Høy`, `Medium`, `Lav`.
-- `Planlegg denne uken`: kommende oppgaver/deloppgaver innen 1-7 dager, gruppert etter prioritet.
+- `Forfalt og i dag`: åpne oppgaver, deloppgaver og ToDo-er med passert frist eller frist i dag.
+- `Neste 7 dager`: åpne oppgaver, deloppgaver og ToDo-er med frist fra i morgen til og med syv dager frem.
+- `I gang`: påbegynte oppgaver som ikke allerede er fanget av de to første tidsvinduene. Seksjonen er åpen som standard og kan kollapses.
+- `Kommer senere`: oppgaver og deloppgaver med frist 8–30 dager frem som ikke allerede ligger i en tidligere seksjon. ToDo-er tas ikke med. Seksjonen er lukket som standard.
 - `Uten ansvarlig`: åpne oppgaver og ToDo-er som må delegeres. Listen viser alle elementene i samme hastegradssortering som ellers, men ruller internt når den blir høyere enn omtrent seks til syv kort.
 - `Teamoversikt`: viser åpne oppgaver/ToDo-er og risikopunkter per person. I `Mine`-visning skjules denne og brukeren får beskjed om å bytte til Team for teamfordeling.
+
+Dashboardets tidsvinduer klassifiseres ett sted i `classifyDashboardItem()`. Et element eies av den første seksjonen det kvalifiserer til, slik at det ikke dupliseres mellom hovedseksjonene. `Uten ansvarlig` og `Teamoversikt` er tverrgående unntak. Når en deloppgave utløser plasseringen, vises relevante deloppgaver med tittel, absolutt dato og relativ etikett under hovedkortet. I `I gang` vises utfylt `dependencies` som en escapet blokkertmelding.
+
+Oppgaver og ToDo-er i de blandede tidsseksjonene har egne tekst- og ikonbaserte typeindikatorer. Skillet er derfor ikke avhengig av farge. Alle tidsseksjoner er gruppert etter prioritet og sortert med den eksisterende hasteberegningen. Kollapstilstanden for `I gang` og `Kommer senere` lagres lokalt i nettleseren.
 
 På mobil er dashboardet komprimert: toppkortene vises som horisontale chips og kort/spacing er strammet inn slik at prioriterte oppgaver kommer tidligere på skjermen. Desktop-layouten er beholdt bred og mer informasjonsrik.
 

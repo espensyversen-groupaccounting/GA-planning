@@ -1,5 +1,34 @@
 # Development Log
 
+## v1.9.0 - 2026-09-03
+
+### Tidsstyrt dashboard
+- Erstattet `Fokus nå` og `Planlegg denne uken` med `Forfalt og i dag`, `Neste 7 dager`, `I gang` og `Kommer senere` i bindende prioriteringsrekkefølge.
+- `classifyDashboardItem()` klassifiserer hvert åpent element ett sted og returnerer nøyaktig én hovedseksjon. Dette hindrer duplikater uten å endre eksisterende hasteberegning.
+- ToDo-er deltar i de to nærmeste tidsvinduene, men ikke i `Kommer senere`.
+- `I gang` er åpen som standard. `Kommer senere` er lukket som standard. Begge kollapstilstander lagres i `localStorage`.
+
+### Handlingsinformasjon på kortene
+- Oppgaver som løftes av deloppgavefrister viser de utløsende deloppgavene med tittel, dato og relativ etikett under hovedkortet.
+- Påbegynte oppgaver med innhold i `dependencies` viser en tydelig, HTML-escapet blokkertmelding.
+- Oppgave og ToDo skilles med både typeikon og tekst, slik at skillet fungerer uten farge.
+- Alle seksjonsoverskrifter viser antall unike kort. `Uten ansvarlig` og `Teamoversikt` beholder eksisterende innhold og layout.
+
+### Avgrensning og versjon
+- Toppkortenes markup og tellelogikk, `taskUrgencyScore()`, `compareTasksByUrgency()`, `taskSignals()`, oppgavekort, Oppgaver-fanen, ToDo-fanen, ToDo-panelet, oppgavemodalen, eksport og Firestore-regler er uendret.
+- Versjon bumpet til `1.9.0` i alle tre versjonskilder; klientbuild er `1900`.
+
+### Kontroll
+- Lokal Chrome-test består: 22/22 klassifiserings- og desktopkontroller, 3/3 reload-/persistenskontroller og 5/5 mobilkontroller.
+- Testdata dekker oppgave, deloppgave og ToDo i alle fire tidsvinduer, påbegynt arbeid, blokkerttekst, Team/Mine, tomtilstander, fullførte elementer og frister utenfor 30 dager.
+- De kritiske testene består: oppgave uten hovedfrist løftes av deloppgave i dag med synlig deloppgavelinje; ToDo om 20 dager utelates; ingen element-ID forekommer i mer enn én hovedseksjon; toppkorttallene er identiske med eksisterende beregning.
+- Kollapstilstand er kontrollert etter full sidelasting. Mobil ved 390 × 844 px har ingen horisontal side-scroll, og alle seksjoner og kontrollknapper holder seg innenfor viewporten.
+- Visuell kontroll er utført med representative skjermbilder på 1440 × 900 px og 390 × 844 px.
+- Direkte sammenligning mot v1.8.2 bekrefter uendret kildekode for toppkortmarkup/-telling, `taskSignals()`, `taskUrgencyScore()`, `compareTasksByUrgency()`, oppgavekort, Oppgaver-fanen, oppgavemodalen, eksporten og hele `js/todos.js`.
+- `node --check` bestått for `app.js`, `js/todos.js`, `firestore.js` og `service-worker.js`.
+- Firestore-emulatortestene består: 19/19.
+- `git diff --check` bestått (kun forventede advarsler om linjeskift på Windows).
+
 ## v1.8.2 - 2026-09-03
 
 ### Deloppgaver i fristrekkefølge

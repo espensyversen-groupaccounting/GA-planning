@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.8.2';
+const APP_VERSION = '1.9.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -26,6 +26,10 @@ const state = {
   editMode: false,
   quickFilter: '',
   dashboardScope: localStorage.getItem('dashboardScope') || 'mine',
+  dashboardSectionCollapsed: {
+    inProgress: localStorage.getItem('dashboardInProgressCollapsed') === 'true',
+    later: localStorage.getItem('dashboardLaterCollapsed') !== 'false',
+  },
   todoViewFilter: 'open',
   todoViewPriority: '',
   todoViewAssignee: '',
@@ -655,6 +659,43 @@ function subscribeToRealtime() {
 // DASHBOARD
 // ============================================================
 
+function classifyDashboardItem(item, type) {
+  const ownDueDays = taskDueDays(item);
+  const datedSubtasks = type === 'task'
+    ? (item.subtasks || [])
+        .filter(subtask => !subtask.completed && subtask.dueDate)
+        .map(subtask => ({ subtask, dueDays: subtaskDueDays(subtask) }))
+        .filter(entry => Number.isFinite(entry.dueDays))
+    : [];
+  const inWindow = (days, min, max) => Number.isFinite(days) && days >= min && days <= max;
+  const matchingSubtasks = (min, max) => datedSubtasks
+    .filter(entry => inWindow(entry.dueDays, min, max))
+    .sort((a, b) => a.dueDays - b.dueDays)
+    .map(entry => entry.subtask);
+
+  if (inWindow(ownDueDays, -Infinity, 0) || matchingSubtasks(-Infinity, 0).length) {
+    return { section: 'overdueToday', triggerSubtasks: matchingSubtasks(-Infinity, 0) };
+  }
+  if (inWindow(ownDueDays, 1, 7) || matchingSubtasks(1, 7).length) {
+    return { section: 'nextSeven', triggerSubtasks: matchingSubtasks(1, 7) };
+  }
+  if (type === 'task' && item.status === 'i_gang') {
+    return { section: 'inProgress', triggerSubtasks: [] };
+  }
+  if (type === 'task' && (inWindow(ownDueDays, 8, 30) || matchingSubtasks(8, 30).length)) {
+    return { section: 'later', triggerSubtasks: matchingSubtasks(8, 30) };
+  }
+  return { section: null, triggerSubtasks: [] };
+}
+
+function dashboardEntries(tasks, todos) {
+  return [
+    ...tasks.map(item => ({ item, type: 'task' })),
+    ...todos.map(item => ({ item, type: 'todo' })),
+  ].map(entry => ({ ...entry, ...classifyDashboardItem(entry.item, entry.type) }))
+    .filter(entry => entry.section);
+}
+
 function renderDashboard() {
   updateDashboardScopeButtons();
   const tasks = scopedTasks();
@@ -671,25 +712,6 @@ function renderDashboard() {
   const unassignedTodos = openTodos.filter(t => !t.assignedTo);
   const high = open.filter(t => t.priority === 'høy');
   const highTodos = openTodos.filter(t => t.priority === 'høy');
-  // Todos som er urgente – løftes inn i "Fokus nå"
-  const fokusOverdueTodos = openTodos.filter(t => taskDueDays(t) < 0).map(t => ({ ...t, _isTodo: true }));
-  const fokusTodayTodos   = openTodos.filter(t => taskDueDays(t) === 0).map(t => ({ ...t, _isTodo: true }));
-
-  // "Fokus nå" – tasks og todos kombinert
-  const fokusOverdue    = [...today.filter(t => taskDueDays(t) < 0), ...fokusOverdueTodos].sort(compareTasksByUrgency);
-  const fokusToday      = [...today.filter(t => taskDueDays(t) >= 0), ...fokusTodayTodos].sort(compareTasksByUrgency);
-  const fokusInProgress = open.filter(t =>
-    t.status === 'i_gang' && t.priority === 'høy' && !dueTodayOrOverdue(t)
-  ).sort(compareTasksByUrgency);
-
-  // "Planlegg denne uken" – 14 dagers vindu for høy prioritet, 7 dager for øvrige
-  const fokusIds = new Set([...today, ...fokusInProgress].map(t => t.id));
-  const weekPriority = open.filter(t => {
-    if (fokusIds.has(t.id)) return false;
-    if (t.priority === 'høy')
-      return (taskDueDays(t) >= 1 && taskDueDays(t) <= 14) || taskHasSubtaskDueBetween(t, 1, 14);
-    return (taskDueDays(t) >= 1 && taskDueDays(t) <= 7) || taskHasSubtaskDueBetween(t, 1, 7);
-  }).sort(compareTasksByUrgency);
 
   document.getElementById('stats-grid').innerHTML = `
     <button class="stat-card stat-overdue" type="button" onclick="openTasksWithQuickFilter('attention')">
@@ -714,12 +736,39 @@ function renderDashboard() {
     </button>
   `;
 
-  renderFokusNa(fokusOverdue, fokusToday, fokusInProgress);
-  renderPriorityGroups('week-priority-list', weekPriority, 'Ingen oppgaver planlagt de neste 14 dagene');
+  const entries = dashboardEntries(open, openTodos);
+  const bySection = section => entries.filter(entry => entry.section === section);
+  renderDashboardPrioritySection(
+    'overdue-today-list',
+    bySection('overdueToday'),
+    'Alt er under kontroll – ingen frister har passert eller forfaller i dag.'
+  );
+  renderDashboardPrioritySection(
+    'next-seven-list',
+    bySection('nextSeven'),
+    'Ingen oppgaver, deloppgaver eller ToDo-er forfaller de neste 7 dagene.'
+  );
+  renderDashboardPrioritySection(
+    'in-progress-list',
+    bySection('inProgress'),
+    'Ingen påbegynte oppgaver ligger utenfor de nærmeste fristene.',
+    { showBlocked: true }
+  );
+  renderDashboardPrioritySection(
+    'later-list',
+    bySection('later'),
+    'Ingen oppgaver eller deloppgaver er planlagt 8–30 dager frem.'
+  );
+  updateDashboardSection('overdueToday', bySection('overdueToday').length);
+  updateDashboardSection('nextSeven', bySection('nextSeven').length);
+  updateDashboardSection('inProgress', bySection('inProgress').length);
+  updateDashboardSection('later', bySection('later').length);
+
   const unassignedItems = [
     ...unassigned,
     ...unassignedTodos.map(todo => ({ ...todo, _isTodo: true }))
   ].sort(compareTasksByUrgency);
+  document.getElementById('unassigned-section-count').textContent = unassignedItems.length;
   renderCompactList('unassigned-tasks-list', unassignedItems, 'Alle åpne oppgaver og ToDo-er har ansvarlig');
   renderTeamWorkload([...open, ...openTodos]);
   renderTodoPanel();
@@ -739,9 +788,11 @@ function setDashboardScope(scope) {
 
 function renderTeamWorkload(openItems) {
   const el = document.getElementById('team-workload-list');
+  const countEl = document.getElementById('team-overview-count');
   if (!el) return;
 
   if (state.dashboardScope === 'mine') {
+    if (countEl) countEl.textContent = '0';
     el.innerHTML = `<div class="empty-state compact-empty"><p>Bytt til Team for å se fordeling per person</p></div>`;
     return;
   }
@@ -756,6 +807,7 @@ function renderTeamWorkload(openItems) {
     };
   }).filter(row => row.total > 0 || row.urgent > 0)
     .sort((a, b) => b.urgent - a.urgent || b.total - a.total);
+  if (countEl) countEl.textContent = assignedUsers.length;
 
   if (!assignedUsers.length) {
     el.innerHTML = `<div class="empty-state compact-empty"><p>Ingen åpne oppgaver er tildelt ennå</p></div>`;
@@ -787,36 +839,54 @@ function renderCompactList(containerId, tasks, emptyMsg) {
   ).join('');
 }
 
-function renderFokusNa(overdue, today, inProgress) {
-  const el = document.getElementById('today-priority-list');
-  if (!el) return;
-  const total = overdue.length + today.length + inProgress.length;
-  if (!total) {
-    el.innerHTML = `<div class="empty-state compact-empty"><p>Alt er under kontroll — ingenting krever umiddelbar handling</p></div>`;
-    return;
-  }
-  const groups = [
-    { key: 'overdue',    label: 'Forfalt',               items: overdue },
-    { key: 'today',      label: 'Frist i dag',            items: today },
-    { key: 'inprogress', label: 'Pågår — høy prioritet',  items: inProgress },
-  ].filter(g => g.items.length);
-  el.innerHTML = groups.map(g => `
-    <div class="priority-group">
-      <div class="priority-group-title">
-        <span class="fokus-dot fokus-dot--${g.key}"></span>
-        <span>${g.label}</span>
-        <span class="priority-group-count">${g.items.length}</span>
-      </div>
-      <div class="task-list-compact">
-        ${g.items.map(t => t._isTodo ? todoCardHtml(t, { sortable: false }) : taskCardHtml(t, true)).join('')}
-      </div>
-    </div>`).join('');
+function dashboardItemKindHtml(type) {
+  const isTodo = type === 'todo';
+  return `
+    <span class="dashboard-item-kind dashboard-item-kind--${type}">
+      ${isTodo
+        ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="8 12 11 15 16 9"/></svg>'
+        : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>'}
+      ${isTodo ? 'ToDo' : 'Oppgave'}
+    </span>`;
 }
 
-function renderPriorityGroups(containerId, tasks, emptyMsg) {
+function dashboardSubtaskLinesHtml(subtasks) {
+  if (!subtasks.length) return '';
+  return `
+    <div class="dashboard-subtask-lines" aria-label="Relevante deloppgaver">
+      ${subtasks.map(subtask => `
+        <div class="dashboard-subtask-line ${subtaskDueClass(subtask)}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          <span class="dashboard-subtask-title">${esc(subtask.title)}</span>
+          <span class="dashboard-subtask-date">${subtaskDueLabel(subtask)}</span>
+        </div>`).join('')}
+    </div>`;
+}
+
+function dashboardItemHtml(entry, options = {}) {
+  const itemHtml = entry.type === 'todo'
+    ? todoCardHtml(entry.item, { sortable: false })
+    : taskCardHtml(entry.item, true);
+  const dependencies = entry.type === 'task' ? String(entry.item.dependencies || '').trim() : '';
+  const blockedHtml = options.showBlocked && dependencies ? `
+    <div class="dashboard-blocked-note">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      <strong>Blokkert</strong>
+      <span>${esc(dependencies)}</span>
+    </div>` : '';
+  return `
+    <div class="dashboard-item dashboard-item--${entry.type}" data-dashboard-item-id="${esc(entry.item.id)}" data-dashboard-item-type="${entry.type}">
+      ${dashboardItemKindHtml(entry.type)}
+      ${itemHtml}
+      ${dashboardSubtaskLinesHtml(entry.triggerSubtasks)}
+      ${blockedHtml}
+    </div>`;
+}
+
+function renderDashboardPrioritySection(containerId, entries, emptyMsg, options = {}) {
   const el = document.getElementById(containerId);
   if (!el) return;
-  if (!tasks.length) {
+  if (!entries.length) {
     el.innerHTML = `<div class="empty-state compact-empty"><p>${emptyMsg}</p></div>`;
     return;
   }
@@ -828,20 +898,62 @@ function renderPriorityGroups(containerId, tasks, emptyMsg) {
   ];
 
   el.innerHTML = groups.map(group => {
-    const groupTasks = tasks.filter(t => t.priority === group.key).sort(compareTasksByUrgency);
-    if (!groupTasks.length) return '';
+    const groupEntries = entries
+      .filter(entry => (entry.item.priority || 'medium') === group.key)
+      .sort((a, b) => compareTasksByUrgency(a.item, b.item));
+    if (!groupEntries.length) return '';
     return `
       <div class="priority-group">
         <div class="priority-group-title">
           <span class="priority-dot ${group.key}"></span>
           <span>${group.label}</span>
-          <span class="priority-group-count">${groupTasks.length}</span>
+          <span class="priority-group-count">${groupEntries.length}</span>
         </div>
         <div class="task-list-compact">
-          ${groupTasks.map(t => taskCardHtml(t, true)).join('')}
+          ${groupEntries.map(entry => dashboardItemHtml(entry, options)).join('')}
         </div>
       </div>`;
   }).join('');
+}
+
+const dashboardSectionElements = {
+  overdueToday: { countId: 'overdue-today-count' },
+  nextSeven: { countId: 'next-seven-count' },
+  inProgress: {
+    countId: 'in-progress-count',
+    sectionId: 'dashboard-in-progress-section',
+    contentId: 'in-progress-list',
+    storageKey: 'dashboardInProgressCollapsed',
+  },
+  later: {
+    countId: 'later-count',
+    sectionId: 'dashboard-later-section',
+    contentId: 'later-list',
+    storageKey: 'dashboardLaterCollapsed',
+  },
+};
+
+function updateDashboardSection(sectionKey, count) {
+  const config = dashboardSectionElements[sectionKey];
+  if (!config) return;
+  const countEl = document.getElementById(config.countId);
+  if (countEl) countEl.textContent = count;
+  if (!config.sectionId) return;
+  const collapsed = Boolean(state.dashboardSectionCollapsed[sectionKey]);
+  const section = document.getElementById(config.sectionId);
+  const content = document.getElementById(config.contentId);
+  const button = section?.querySelector('.dashboard-section-toggle');
+  section?.classList.toggle('is-collapsed', collapsed);
+  if (content) content.hidden = collapsed;
+  button?.setAttribute('aria-expanded', String(!collapsed));
+}
+
+function toggleDashboardSection(sectionKey) {
+  const config = dashboardSectionElements[sectionKey];
+  if (!config?.storageKey) return;
+  state.dashboardSectionCollapsed[sectionKey] = !state.dashboardSectionCollapsed[sectionKey];
+  localStorage.setItem(config.storageKey, String(state.dashboardSectionCollapsed[sectionKey]));
+  updateDashboardSection(sectionKey, document.getElementById(config.countId)?.textContent || 0);
 }
 
 function openTasksWithQuickFilter(filter) {
