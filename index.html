@@ -214,6 +214,8 @@
             <button class="quick-filter" type="button" data-quick-filter="week">Denne uken</button>
             <button class="quick-filter" type="button" data-quick-filter="soon">Neste 14 dager</button>
             <button class="quick-filter" type="button" data-quick-filter="mine">Mine</button>
+            <button class="quick-filter" type="button" data-quick-filter="owned">Jeg er ansvarlig</button>
+            <button class="quick-filter" type="button" data-quick-filter="participating">Jeg deltar</button>
             <button class="quick-filter" type="button" data-quick-filter="high">Høy prioritet</button>
           </div>
           <div class="tasks-toolbar">
@@ -560,6 +562,16 @@
               <select id="task-assignee" class="form-input">
                 <option value="">Ingen tildelt</option>
               </select>
+            </div>
+            <div id="task-collaborators-field" class="form-group">
+              <label class="form-label" for="task-collaborators-picker">Deltakere</label>
+              <details id="task-collaborators-picker" class="collaborator-picker">
+                <summary>
+                  <span id="task-collaborators-summary">Ingen deltakere</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div id="task-collaborators-options" class="collaborator-options" role="group" aria-label="Velg deltakere"></div>
+              </details>
             </div>
             <div class="form-row">
               <div class="form-group">

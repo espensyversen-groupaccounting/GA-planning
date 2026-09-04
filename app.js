@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.11.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -111,9 +111,31 @@ function isMineItem(item) {
   return state.user && item && item.assignedTo === state.user.uid;
 }
 
+function taskInvolvement(task, userId = state.user?.uid) {
+  if (!task || !userId) {
+    return { owner: false, collaborator: false, subtaskAssignee: false, subtaskTitles: [], involved: false };
+  }
+  const collaborators = Array.isArray(task.collaborators) ? task.collaborators : [];
+  const subtaskTitles = (Array.isArray(task.subtasks) ? task.subtasks : [])
+    .filter(subtask => !subtask.completed && subtask.assignedTo === userId)
+    .map(subtask => subtask.title || 'Deloppgave');
+  const involvement = {
+    owner: task.assignedTo === userId,
+    collaborator: collaborators.includes(userId),
+    subtaskAssignee: subtaskTitles.length > 0,
+    subtaskTitles,
+  };
+  return { ...involvement, involved: involvement.owner || involvement.collaborator || involvement.subtaskAssignee };
+}
+
+function canUpdateTaskStatus(task, userId = state.user?.uid) {
+  const involvement = taskInvolvement(task, userId);
+  return involvement.owner || involvement.collaborator;
+}
+
 function scopedTasks() {
   return state.dashboardScope === 'mine'
-    ? state.tasks.filter(isMineItem)
+    ? state.tasks.filter(task => taskInvolvement(task).involved)
     : state.tasks;
 }
 
@@ -893,14 +915,19 @@ function renderTeamWorkload(openItems) {
 
   const assignedUsers = state.users.map(u => {
     const tasks = openItems.filter(t => t.assignedTo === u.id);
+    const contributing = openItems.filter(item => {
+      const involvement = taskInvolvement(item, u.id);
+      return !involvement.owner && (involvement.collaborator || involvement.subtaskAssignee);
+    });
     return {
       user: u,
       total: tasks.length,
+      contributing: contributing.length,
       urgent: tasks.filter(taskNeedsAttention).length,
       soon: tasks.filter(t => taskDueDays(t) >= 0 && taskDueDays(t) <= 14).length,
     };
-  }).filter(row => row.total > 0 || row.urgent > 0)
-    .sort((a, b) => b.urgent - a.urgent || b.total - a.total);
+  }).filter(row => row.total > 0 || row.contributing > 0 || row.urgent > 0)
+    .sort((a, b) => b.urgent - a.urgent || b.total - a.total || b.contributing - a.contributing);
   if (countEl) countEl.textContent = assignedUsers.length;
 
   if (!assignedUsers.length) {
@@ -915,7 +942,7 @@ function renderTeamWorkload(openItems) {
         : `<span class="workload-avatar">${initials(row.user.displayName || row.user.email)}</span>`}
       <span class="workload-person">
         <span class="workload-name">${esc(row.user.displayName || row.user.email)}</span>
-        <span class="workload-meta">${row.total} åpne${row.soon ? ` · ${row.soon} snart` : ''}</span>
+        <span class="workload-meta">${row.total} åpne${row.contributing ? ` · ${row.contributing} deltar` : ''}${row.soon ? ` · ${row.soon} snart` : ''}</span>
       </span>
       <span class="workload-count ${row.urgent ? 'has-risk' : ''}">${row.urgent}</span>
     </button>`).join('');
@@ -1094,12 +1121,54 @@ function updateQuickFilterButtons() {
 // TASK CARDS HTML
 // ============================================================
 
+function taskCollaboratorsHtml(task) {
+  const ids = Array.isArray(task.collaborators) ? task.collaborators : [];
+  const names = Array.isArray(task.collaboratorNames) ? task.collaboratorNames : [];
+  const people = ids.map((id, index) => ({ id, snapshotName: names[index] || id }))
+    .filter(person => person.id && person.id !== task.assignedTo)
+    .map(person => {
+    const { id, snapshotName } = person;
+    const user = state.users.find(candidate => candidate.id === id);
+    return {
+      id,
+      name: user?.displayName || user?.email || snapshotName,
+      photoURL: user?.photoURL || '',
+      inactive: !user,
+    };
+  });
+  if (!people.length) return '';
+  const visible = people.slice(0, 3);
+  return `
+    <span class="collaborator-avatars" aria-label="${people.length} ${people.length === 1 ? 'deltaker' : 'deltakere'}">
+      ${visible.map(person => person.photoURL
+        ? `<img src="${esc(person.photoURL)}" class="collaborator-avatar ${person.inactive ? 'is-inactive' : ''}" alt="" title="Deltaker: ${esc(person.name)}${person.inactive ? ' (inaktiv)' : ''}" />`
+        : `<span class="collaborator-avatar ${person.inactive ? 'is-inactive' : ''}" title="Deltaker: ${esc(person.name)}${person.inactive ? ' (inaktiv)' : ''}">${esc(initials(person.name))}</span>`
+      ).join('')}
+      ${people.length > visible.length ? `<span class="collaborator-more" title="${esc(people.slice(visible.length).map(person => person.name).join(', '))}">+${people.length - visible.length}</span>` : ''}
+    </span>`;
+}
+
+function taskMineContextHtml(task) {
+  const showContext = state.dashboardScope === 'mine' || ['mine', 'participating'].includes(state.quickFilter);
+  if (!showContext) return '';
+  const involvement = taskInvolvement(task);
+  if (involvement.owner || !involvement.involved) return '';
+  const parts = [];
+  if (involvement.collaborator) parts.push('Du deltar');
+  if (involvement.subtaskAssignee) {
+    const shown = involvement.subtaskTitles.slice(0, 2).map(esc).join(', ');
+    const extra = involvement.subtaskTitles.length > 2 ? ` +${involvement.subtaskTitles.length - 2}` : '';
+    parts.push(`Din${involvement.subtaskTitles.length > 1 ? 'e' : ''} deloppgave${involvement.subtaskTitles.length > 1 ? 'r' : ''}: ${shown}${extra}`);
+  }
+  return `<div class="task-involvement-reason">${parts.join(' · ')}</div>`;
+}
+
 function taskCardHtml(task, compact = false) {
   const prog = subtaskProgress(task.subtasks);
   const dateClass = dueDateClass(task.dueDate);
   const assignee = state.users.find(u => u.id === task.assignedTo);
   const isDone = task.status === 'fullfort';
-  const canQuickChange = canEdit() || (state.user && task.assignedTo === state.user.uid);
+  const canQuickChange = canEdit() || canUpdateTaskStatus(task);
   const checkBtn = canQuickChange ? `
     <button class="task-check-btn${isDone ? ' checked' : ''}"
             onclick="quickStatusChange('${task.id}','${isDone ? 'i_gang' : 'fullfort'}',event)"
@@ -1134,6 +1203,8 @@ function taskCardHtml(task, compact = false) {
     </span>` : '';
   const categoryHtml = categoryChipHtml(task);
   const signalHtml = taskSignals(task).map(s => `<span class="risk-badge ${s.key}">${s.label}</span>`).join('');
+  const collaboratorsHtml = taskCollaboratorsHtml(task);
+  const involvementHtml = taskMineContextHtml(task);
 
   if (compact) {
     return `
@@ -1147,10 +1218,12 @@ function taskCardHtml(task, compact = false) {
           ${signalHtml}
           ${categoryHtml}
           ${assigneeHtml}
+          ${collaboratorsHtml}
           ${dueDateHtml}
           ${undoDoneBtn}
         </div>
         ${progressHtml}
+        ${involvementHtml}
       </div>`;
   }
 
@@ -1172,11 +1245,13 @@ function taskCardHtml(task, compact = false) {
           ${priorityLabel(task.priority)}
         </span>
         ${assigneeHtml}
+        ${collaboratorsHtml}
         ${dueDateHtml}
         ${prog ? `<span style="font-size:.75rem;color:var(--text-2)">${prog.done}/${prog.total} deloppgaver</span>` : ''}
         ${undoDoneBtn}
       </div>
       ${progressHtml}
+      ${involvementHtml}
     </div>`;
 }
 
@@ -1209,7 +1284,12 @@ function renderTasksList() {
   if (state.quickFilter === 'week') items = items.filter(t => !isDoneItem(t) && (dueTodayOrOverdue(t) || dueThisWeek(t)));
   if (state.quickFilter === 'unassigned') items = items.filter(t => !isDoneItem(t) && !t.assignedTo);
   if (state.quickFilter === 'soon') items = items.filter(t => !isDoneItem(t) && dueNext14Days(t));
-  if (state.quickFilter === 'mine') items = items.filter(t => !isDoneItem(t) && t.assignedTo === state.user.uid);
+  if (state.quickFilter === 'mine') items = items.filter(t => !isDoneItem(t) && taskInvolvement(t).involved);
+  if (state.quickFilter === 'owned') items = items.filter(t => !isDoneItem(t) && taskInvolvement(t).owner);
+  if (state.quickFilter === 'participating') items = items.filter(t => {
+    const involvement = taskInvolvement(t);
+    return !isDoneItem(t) && !involvement.owner && (involvement.collaborator || involvement.subtaskAssignee);
+  });
   if (state.quickFilter === 'high') items = items.filter(t => !isDoneItem(t) && t.priority === 'høy');
 
   items.sort(compareTasksByUrgency);
@@ -1246,7 +1326,77 @@ function replaceSelectOptions(select, options, canRestore) {
   if (current && canRestore(current)) select.value = current;
 }
 
+function collaboratorSelectionsFromTask(task) {
+  const ids = Array.isArray(task?.collaborators) ? task.collaborators : [];
+  const names = Array.isArray(task?.collaboratorNames) ? task.collaboratorNames : [];
+  return ids.map((id, index) => ({ id, name: names[index] || id }));
+}
+
+function selectedCollaboratorsFromForm() {
+  return [...document.querySelectorAll('#task-collaborators-options input[type="checkbox"]:checked')]
+    .map(input => ({
+      id: input.value,
+      name: input.dataset.name || input.value,
+      preservedInactive: input.dataset.preservedInactive === 'true',
+    }));
+}
+
+function updateCollaboratorSummary() {
+  const summary = document.getElementById('task-collaborators-summary');
+  if (!summary) return;
+  const selected = selectedCollaboratorsFromForm();
+  summary.textContent = selected.length
+    ? `${selected.length} ${selected.length === 1 ? 'deltaker' : 'deltakere'} valgt`
+    : 'Ingen deltakere';
+}
+
+function renderCollaboratorPicker(selections = []) {
+  const optionsEl = document.getElementById('task-collaborators-options');
+  if (!optionsEl) return;
+  const ownerId = document.getElementById('task-assignee')?.value || '';
+  const selectedById = new Map(selections
+    .filter(selection => selection.id && selection.id !== ownerId)
+    .map(selection => [selection.id, selection]));
+  const activeIds = new Set(state.users.map(user => user.id));
+  const readonly = Boolean(state.activeTaskId) && !canEdit();
+  const activeOptions = state.users
+    .filter(user => user.id !== ownerId)
+    .map(user => {
+      const name = user.displayName || user.email || user.id;
+      return `
+        <label class="collaborator-option">
+          <input type="checkbox" value="${esc(user.id)}" data-name="${esc(name)}"
+            ${selectedById.has(user.id) ? 'checked' : ''} ${readonly ? 'disabled' : ''}
+            onchange="updateCollaboratorSummary()" />
+          ${user.photoURL
+            ? `<img src="${esc(user.photoURL)}" class="collaborator-option-avatar" alt="" />`
+            : `<span class="collaborator-option-avatar">${esc(initials(name))}</span>`}
+          <span>${esc(name)}</span>
+        </label>`;
+    });
+  const inactiveOptions = [...selectedById.values()]
+    .filter(selection => !activeIds.has(selection.id))
+    .map(selection => `
+      <label class="collaborator-option is-inactive">
+        <input type="checkbox" value="${esc(selection.id)}" data-name="${esc(selection.name)}"
+          data-preserved-inactive="true" checked ${readonly ? 'disabled' : ''}
+          onchange="updateCollaboratorSummary()" />
+        <span class="collaborator-option-avatar">${esc(initials(selection.name))}</span>
+        <span>${esc(selection.name)} <small>Inaktiv</small></span>
+      </label>`);
+  optionsEl.innerHTML = [...activeOptions, ...inactiveOptions].join('') ||
+    '<p class="collaborator-empty">Ingen tilgjengelige teammedlemmer</p>';
+  document.getElementById('task-collaborators-picker')?.classList.toggle('is-readonly', readonly);
+  updateCollaboratorSummary();
+}
+
+function handleTaskAssigneeChange() {
+  const ownerId = document.getElementById('task-assignee')?.value || '';
+  renderCollaboratorPicker(selectedCollaboratorsFromForm().filter(selection => selection.id !== ownerId));
+}
+
 function populateAssigneeSelects() {
+  const collaboratorSelections = selectedCollaboratorsFromForm();
   const opts = ['<option value="">Alle ansvarlige</option>',
     '<option value="__unassigned">Uten ansvarlig</option>',
     ...state.users.map(u => `<option value="${u.id}">${esc(u.displayName || u.email)}</option>`)
@@ -1263,6 +1413,7 @@ function populateAssigneeSelects() {
     value => value === '__unassigned' || isCurrentUser(value)
   );
   replaceSelectOptions(document.getElementById('task-assignee'), formOpts, isCurrentUser);
+  renderCollaboratorPicker(collaboratorSelections);
   replaceSelectOptions(document.getElementById('todo-assignee'), formOpts, isCurrentUser);
   replaceSelectOptions(document.getElementById('todo-panel-assignee'), formOpts, isCurrentUser);
   replaceSelectOptions(document.getElementById('todo-edit-assignee'), formOpts, isCurrentUser);
@@ -1375,7 +1526,7 @@ async function openTaskModal(taskId = null, prefetchedTask = null) {
     document.getElementById('modal-title').textContent = task.title;
     state.activeTaskDetailsUpdatedAt = task.detailsUpdatedAt || task.updatedAt || null;
     fillTaskForm(task);
-    updateStatusStepper(task.status);
+    updateStatusStepper(task.status, task);
     updateModalButtons(task);
     renderSubtasks(task.subtasks || []);
     renderSubtaskTimeline(task.subtasks || []);
@@ -1388,6 +1539,7 @@ async function openTaskModal(taskId = null, prefetchedTask = null) {
     document.getElementById('subtasks-list').innerHTML = '';
     renderSubtaskTimeline([]);
     document.getElementById('comments-list').innerHTML = '';
+    renderCollaboratorPicker([]);
     updateStatusStepper('ikke_startet');
     updateModalButtons(null);
   }
@@ -1420,6 +1572,7 @@ function fillTaskForm(task) {
   if (categoryEl) categoryEl.value = task.categoryId || '';
   document.getElementById('task-status').value = task.status || 'ikke_startet';
   document.getElementById('task-assignee').value = task.assignedTo || '';
+  renderCollaboratorPicker(collaboratorSelectionsFromTask(task));
   document.getElementById('task-dependencies').value = task.dependencies || '';
 
   if (task.startDate) {
@@ -1443,13 +1596,15 @@ function updateModalButtons(task) {
   const cancelBtn = document.getElementById('btn-cancel-task');
 
   deleteBtn.classList.toggle('hidden', !task || !canEdit());
-  undoBtn.classList.toggle('hidden', !task || task.status !== 'fullfort' || !(canEdit() || task.assignedTo === state.user.uid));
+  const canChangeStatus = task && (canEdit() || canUpdateTaskStatus(task));
+  undoBtn.classList.toggle('hidden', !task || task.status !== 'fullfort' || !canChangeStatus);
   saveBtn.textContent  = task ? 'Lagre endringer' : 'Opprett oppgave';
 
-  // Membres can only change status on their own tasks
+  // Medlemmer kan endre hovedstatus når de eier eller deltar på oppgaven.
   if (task && !canEdit()) {
-    if (task.assignedTo === state.user.uid) {
+    if (canChangeStatus) {
       saveBtn.textContent = 'Oppdater status';
+      saveBtn.classList.remove('hidden');
     } else {
       saveBtn.classList.add('hidden');
     }
@@ -1464,8 +1619,13 @@ function setFormReadOnly(readonly) {
       const el = document.getElementById(id);
       if (el) el.disabled = readonly;
     });
+  document.querySelectorAll('#task-collaborators-options input').forEach(input => {
+    input.disabled = readonly;
+  });
+  document.getElementById('task-collaborators-picker')?.classList.toggle('is-readonly', readonly);
   const statusEl = document.getElementById('task-status');
-  if (statusEl) statusEl.disabled = false; // status always editable for assigned
+  const activeTask = state.tasks.find(task => task.id === state.activeTaskId);
+  if (statusEl) statusEl.disabled = Boolean(activeTask) && !canEdit() && !canUpdateTaskStatus(activeTask);
 }
 
 async function handleSaveTask() {
@@ -1485,6 +1645,9 @@ async function handleSaveTask() {
 
   const assignee = state.users.find(u => u.id === assigneeId);
   const category = state.categories.find(c => c.id === categoryId);
+  const collaboratorSelections = selectedCollaboratorsFromForm()
+    .filter(selection => selection.id !== assigneeId)
+    .filter(selection => state.users.some(user => user.id === selection.id) || selection.preservedInactive);
 
   const data = {
     title,
@@ -1496,6 +1659,11 @@ async function handleSaveTask() {
     status,
     assignedTo: assigneeId || null,
     assignedToName: assignee ? (assignee.displayName || assignee.email) : null,
+    collaborators: collaboratorSelections.map(selection => selection.id),
+    collaboratorNames: collaboratorSelections.map(selection => {
+      const activeUser = state.users.find(user => user.id === selection.id);
+      return activeUser ? (activeUser.displayName || activeUser.email || activeUser.id) : selection.name;
+    }),
     startDate: startStr ? firebase.firestore.Timestamp.fromDate(new Date(startStr)) : null,
     dueDate:   dueStr   ? firebase.firestore.Timestamp.fromDate(new Date(dueStr))   : null,
     dependencies: deps,
@@ -1510,6 +1678,10 @@ async function handleSaveTask() {
 
       // If role is Medlem, only allow status update
       if (!canEdit()) {
+        if (!canUpdateTaskStatus(oldTask)) {
+          showToast('Du kan ikke endre status på denne oppgaven.', 'error');
+          return;
+        }
         await updateTask(taskId, { status });
       } else {
         await updateTaskIfUnchanged(taskId, data, state.activeTaskDetailsUpdatedAt);
@@ -1608,13 +1780,17 @@ function renderSubtaskTimeline(subtasks) {
 
   const rows = displaySubtasks.map(({ subtask: s }, i) => {
     const dueClass = subtaskDueClass(s);
+    const assigneeHtml = subtaskAssigneeHtml(s, 'timeline');
     return `
       <div class="subtask-timeline-row ${s.completed ? 'done' : ''} ${dueClass}">
         <div class="subtask-timeline-main">
           <span class="subtask-timeline-index">${i + 1}</span>
           <span class="subtask-timeline-title">${esc(s.title)}</span>
         </div>
-        <span class="subtask-timeline-date">${subtaskDueLabel(s)}</span>
+        <div class="subtask-timeline-meta">
+          ${assigneeHtml}
+          <span class="subtask-timeline-date">${subtaskDueLabel(s)}</span>
+        </div>
       </div>`;
   }).join('');
 
@@ -1635,6 +1811,50 @@ function renderSubtaskTimeline(subtasks) {
       </div>
       <div class="subtask-timeline-rows">${rows}</div>
     </div>`;
+}
+
+function subtaskAssigneeInfo(subtask) {
+  if (!subtask?.assignedTo) return null;
+  const user = state.users.find(candidate => candidate.id === subtask.assignedTo);
+  return {
+    id: subtask.assignedTo,
+    name: user?.displayName || user?.email || subtask.assignedToName || subtask.assignedTo,
+    photoURL: user?.photoURL || '',
+    inactive: !user,
+  };
+}
+
+function subtaskAssigneeHtml(subtask, context = 'list') {
+  const person = subtaskAssigneeInfo(subtask);
+  if (!person) return '';
+  const compact = context === 'timeline';
+  const title = `${person.name}${person.inactive ? ' (inaktiv)' : ''}`;
+  return `
+    <span class="subtask-assignee ${compact ? 'is-compact' : ''} ${person.inactive ? 'is-inactive' : ''}"
+          title="${esc(title)}">
+      ${person.photoURL
+        ? `<img src="${esc(person.photoURL)}" class="subtask-assignee-avatar" alt="" />`
+        : `<span class="subtask-assignee-avatar">${esc(initials(person.name))}</span>`}
+      <span class="subtask-assignee-name">${esc(person.name)}</span>
+      ${person.inactive ? '<span class="subtask-assignee-state">Inaktiv</span>' : ''}
+    </span>`;
+}
+
+function subtaskAssigneeOptions(subtask) {
+  const selectedId = subtask?.assignedTo || '';
+  const selected = subtaskAssigneeInfo(subtask);
+  const activeIds = new Set(state.users.map(user => user.id));
+  const options = [
+    '<option value="">Ingen ansvarlig</option>',
+    ...state.users.map(user => {
+      const name = user.displayName || user.email || user.id;
+      return `<option value="${esc(user.id)}" ${user.id === selectedId ? 'selected' : ''}>${esc(name)}</option>`;
+    }),
+  ];
+  if (selected && !activeIds.has(selected.id)) {
+    options.push(`<option value="${esc(selected.id)}" selected>Inaktiv: ${esc(selected.name)}</option>`);
+  }
+  return options.join('');
 }
 
 function renderSubtasks(subtasks) {
@@ -1660,8 +1880,10 @@ function renderSubtasks(subtasks) {
         <span class="subtask-title ${s.completed ? 'done' : ''}">${esc(s.title)}</span>
         <div class="subtask-meta">
           <span class="subtask-due ${subtaskDueClass(s)} ${s.dueDate ? '' : 'muted'}">${subtaskDueLabel(s)}</span>
+          ${!editable ? subtaskAssigneeHtml(s) : ''}
         </div>
       </div>
+      ${editable ? `<select class="subtask-assignee-select" onchange="updateSubtaskAssignee(${storedIndex}, this.value)" aria-label="Ansvarlig for ${esc(s.title)}">${subtaskAssigneeOptions(s)}</select>` : ''}
       ${editable ? `<input type="date" class="subtask-date-input" value="${esc(s.dueDate || '')}" onchange="updateSubtaskDueDate(${storedIndex}, this.value)" aria-label="Frist for ${esc(s.title)}" />` : ''}
       ${editable ? `<button class="btn-remove-subtask" onclick="removeSubtask(${storedIndex})" title="Fjern">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1720,7 +1942,14 @@ async function handleAddSubtask() {
   if (!taskId) return;
   const subtasks = await updateSubtasksWithFeedback(taskId, current => [
     ...current,
-    { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, title, completed: false, dueDate: dueInput.value || null }
+    {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      title,
+      completed: false,
+      dueDate: dueInput.value || null,
+      assignedTo: null,
+      assignedToName: null,
+    }
   ], 'Kunne ikke legge til deloppgaven. Prøv igjen.');
   if (!subtasks) return;
   input.value = '';
@@ -1736,6 +1965,26 @@ async function updateSubtaskDueDate(index, dueDate) {
     next[index] = { ...next[index], dueDate: dueDate || null };
     return next;
   }, 'Kunne ikke oppdatere fristen. Prøv igjen.');
+}
+
+async function updateSubtaskAssignee(index, assignedTo) {
+  const taskId = state.activeTaskId;
+  if (!taskId || !canEdit()) return;
+  await updateSubtasksWithFeedback(taskId, current => {
+    const next = [...current];
+    if (!next[index]) return current;
+    const activeUser = state.users.find(user => user.id === assignedTo);
+    const existing = next[index];
+    const assignedToName = activeUser
+      ? (activeUser.displayName || activeUser.email || activeUser.id)
+      : (assignedTo && existing.assignedTo === assignedTo ? existing.assignedToName || assignedTo : null);
+    next[index] = {
+      ...existing,
+      assignedTo: assignedTo || null,
+      assignedToName,
+    };
+    return next;
+  }, 'Kunne ikke oppdatere ansvarlig. Prøv igjen.');
 }
 
 async function removeSubtask(index) {
@@ -1757,7 +2006,7 @@ async function quickStatusChange(taskId, newStatus, event) {
   if (event) event.stopPropagation();
   const task = state.tasks.find(t => t.id === taskId);
   if (!task) return;
-  if (!canEdit() && task.assignedTo !== state.user.uid) return;
+  if (!canEdit() && !canUpdateTaskStatus(task)) return;
   try {
     await updateTask(taskId, { status: newStatus });
     if (newStatus === 'fullfort') {
@@ -1785,7 +2034,7 @@ async function quickSetStatus(newStatus) {
 
   const task = state.tasks.find(t => t.id === state.activeTaskId);
   if (!task) return;
-  if (!canEdit() && task.assignedTo !== state.user.uid) return;
+  if (!canEdit() && !canUpdateTaskStatus(task)) return;
   try {
     await updateTask(state.activeTaskId, { status: newStatus });
     if (newStatus === 'fullfort') showToast('✓ Oppgave fullført!');
@@ -1801,7 +2050,7 @@ async function handleUndoComplete() {
 }
 
 // Bygg/oppdater status-stepperen øverst i modal-detaljfanen
-function updateStatusStepper(currentStatus) {
+function updateStatusStepper(currentStatus, taskOverride = null) {
   const stepper = document.getElementById('status-stepper');
   if (!stepper) return;
   const steps = [
@@ -1810,8 +2059,13 @@ function updateStatusStepper(currentStatus) {
     { key: 'fullfort',     label: 'Fullført'       },
   ];
   const curIdx = steps.findIndex(s => s.key === currentStatus);
-  const canChange = canEdit() || (state.activeTaskId &&
-    state.tasks.find(t => t.id === state.activeTaskId)?.assignedTo === state.user?.uid);
+  const task = taskOverride || state.tasks.find(item => item.id === state.activeTaskId);
+  const canChange = canEdit() || (Boolean(task) && canUpdateTaskStatus(task));
+  stepper.classList.toggle('hidden', !canChange);
+  if (!canChange) {
+    stepper.innerHTML = '';
+    return;
+  }
 
   stepper.innerHTML = steps.map((s, i) => `
     <button class="status-step${currentStatus === s.key ? ' active' : ''}${i < curIdx ? ' past' : ''}"
@@ -2549,6 +2803,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-save-task').addEventListener('click', handleSaveTask);
   document.getElementById('btn-delete-task').addEventListener('click', handleDeleteTask);
   document.getElementById('btn-undo-complete').addEventListener('click', handleUndoComplete);
+  document.getElementById('task-assignee').addEventListener('change', handleTaskAssigneeChange);
 
   // Subtask add
   document.getElementById('btn-add-subtask').addEventListener('click', handleAddSubtask);

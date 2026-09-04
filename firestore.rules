@@ -44,7 +44,9 @@ service cloud.firestore {
     }
 
     function isOwnAssignedTask() {
-      return resource.data.assignedTo == request.auth.uid;
+      let collaborators = resource.data.get('collaborators', []);
+      return resource.data.assignedTo == request.auth.uid
+        || (collaborators is list && request.auth.uid in collaborators);
     }
 
     function isOwnAssignedTodo() {

@@ -1253,6 +1253,88 @@ body {
 .form-input:focus { outline: none; border-color: var(--coral); }
 .form-textarea { resize: vertical; min-height: 80px; }
 
+.collaborator-picker {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+}
+.collaborator-picker > summary {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: .875rem;
+  list-style: none;
+}
+.collaborator-picker > summary::-webkit-details-marker { display: none; }
+.collaborator-picker > summary::marker { content: ''; }
+.collaborator-picker > summary::after { content: '\2304'; color: var(--text-2); font-size: .85rem; }
+.collaborator-picker[open] > summary::after { transform: rotate(180deg); }
+.collaborator-picker.is-readonly > summary { cursor: default; color: var(--text-2); }
+.collaborator-options {
+  max-height: 190px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+  padding: 6px;
+}
+.collaborator-option {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  font-size: .8rem;
+  cursor: pointer;
+}
+.collaborator-option:hover { background: var(--bg); }
+.collaborator-option.is-inactive { color: var(--text-2); }
+.collaborator-option small { color: var(--text-3); margin-left: 3px; }
+.collaborator-option-avatar,
+.collaborator-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--coral);
+  color: var(--white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .58rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.collaborator-avatars { display: inline-flex; align-items: center; padding-left: 4px; }
+.collaborator-avatar { margin-left: -5px; border: 2px solid var(--white); }
+.collaborator-avatar.is-inactive { filter: grayscale(1); opacity: .55; }
+.collaborator-more {
+  min-width: 24px;
+  height: 24px;
+  margin-left: -5px;
+  padding: 0 5px;
+  border: 2px solid var(--white);
+  border-radius: 99px;
+  background: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  font-size: .64rem;
+  font-weight: 700;
+}
+.task-involvement-reason {
+  margin-top: 6px;
+  color: var(--text-2);
+  font-size: .72rem;
+  line-height: 1.35;
+}
+.collaborator-empty { margin: 8px; color: var(--text-3); font-size: .78rem; }
+
 /* ---- Modal ---- */
 .modal-overlay {
   position: fixed; inset: 0;
@@ -1379,6 +1461,7 @@ body {
   font-weight: 600;
   white-space: nowrap;
 }
+.subtask-timeline-meta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .subtask-timeline-row.overdue .subtask-timeline-date { color: var(--danger); }
 .subtask-timeline-row.soon .subtask-timeline-date { color: var(--warning); }
 
@@ -1425,6 +1508,43 @@ body {
   background: var(--white);
   color: var(--text);
 }
+.subtask-assignee-select {
+  width: 150px;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  background: var(--white);
+  color: var(--text);
+  font: inherit;
+  font-size: .76rem;
+}
+.subtask-assignee {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-2);
+  font-size: .7rem;
+}
+.subtask-assignee.is-inactive { color: var(--text-3); }
+.subtask-assignee-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--text-3);
+  color: var(--white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: .52rem;
+  font-weight: 700;
+}
+.subtask-assignee-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subtask-assignee-state { font-size: .62rem; font-weight: 700; }
+.subtask-assignee.is-compact .subtask-assignee-name { max-width: 105px; }
 .btn-remove-subtask {
   background: none; border: none; cursor: pointer;
   color: var(--text-3); padding: 2px;
@@ -1753,6 +1873,14 @@ body {
     padding-left: 25px;
   }
 
+  .subtask-timeline-meta {
+    justify-content: flex-start;
+    padding-left: 25px;
+    flex-wrap: wrap;
+  }
+
+  .subtask-timeline-meta .subtask-timeline-date { padding-left: 0; }
+
   .subtask-item {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -1760,6 +1888,11 @@ body {
   }
 
   .subtask-date-input {
+    grid-column: 2 / -1;
+    width: 100%;
+  }
+
+  .subtask-assignee-select {
     grid-column: 2 / -1;
     width: 100%;
   }

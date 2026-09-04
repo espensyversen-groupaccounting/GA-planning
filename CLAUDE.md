@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.10.0`
+Gjeldende appversjon: `v1.11.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -71,7 +71,7 @@ Firestore Rules er sikkerhetsgrensen. Klientsjekker styrer bare hva UI-et viser.
 |-------|:---:|:---:|:---:|:---:|:---:|
 | Admin | Ja | Ja | Ja | Ja | Ja |
 | Teamleder | Ja | Ja | Ja | Ja | Nei |
-| Medlem | Nei | Nei | Egne tildelte | Nei | Nei |
+| Medlem | Nei | Nei | Egne tildelte og oppgaver der brukeren er deltaker | Nei | Nei |
 
 Admin-panelet er synlig for Admin og Teamleder fordi kategorier administreres der. Brukeradministrasjon vises og fungerer bare for Admin.
 
@@ -100,9 +100,11 @@ Opprettes eller oppdateres automatisk ved første innlogging etter at brukeren f
 - `categoryName`, `categoryColor`: snapshot-felter for stabil visning
 - `status`: `ikke_startet` | `i_gang` | `fullfort`
 - `assignedTo`, `assignedToName`
+- `collaborators`: valgfritt array av uid-strenger; manglende felt behandles som tomt
+- `collaboratorNames`: snapshot-navn i samme rekkefølge som `collaborators`
 - `startDate`, `dueDate`: Firestore Timestamp eller null
 - `dependencies`
-- `subtasks`: array av `{ id, title, completed, dueDate }`, der `dueDate` er `YYYY-MM-DD` eller null
+- `subtasks`: array av `{ id, title, completed, dueDate, assignedTo, assignedToName }`, der `dueDate` er `YYYY-MM-DD` eller null og ansvarligfeltene er valgfrie
 - `deletedAt`, `deletedBy`: soft-delete/arkivering
 - `createdBy`, `createdAt`, `updatedAt`
 - write metadata
@@ -146,7 +148,7 @@ Dashboardet er en operativ ledervisning, ikke bare en statusrapport.
 
 Dashboardet har en segmentert kontroll:
 - `Team`: viser teamets samlede oppgaver, ToDo-er, risiko og fordeling.
-- `Mine`: viser kun oppgaver og ToDo-er tildelt innlogget bruker.
+- `Mine`: viser ToDo-er tildelt innlogget bruker og oppgaver der brukeren er hovedansvarlig, deltaker eller ansvarlig for minst én åpen deloppgave.
 
 Toppkort:
 - `Forfalt og i dag`: samme unike elementer som tidsseksjonen med samme navn, med eget undertall for elementer der hovedfrist eller minst én åpen deloppgave er forfalt.
@@ -163,7 +165,7 @@ Dashboardseksjoner:
 - `I gang`: påbegynte oppgaver som ikke allerede er fanget av de to første tidsvinduene. Seksjonen er åpen som standard og kan kollapses.
 - `Kommer senere`: oppgaver og deloppgaver med frist 8–30 dager frem som ikke allerede ligger i en tidligere seksjon. ToDo-er tas ikke med. Seksjonen er åpen som standard for brukere uten lagret preferanse.
 - `Uten ansvarlig`: åpne oppgaver og ToDo-er som må delegeres. Listen viser alle elementene i samme hastegradssortering som ellers, men ruller internt når den blir høyere enn omtrent seks til syv kort.
-- `Teamoversikt`: viser åpne oppgaver/ToDo-er og risikopunkter per person. I `Mine`-visning skjules denne og brukeren får beskjed om å bytte til Team for teamfordeling.
+- `Teamoversikt`: viser åpne oppgaver/ToDo-er som personen eier og, når tallet er større enn null, hvor mange åpne oppgaver personen bidrar til som deltaker eller deloppgaveansvarlig. Bidrag telles ikke dobbelt med eide oppgaver, og risiko beregnes fortsatt bare fra eide oppgaver. Kun aktive personer i `state.users` vises. I `Mine`-visning skjules oversikten og brukeren får beskjed om å bytte til Team for teamfordeling.
 
 Dashboardets tidsvinduer klassifiseres ett sted i `classifyDashboardItem()`. Et element eies av den første seksjonen det kvalifiserer til, slik at det ikke dupliseres mellom hovedseksjonene. `Uten ansvarlig` og `Teamoversikt` er tverrgående unntak. Når en deloppgave utløser plasseringen, vises relevante deloppgaver med tittel, absolutt dato og relativ etikett under hovedkortet. I `I gang` vises utfylt `dependencies` som en escapet blokkertmelding.
 
@@ -183,6 +185,8 @@ Hurtigfiltre:
 - `Denne uken`: frist i dag eller innen 7 dager, inkludert deloppgaver.
 - `Neste 14 dager`: bredere planleggingsvindu for kommende leveranser.
 - `Mine`
+- `Jeg er ansvarlig`: åpne oppgaver der innlogget bruker er hovedansvarlig.
+- `Jeg deltar`: åpne oppgaver der brukeren er deltaker eller ansvarlig for en åpen deloppgave, men ikke hovedansvarlig.
 - `Høy prioritet`
 
 Oppgaver-fanen viser bare dokumenter fra `tasks`; ToDo-er håndteres i sidepanelet og ToDo-fanen. Standard sortering er etter hastegrad, ikke bare prioritet. Oppgavekort viser signaler som `Forfalt`, `Frist i dag`, `Denne uken`, `Neste 14 d`, `Ikke tildelt` og `Deloppgavefrist`.
@@ -259,7 +263,13 @@ Skjulte kategorier kan fortsatt vises på gamle oppgaver, men kan ikke velges so
 ## Deloppgaver og frister
 Deloppgaver kan ha egne deadlines. Disse brukes i dashboardets hasteberegning og i oppgavekortene. Deloppgaver med frist i dag eller denne uken kan løfte hovedoppgaven opp i dashboardet selv om hovedoppgavens egen frist er senere.
 
-I oppgavemodalen vises deloppgaver stigende etter frist, med deloppgaver uten frist sist. Sorteringen skjer bare på en visningskopi som beholder indeks til det lagrede arrayet; avkryssing, fristendring og sletting oppdaterer derfor riktig element uten å endre rekkefølgen i Firestore. Begge modal-fanene viser alltid absolutt dato sammen med den relative etiketten `Forfalt`, `I dag`, `I morgen` eller `Om N d` når den er relevant. Fullførte deloppgaver viser `Fullført`, og udaterte viser `Ingen frist`.
+I oppgavemodalen vises deloppgaver stigende etter frist, med deloppgaver uten frist sist. Sorteringen skjer bare på en visningskopi som beholder indeks til det lagrede arrayet; avkryssing, ansvarsendring, fristendring og sletting oppdaterer derfor riktig element uten å endre rekkefølgen i Firestore. Begge modal-fanene viser ansvarlig og alltid absolutt dato sammen med den relative etiketten `Forfalt`, `I dag`, `I morgen` eller `Om N d` når den er relevant. Fullførte deloppgaver viser `Fullført`, og udaterte viser `Ingen frist`.
+
+Oppgaver har fortsatt nøyaktig én hovedansvarlig i `assignedTo`, men kan i tillegg ha flere deltakere. Hovedansvarlig filtreres bort fra deltakerlisten ved lagring. Kort viser deltakerne kompakt, mens `taskInvolvement()` er felles kilde for `Mine`, hurtigfiltrene, teamoversikten og klientens statuskontroller. Hovedansvarlig og deltaker kan endre hovedstatus; en bruker som kun er deloppgaveansvarlig kan ikke endre hovedstatus.
+
+Lagrede deltakere og deloppgaveansvarlige som ikke lenger finnes i `state.users`, beholdes med snapshot-navnet og merkes som inaktive til de fjernes eksplisitt. Bare aktive brukere kan velges på nytt, og inaktive personer telles ikke i teamoversikten.
+
+Deloppgaver er fortsatt et array inne i oppgavedokumentet. Firestore-reglene kan derfor ikke gi et Medlem skrivetilgang bare til sitt eget arrayelement. Deloppgaveansvar i v1.11.0 er et koordineringsverktøy: personen ser oppgaven i `Mine`, men kan ikke krysse av eller redigere deloppgaven. Det krever egne deloppgavedokumenter i en senere arkitektur.
 
 ## Eksport og sikkerhetskopi
 Admin har et eget kort under Administrasjon for å laste ned en manuell øyeblikkskopi. Eksporten henter ett rått snapshot fra hver av samlingene `tasks`, `todos`, `categories`, `users`, `allowedUsers` og `comments`. Soft-slettede oppgaver og ToDo-er er med; varsler utelates fordi de er avledede og forgjengelige.

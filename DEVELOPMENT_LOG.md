@@ -1,5 +1,32 @@
 # Development Log
 
+## v1.11.0 - 2026-09-04
+
+### Samarbeid om oppgaver
+- Beholdt `assignedTo` som én hovedansvarlig og la til valgfrie, parallelle snapshotfelter `collaborators` og `collaboratorNames` for flere deltakere.
+- Oppgavemodalen har flervalg for deltakere. Hovedansvarlig kan ikke samtidig være deltaker, og valgt innhold bevares når brukerlisten oppdateres.
+- Inaktive, allerede lagrede deltakere beholdes med snapshot-navn og merkes som inaktive til de fjernes eksplisitt. Nye valg begrenses til aktive brukere.
+- Oppgavekort viser inntil tre deltakeravatarer og `+N` ved flere, uten å redusere hovedansvarliges visuelle rolle.
+
+### Deloppgaveansvar og Mine
+- Deloppgaver kan tildeles en aktiv bruker via nedtrekksliste ved siden av fristen. Snapshot-navnet vises kompakt i både Detaljer- og Deloppgaver-fanen, også for en senere inaktiv bruker.
+- `taskInvolvement()` returnerer separate flagg for hovedansvarlig, deltaker og ansvarlig for en åpen deloppgave. `Mine`, hurtigfiltrene, teamoversikten og klientens statuskontroller bruker denne felles vurderingen.
+- `Mine` inkluderer alle tre involveringsformer og forklarer på kortet hvorfor en oppgave eid av en annen vises. Nye filtre skiller `Jeg er ansvarlig` fra `Jeg deltar` uten overlapp.
+- Teamoversikten beholder v1.10.0-tallet for eide åpne oppgaver/ToDo-er og viser i tillegg `M deltar` uten dobbelttelling. Inaktive personer vises ikke i oversikten.
+
+### Rettigheter og begrensning
+- Firestore-reglene lar et Medlem endre de samme eksisterende statusfeltene når brukeren er hovedansvarlig eller finnes i `collaborators`. Sikker feltaksess gjør eldre oppgaver uten `collaborators` bakoverkompatible.
+- En bruker som kun er deloppgaveansvarlig får ingen hovedstatuskontroll. Deloppgaver ligger fortsatt som embedded array og er derfor kun koordinering for Medlem; avkryssing krever fortsatt Admin eller Teamleder.
+- Eksportkoden er uendret. JSON-backupen tar med de nye råfeltene automatisk via eksisterende rekursive normalisering.
+
+### Kontroll
+- Firestore-emulatortestene består: 24/24, inkludert fem nye tester for deltakerstatus, sperrede innholdsfelt, utenforstående, eldre dokument uten deltakerfelt og deloppgaveansvarlig.
+- Lokal Chrome-test består med 31 kontroller på både desktop 1440 x 900 og mobil 390 x 844. Den dekker valg og bevaring, inaktive snapshots, Mine/filtre, faktisk statusendring fra kort og modal, teamtelling, datosortering og JSON-felter.
+- Team-toppkortenes fem tall er identiske med og uten de nye involveringsfeltene for samme Team-datasett. `classifyDashboardItem()`, tellelogikken, hasteberegningen og `taskSignals()` er uendret.
+- Mobil- og desktopvisning er kontrollert uten horisontal side-scroll. ToDo-modulen og konverteringsflyten er uendret.
+- `node --check` består for `app.js`, `js/todos.js`, `firestore.js` og `service-worker.js`.
+- Versjon bumpet til `1.11.0` i alle tre versjonskilder; klientbuild er `11100`.
+
 ## v1.10.0 - 2026-09-04
 
 ### Toppkort som dashboardfiltre
