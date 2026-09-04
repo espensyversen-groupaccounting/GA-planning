@@ -145,14 +145,22 @@
             </div>
           </div>
           <div class="stats-grid" id="stats-grid"></div>
+          <div id="dashboard-filter-bar" class="dashboard-filter-bar" hidden>
+            <span id="dashboard-filter-summary"></span>
+            <button class="dashboard-filter-reset" type="button" onclick="clearDashboardFilter()">Nullstill filter</button>
+          </div>
+          <div id="dashboard-filter-empty" class="empty-state dashboard-filter-empty" hidden>
+            <p>Ingen elementer passer med dette filteret.</p>
+            <button class="btn btn-secondary btn-compact" type="button" onclick="clearDashboardFilter()">Nullstill filter</button>
+          </div>
           <div class="dashboard-sections">
-            <section class="dashboard-section dashboard-section-wide">
+            <section id="dashboard-overdue-today-section" class="dashboard-section dashboard-section-wide">
               <div class="section-header-row">
                 <h2 class="section-title">Forfalt og i dag <span id="overdue-today-count" class="dashboard-section-count">0</span></h2>
               </div>
               <div id="overdue-today-list" class="priority-group-list"></div>
             </section>
-            <section class="dashboard-section dashboard-section-wide">
+            <section id="dashboard-next-seven-section" class="dashboard-section dashboard-section-wide">
               <div class="section-header-row">
                 <h2 class="section-title">Neste 7 dager <span id="next-seven-count" class="dashboard-section-count">0</span></h2>
               </div>
@@ -166,11 +174,18 @@
               <div id="in-progress-list" class="priority-group-list dashboard-collapsible-content"></div>
             </section>
             <section id="dashboard-later-section" class="dashboard-section dashboard-section-wide dashboard-collapsible-section">
-              <button class="dashboard-section-toggle" type="button" onclick="toggleDashboardSection('later')" aria-expanded="false" aria-controls="later-list">
+              <button class="dashboard-section-toggle" type="button" onclick="toggleDashboardSection('later')" aria-expanded="true" aria-controls="later-list">
                 <span class="section-title">Kommer senere <span id="later-count" class="dashboard-section-count">0</span></span>
                 <svg class="dashboard-section-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
               <div id="later-list" class="priority-group-list dashboard-collapsible-content"></div>
+            </section>
+            <section id="dashboard-other-results-section" class="dashboard-section dashboard-section-wide" hidden>
+              <div class="section-header-row dashboard-other-results-header">
+                <h2 class="section-title">Andre treff <span id="other-results-count" class="dashboard-section-count">0</span></h2>
+                <p>Disse elementene har frist lenger frem, mangler frist eller faller utenfor dashboardets tidsseksjoner.</p>
+              </div>
+              <div id="other-results-list" class="priority-group-list"></div>
             </section>
             <section class="dashboard-section">
               <h2 class="section-title">Uten ansvarlig <span id="unassigned-section-count" class="dashboard-section-count">0</span></h2>

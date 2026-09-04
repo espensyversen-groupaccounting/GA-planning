@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -26,9 +26,10 @@ const state = {
   editMode: false,
   quickFilter: '',
   dashboardScope: localStorage.getItem('dashboardScope') || 'mine',
+  dashboardFilter: '',
   dashboardSectionCollapsed: {
     inProgress: localStorage.getItem('dashboardInProgressCollapsed') === 'true',
-    later: localStorage.getItem('dashboardLaterCollapsed') !== 'false',
+    later: localStorage.getItem('dashboardLaterCollapsed') === 'true',
   },
   todoViewFilter: 'open',
   todoViewPriority: '',
@@ -692,8 +693,44 @@ function dashboardEntries(tasks, todos) {
   return [
     ...tasks.map(item => ({ item, type: 'task' })),
     ...todos.map(item => ({ item, type: 'todo' })),
-  ].map(entry => ({ ...entry, ...classifyDashboardItem(entry.item, entry.type) }))
-    .filter(entry => entry.section);
+  ].map(entry => ({ ...entry, ...classifyDashboardItem(entry.item, entry.type) }));
+}
+
+const dashboardFilterLabels = {
+  overdueToday: 'Forfalt og i dag',
+  nextSeven: 'Neste 7 dager',
+  inProgress: 'I gang',
+  unassigned: 'Uten ansvarlig',
+  high: 'Høy prioritet',
+};
+
+function dashboardEntryIsOverdue(entry) {
+  if (taskDueDays(entry.item) < 0) return true;
+  if (entry.type !== 'task') return false;
+  return (entry.item.subtasks || []).some(subtask =>
+    !subtask.completed && subtask.dueDate && subtaskDueDays(subtask) < 0
+  );
+}
+
+function dashboardEntryMatchesFilter(entry, filter) {
+  if (['overdueToday', 'nextSeven', 'inProgress'].includes(filter)) {
+    return entry.section === filter;
+  }
+  if (filter === 'unassigned') return !entry.item.assignedTo;
+  if (filter === 'high') return entry.item.priority === 'høy';
+  return true;
+}
+
+function setDashboardFilter(filter) {
+  const nextFilter = dashboardFilterLabels[filter] ? filter : '';
+  state.dashboardFilter = state.dashboardFilter === nextFilter ? '' : nextFilter;
+  renderDashboard();
+}
+
+function clearDashboardFilter() {
+  if (!state.dashboardFilter) return;
+  state.dashboardFilter = '';
+  renderDashboard();
 }
 
 function renderDashboard() {
@@ -702,67 +739,90 @@ function renderDashboard() {
   const todos = scopedTodos();
   const open = tasks.filter(t => !isDoneItem(t));
   const openTodos = todos.filter(t => !isDoneItem(t));
-  const overdue = open.filter(t => taskDueDays(t) < 0);
-  const overdueTodos = openTodos.filter(t => taskDueDays(t) < 0);
-  const today = open.filter(dueTodayOrOverdue);
-  const todayTodos = openTodos.filter(dueTodayOrOverdue);
-  const week = open.filter(t => dueTodayOrOverdue(t) || dueThisWeek(t));
-  const weekTodos = openTodos.filter(t => dueTodayOrOverdue(t) || dueThisWeek(t));
   const unassigned = open.filter(t => !t.assignedTo);
   const unassignedTodos = openTodos.filter(t => !t.assignedTo);
-  const high = open.filter(t => t.priority === 'høy');
-  const highTodos = openTodos.filter(t => t.priority === 'høy');
+  const entries = dashboardEntries(open, openTodos);
+  const classifiedEntries = entries.filter(entry => entry.section);
+  const sections = {
+    overdueToday: classifiedEntries.filter(entry => entry.section === 'overdueToday'),
+    nextSeven: classifiedEntries.filter(entry => entry.section === 'nextSeven'),
+    inProgress: classifiedEntries.filter(entry => entry.section === 'inProgress'),
+    later: classifiedEntries.filter(entry => entry.section === 'later'),
+  };
+  const crossSectionCounts = {
+    unassigned: entries.filter(entry => !entry.item.assignedTo).length,
+    high: entries.filter(entry => entry.item.priority === 'høy').length,
+  };
+  const overdueCount = sections.overdueToday.filter(dashboardEntryIsOverdue).length;
+  const filter = state.dashboardFilter;
+  const isCrossSectionFilter = ['unassigned', 'high'].includes(filter);
+  const filteredEntries = filter
+    ? entries.filter(entry => dashboardEntryMatchesFilter(entry, filter))
+    : classifiedEntries;
+  const filteredSections = Object.fromEntries(
+    Object.keys(sections).map(section => [
+      section,
+      filteredEntries.filter(entry => entry.section === section),
+    ])
+  );
+  const otherResults = isCrossSectionFilter
+    ? filteredEntries.filter(entry => !entry.section)
+    : [];
+  const activeFilterCount = filter ? filteredEntries.length : classifiedEntries.length;
 
   document.getElementById('stats-grid').innerHTML = `
-    <button class="stat-card stat-overdue" type="button" onclick="openTasksWithQuickFilter('attention')">
-      <div class="stat-number">${overdue.length + overdueTodos.length}</div>
-      <div class="stat-label">Forsinket</div>
+    <button class="stat-card stat-overdue ${filter === 'overdueToday' ? 'is-active' : ''}" type="button" onclick="setDashboardFilter('overdueToday')" aria-pressed="${filter === 'overdueToday'}">
+      <div class="stat-number">${sections.overdueToday.length}</div>
+      <div class="stat-label">Forfalt og i dag</div>
+      <div class="stat-detail stat-detail-danger">${overdueCount} forfalt</div>
     </button>
-    <button class="stat-card stat-today" type="button" onclick="openTasksWithQuickFilter('today')">
-      <div class="stat-number">${today.length + todayTodos.length}</div>
-      <div class="stat-label">I dag</div>
+    <button class="stat-card stat-soon ${filter === 'nextSeven' ? 'is-active' : ''}" type="button" onclick="setDashboardFilter('nextSeven')" aria-pressed="${filter === 'nextSeven'}">
+      <div class="stat-number">${sections.nextSeven.length}</div>
+      <div class="stat-label">Neste 7 dager</div>
     </button>
-    <button class="stat-card stat-soon" type="button" onclick="openTasksWithQuickFilter('week')">
-      <div class="stat-number">${week.length + weekTodos.length}</div>
-      <div class="stat-label">Denne uken</div>
+    <button class="stat-card stat-active ${filter === 'inProgress' ? 'is-active' : ''}" type="button" onclick="setDashboardFilter('inProgress')" aria-pressed="${filter === 'inProgress'}">
+      <div class="stat-number">${sections.inProgress.length}</div>
+      <div class="stat-label">I gang</div>
     </button>
-    <button class="stat-card stat-unassigned" type="button" onclick="openTasksWithQuickFilter('unassigned')">
-      <div class="stat-number">${unassigned.length + unassignedTodos.length}</div>
+    <button class="stat-card stat-unassigned ${filter === 'unassigned' ? 'is-active' : ''}" type="button" onclick="setDashboardFilter('unassigned')" aria-pressed="${filter === 'unassigned'}">
+      <div class="stat-number">${crossSectionCounts.unassigned}</div>
       <div class="stat-label">Uten ansvarlig</div>
     </button>
-    <button class="stat-card stat-high" type="button" onclick="openTasksWithQuickFilter('high')">
-      <div class="stat-number">${high.length + highTodos.length}</div>
+    <button class="stat-card stat-high ${filter === 'high' ? 'is-active' : ''}" type="button" onclick="setDashboardFilter('high')" aria-pressed="${filter === 'high'}">
+      <div class="stat-number">${crossSectionCounts.high}</div>
       <div class="stat-label">Høy prioritet</div>
     </button>
   `;
 
-  const entries = dashboardEntries(open, openTodos);
-  const bySection = section => entries.filter(entry => entry.section === section);
+  updateDashboardFilterUi(filter, activeFilterCount, entries.length);
   renderDashboardPrioritySection(
     'overdue-today-list',
-    bySection('overdueToday'),
+    filteredSections.overdueToday,
     'Alt er under kontroll – ingen frister har passert eller forfaller i dag.'
   );
   renderDashboardPrioritySection(
     'next-seven-list',
-    bySection('nextSeven'),
+    filteredSections.nextSeven,
     'Ingen oppgaver, deloppgaver eller ToDo-er forfaller de neste 7 dagene.'
   );
   renderDashboardPrioritySection(
     'in-progress-list',
-    bySection('inProgress'),
+    filteredSections.inProgress,
     'Ingen påbegynte oppgaver ligger utenfor de nærmeste fristene.',
     { showBlocked: true }
   );
   renderDashboardPrioritySection(
     'later-list',
-    bySection('later'),
+    filteredSections.later,
     'Ingen oppgaver eller deloppgaver er planlagt 8–30 dager frem.'
   );
-  updateDashboardSection('overdueToday', bySection('overdueToday').length);
-  updateDashboardSection('nextSeven', bySection('nextSeven').length);
-  updateDashboardSection('inProgress', bySection('inProgress').length);
-  updateDashboardSection('later', bySection('later').length);
+  renderDashboardPrioritySection('other-results-list', otherResults, '');
+  document.getElementById('other-results-count').textContent = otherResults.length;
+  updateDashboardSection('overdueToday', sections.overdueToday.length);
+  updateDashboardSection('nextSeven', sections.nextSeven.length);
+  updateDashboardSection('inProgress', sections.inProgress.length);
+  updateDashboardSection('later', sections.later.length);
+  updateDashboardSectionVisibility(filteredSections, otherResults);
 
   const unassignedItems = [
     ...unassigned,
@@ -772,6 +832,40 @@ function renderDashboard() {
   renderCompactList('unassigned-tasks-list', unassignedItems, 'Alle åpne oppgaver og ToDo-er har ansvarlig');
   renderTeamWorkload([...open, ...openTodos]);
   renderTodoPanel();
+}
+
+function updateDashboardFilterUi(filter, matchCount, totalCount) {
+  const bar = document.getElementById('dashboard-filter-bar');
+  const summary = document.getElementById('dashboard-filter-summary');
+  const empty = document.getElementById('dashboard-filter-empty');
+  if (!bar || !summary || !empty) return;
+  const isActive = Boolean(filter);
+  bar.hidden = !isActive;
+  empty.hidden = !isActive || matchCount > 0;
+  if (isActive) {
+    const hiddenCount = Math.max(0, totalCount - matchCount);
+    summary.textContent = `Viser ${dashboardFilterLabels[filter]} · ${matchCount} treff · ${hiddenCount} filtrert bort`;
+  }
+}
+
+function updateDashboardSectionVisibility(filteredSections, otherResults) {
+  const filter = state.dashboardFilter;
+  const directFilters = ['overdueToday', 'nextSeven', 'inProgress'];
+  const sectionIds = {
+    overdueToday: 'dashboard-overdue-today-section',
+    nextSeven: 'dashboard-next-seven-section',
+    inProgress: 'dashboard-in-progress-section',
+    later: 'dashboard-later-section',
+  };
+  Object.entries(sectionIds).forEach(([section, id]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!filter) el.hidden = false;
+    else if (directFilters.includes(filter)) el.hidden = section !== filter || !filteredSections[section].length;
+    else el.hidden = !filteredSections[section].length;
+  });
+  const otherSection = document.getElementById('dashboard-other-results-section');
+  if (otherSection) otherSection.hidden = !['unassigned', 'high'].includes(filter) || !otherResults.length;
 }
 
 function updateDashboardScopeButtons() {
@@ -839,15 +933,22 @@ function renderCompactList(containerId, tasks, emptyMsg) {
   ).join('');
 }
 
-function dashboardItemKindHtml(type) {
+function dashboardItemKindIconHtml(type) {
   const isTodo = type === 'todo';
   return `
-    <span class="dashboard-item-kind dashboard-item-kind--${type}">
+    <span class="dashboard-item-kind-icon dashboard-item-kind-icon--${type}" role="img" aria-label="${isTodo ? 'ToDo' : 'Oppgave'}" title="${isTodo ? 'ToDo' : 'Oppgave'}">
       ${isTodo
         ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="8 12 11 15 16 9"/></svg>'
         : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>'}
-      ${isTodo ? 'ToDo' : 'Oppgave'}
     </span>`;
+}
+
+function dashboardCardWithKindIcon(itemHtml, type) {
+  const template = document.createElement('template');
+  template.innerHTML = itemHtml.trim();
+  const title = template.content.querySelector(type === 'todo' ? '.todo-title' : '.task-card-title');
+  if (title) title.insertAdjacentHTML('afterbegin', dashboardItemKindIconHtml(type));
+  return template.innerHTML;
 }
 
 function dashboardSubtaskLinesHtml(subtasks) {
@@ -864,9 +965,9 @@ function dashboardSubtaskLinesHtml(subtasks) {
 }
 
 function dashboardItemHtml(entry, options = {}) {
-  const itemHtml = entry.type === 'todo'
+  const itemHtml = dashboardCardWithKindIcon(entry.type === 'todo'
     ? todoCardHtml(entry.item, { sortable: false })
-    : taskCardHtml(entry.item, true);
+    : taskCardHtml(entry.item, true), entry.type);
   const dependencies = entry.type === 'task' ? String(entry.item.dependencies || '').trim() : '';
   const blockedHtml = options.showBlocked && dependencies ? `
     <div class="dashboard-blocked-note">
@@ -876,7 +977,6 @@ function dashboardItemHtml(entry, options = {}) {
     </div>` : '';
   return `
     <div class="dashboard-item dashboard-item--${entry.type}" data-dashboard-item-id="${esc(entry.item.id)}" data-dashboard-item-type="${entry.type}">
-      ${dashboardItemKindHtml(entry.type)}
       ${itemHtml}
       ${dashboardSubtaskLinesHtml(entry.triggerSubtasks)}
       ${blockedHtml}
@@ -939,7 +1039,7 @@ function updateDashboardSection(sectionKey, count) {
   const countEl = document.getElementById(config.countId);
   if (countEl) countEl.textContent = count;
   if (!config.sectionId) return;
-  const collapsed = Boolean(state.dashboardSectionCollapsed[sectionKey]);
+  const collapsed = Boolean(state.dashboardSectionCollapsed[sectionKey]) && !state.dashboardFilter;
   const section = document.getElementById(config.sectionId);
   const content = document.getElementById(config.contentId);
   const button = section?.querySelector('.dashboard-section-toggle');
@@ -2493,6 +2593,10 @@ document.addEventListener('DOMContentLoaded', () => {
       closeTodoEditModal();
       return;
     }
-    if (!document.getElementById('task-modal').classList.contains('hidden')) closeTaskModal();
+    if (!document.getElementById('task-modal').classList.contains('hidden')) {
+      closeTaskModal();
+      return;
+    }
+    if (state.dashboardFilter) clearDashboardFilter();
   });
 });

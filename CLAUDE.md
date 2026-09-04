@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.9.0`
+Gjeldende appversjon: `v1.10.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -149,23 +149,25 @@ Dashboardet har en segmentert kontroll:
 - `Mine`: viser kun oppgaver og ToDo-er tildelt innlogget bruker.
 
 Toppkort:
-- `Forsinket`: åpne oppgaver med passert hovedfrist.
-- `I dag`: åpne oppgaver eller deloppgaver med frist i dag, inkludert forfalte.
-- `Denne uken`: åpne oppgaver, deloppgaver eller ToDo-er med frist innen 7 dager.
+- `Forfalt og i dag`: samme unike elementer som tidsseksjonen med samme navn, med eget undertall for elementer der hovedfrist eller minst én åpen deloppgave er forfalt.
+- `Neste 7 dager`: samme unike elementer som tidsseksjonen med samme navn.
+- `I gang`: samme unike elementer som tidsseksjonen med samme navn.
 - `Uten ansvarlig`: åpne oppgaver eller ToDo-er uten tildelt person.
 - `Høy prioritet`: åpne oppgaver eller ToDo-er med høy prioritet.
+
+Kortene er midlertidige dashboardfiltre og navigerer ikke til Oppgaver-fanen. De tre første viser kun sin tidsseksjon. De to siste filtrerer på tvers av tidsseksjonene; treff utenfor tidsklassifiseringen vises da i den midlertidige seksjonen `Andre treff`. Aktivt filter kombineres med `Team`/`Mine`, nullstilles ved nytt klikk eller Escape og lagres ikke i `localStorage`. De nederste seksjonene `Uten ansvarlig` og `Teamoversikt` påvirkes ikke av filteret.
 
 Dashboardseksjoner:
 - `Forfalt og i dag`: åpne oppgaver, deloppgaver og ToDo-er med passert frist eller frist i dag.
 - `Neste 7 dager`: åpne oppgaver, deloppgaver og ToDo-er med frist fra i morgen til og med syv dager frem.
 - `I gang`: påbegynte oppgaver som ikke allerede er fanget av de to første tidsvinduene. Seksjonen er åpen som standard og kan kollapses.
-- `Kommer senere`: oppgaver og deloppgaver med frist 8–30 dager frem som ikke allerede ligger i en tidligere seksjon. ToDo-er tas ikke med. Seksjonen er lukket som standard.
+- `Kommer senere`: oppgaver og deloppgaver med frist 8–30 dager frem som ikke allerede ligger i en tidligere seksjon. ToDo-er tas ikke med. Seksjonen er åpen som standard for brukere uten lagret preferanse.
 - `Uten ansvarlig`: åpne oppgaver og ToDo-er som må delegeres. Listen viser alle elementene i samme hastegradssortering som ellers, men ruller internt når den blir høyere enn omtrent seks til syv kort.
 - `Teamoversikt`: viser åpne oppgaver/ToDo-er og risikopunkter per person. I `Mine`-visning skjules denne og brukeren får beskjed om å bytte til Team for teamfordeling.
 
 Dashboardets tidsvinduer klassifiseres ett sted i `classifyDashboardItem()`. Et element eies av den første seksjonen det kvalifiserer til, slik at det ikke dupliseres mellom hovedseksjonene. `Uten ansvarlig` og `Teamoversikt` er tverrgående unntak. Når en deloppgave utløser plasseringen, vises relevante deloppgaver med tittel, absolutt dato og relativ etikett under hovedkortet. I `I gang` vises utfylt `dependencies` som en escapet blokkertmelding.
 
-Oppgaver og ToDo-er i de blandede tidsseksjonene har egne tekst- og ikonbaserte typeindikatorer. Skillet er derfor ikke avhengig av farge. Alle tidsseksjoner er gruppert etter prioritet og sortert med den eksisterende hasteberegningen. Kollapstilstanden for `I gang` og `Kommer senere` lagres lokalt i nettleseren.
+Oppgaver og ToDo-er i de blandede tidsseksjonene har to visuelt ulike typeikoner direkte ved tittelen, med tilgjengelig navn for skjermlesere. Skillet er derfor ikke avhengig av farge. Alle tidsseksjoner er gruppert etter prioritet og sortert med den eksisterende hasteberegningen. Kollapstilstanden for `I gang` og `Kommer senere` lagres lokalt i nettleseren.
 
 På mobil er dashboardet komprimert: toppkortene vises som horisontale chips og kort/spacing er strammet inn slik at prioriterte oppgaver kommer tidligere på skjermen. Desktop-layouten er beholdt bred og mer informasjonsrik.
 
@@ -198,7 +200,7 @@ Ansvarlig er alltid synlig som en kompakt valgbrikke under tittelfeltet. I `Mine
 
 ToDo-er vises:
 - i et høyre sidepanel på brede skjermer, eller i et bunnark på smalere skjermer
-- i toppkortene på dashboardet der de påvirker `I dag`, `Denne uken`, `Uten ansvarlig` og `Høy prioritet`
+- i toppkortene på dashboardet der de påvirker `Forfalt og i dag`, `Neste 7 dager`, `Uten ansvarlig` og `Høy prioritet`
 - i Team/Mine-visningen på dashboardet
 - i ToDo-fanen med åpne/fullførte filtre og manuell rangering
 

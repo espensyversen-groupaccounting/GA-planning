@@ -1,5 +1,30 @@
 # Development Log
 
+## v1.10.0 - 2026-09-04
+
+### Toppkort som dashboardfiltre
+- Erstattet de gamle navigerende toppkortene med `Forfalt og i dag`, `Neste 7 dager`, `I gang`, `Uten ansvarlig` og `Høy prioritet`.
+- De tre tidskortene leser antall direkte fra de samme klassifiserte seksjonsarrayene som rendrer innholdet. Første kort viser i tillegg antall unike elementer med forfalt hovedfrist eller minst én åpen, forfalt deloppgave.
+- Kortene filtrerer dashboardet etter at `classifyDashboardItem()` har klassifisert elementene. Aktivt filter kan slås av med nytt klikk, `Nullstill filter` eller Escape, lagres ikke lokalt og kombineres med `Team`/`Mine`.
+- `Uten ansvarlig` og `Høy prioritet` inkluderer også åpne elementer uten tidsseksjon. Disse vises uten duplikater i den midlertidige, forklarte seksjonen `Andre treff`.
+- Nederste `Uten ansvarlig` og `Teamoversikt` påvirkes ikke av toppkortfiltrene.
+
+### Kompakt presentasjon
+- Typeindikatoren er flyttet fra en egen rad til to visuelt ulike, tilgjengelig navngitte ikoner direkte i korttittelen. Eksisterende `taskCardHtml()` og `todoCardHtml()` er urørt.
+- `Kommer senere` er åpen som standard når ingen preferanse finnes. Eksisterende lagrede åpne og lukkede tilstander beholdes.
+- Aktivt toppkort, tastaturfokus, filterstatus, nulltreff og mobilvisning har egne responsive stiler.
+
+### Kontroll
+- Lokal Chrome-test består: de tre tidskortene matcher seksjonstellingen, de to tverrgående kortene inkluderer alle åpne treff, og synlige tidsseksjoner pluss `Andre treff` summerer til aktivt kort.
+- En høyprioritert oppgave med frist om 60 dager og en utildelt oppgave uten frist vises korrekt i `Andre treff`. Seksjonen er skjult uten aktivt tverrgående filter og når den er tom.
+- En oppgave med to forfalte deloppgaver telles én gang. En oppgave med både forfalt hovedfrist og forfalte deloppgaver telles også én gang.
+- Klikk, nytt klikk, nullstilling, Space-tast, Escape, Team/Mine, reload uten filterpersistens, nulltreff og modal-forrang er kontrollert. Oppgavemodalen lukkes før et aktivt dashboardfilter.
+- Ny profil får åpen `Kommer senere`; lagret kollapstilstand beholdes. Desktop ved 1440 × 900 px og mobil ved 390 × 844 px er visuelt kontrollert uten horisontal side-scroll.
+- Direkte kildekodesammenligning mot v1.9.0 bekrefter at `classifyDashboardItem()`, hasteberegningen, `taskSignals()`, `taskCardHtml()`, `todoCardHtml()` og hele `js/todos.js` er uendret.
+- `node --check` består for `app.js`, `js/todos.js`, `firestore.js` og `service-worker.js`.
+- Firestore-emulatortestene består: 19/19.
+- Versjon bumpet til `1.10.0` i alle tre versjonskilder; klientbuild er `11000`.
+
 ## v1.9.0 - 2026-09-03
 
 ### Tidsstyrt dashboard
