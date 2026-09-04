@@ -1,5 +1,22 @@
 # Development Log
 
+## v1.13.1 - 2026-09-04
+
+### Årlig gjentakelse
+- Utvidet den eksisterende gjentakelsesmodellen med `frequency: 'yearly'`. Måned og dag utledes fra den stabile `anchorDate`, mens `interval` angir hvert N. år og eksisterende sluttdato gjelder uendret.
+- La den årlige grenen bruke samme månedssluttprinsipp som månedsberegningen. Et anker på 29. februar gir derfor 28. februar i år som ikke er skuddår.
+- Startdato og deloppgavefrister bruker den eksisterende dagforskyvningen fra ferdigdato, slik at hele perioden bevares også for årlige forekomster.
+- La til norsk oppsummering for årlig intervall og en eksplisitt forklaring av 29. februar. Hjelpeteksten forklarer at forekomster først opprettes når fristen er innenfor 90 dager.
+
+### Avgrensning og kontroll
+- Ukentlig og månedlig gjentakelse bruker sine eksisterende kodegrener uendret. Transaksjoner, deterministiske ID-er, duplikatsikring, stabilt anker og 90-dagershorisont er uendret.
+- Ved bytte til årlig mønster fanges endringen av den eksisterende signaturen, slik at `recurrenceGeneratedUntil` settes tilbake til `anchorDate`; tidligere forekomster beholdes urørt.
+- Firestore-regler, regeltester, dashboard, ToDo-er, klassifisering og eksportlogikk er uendret. JSON-backupen tar automatisk med `frequency: 'yearly'` som rådata.
+- Målrettet datotest består 18/18 for isolert årsberegning og simulert 90-dagershorisont, intervall 2, periode og deloppgavefrist, 29. februar, sluttdato, oppsummering, mønsterendring og regresjoner for ukentlig/månedlig.
+- Firestore-integrasjonstesten består 8/8: de simulerte årsforekomstene opprettes med korrekte datoer, og gjentatt kjøring oppretter ingen duplikater. Chrome-kontrollen består 15/15 på desktop og 390 px mobil.
+- Eksisterende Firestore-emulatortester består 24/24, og `node --check` består for alle fire JavaScript-filer.
+- Versjon bumpet til `1.13.1` i alle tre versjonskilder; klientbuild er `11301`.
+
 ## v1.13.0 - 2026-09-04
 
 ### Gjentakende oppgaver

@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.13.0';
+const APP_VERSION = '1.13.1';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -126,7 +126,7 @@ function nextRecurrenceDate(template, afterDate) {
   const anchor = dateStringToUtc(recurrence?.anchorDate);
   const after = dateStringToUtc(afterDate);
   const interval = Math.max(1, Math.floor(Number(recurrence?.interval) || 1));
-  if (!anchor || !after || !['weekly', 'monthly'].includes(recurrence?.frequency)) return null;
+  if (!anchor || !after || !['weekly', 'monthly', 'yearly'].includes(recurrence?.frequency)) return null;
 
   if (recurrence.frequency === 'weekly') {
     const weekday = Number(recurrence.weekday);
@@ -141,6 +141,21 @@ function nextRecurrenceDate(template, afterDate) {
       candidateWeek.setUTCDate(candidateWeek.getUTCDate() - ((candidateWeek.getUTCDay() + 6) % 7));
       const weeksFromAnchor = Math.round((candidateWeek.getTime() - anchorWeek.getTime()) / (7 * 86400000));
       if (weeksFromAnchor >= 0 && weeksFromAnchor % interval === 0) return utcDateToString(candidate);
+    }
+    return null;
+  }
+
+  if (recurrence.frequency === 'yearly') {
+    const anchorYear = anchor.getUTCFullYear();
+    const anchorMonth = anchor.getUTCMonth();
+    const anchorDay = anchor.getUTCDate();
+    const yearsFromAnchor = after.getUTCFullYear() - anchorYear;
+    let cycle = Math.max(0, Math.floor(yearsFromAnchor / interval) * interval);
+    for (let attempt = 0; attempt < 400; attempt += 1, cycle += interval) {
+      const year = anchorYear + cycle;
+      const lastDay = new Date(Date.UTC(year, anchorMonth + 1, 0)).getUTCDate();
+      const candidate = new Date(Date.UTC(year, anchorMonth, Math.min(anchorDay, lastDay)));
+      if (candidate > after && candidate > anchor) return utcDateToString(candidate);
     }
     return null;
   }
@@ -169,6 +184,16 @@ function recurrenceSummary(recurrence) {
     const weekdays = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag'];
     const cadence = interval === 1 ? 'hver uke' : `hver ${interval}. uke`;
     return `Gjentas ${cadence} på ${weekdays[Number(recurrence.weekday)] || 'valgt ukedag'}${end}`;
+  }
+  if (recurrence.frequency === 'yearly') {
+    const anchor = dateStringToUtc(recurrence.anchorDate);
+    if (!anchor) return 'Årlig gjentakelse krever en gyldig ferdigdato.';
+    const months = ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember'];
+    const cadence = interval === 1 ? 'hvert år' : `hvert ${interval}. år`;
+    const fallback = anchor.getUTCMonth() === 1 && anchor.getUTCDate() === 29
+      ? ' I år uten 29. februar brukes 28. februar.'
+      : '';
+    return `Gjentas ${anchor.getUTCDate()}. ${months[anchor.getUTCMonth()]} ${cadence}${end}.${fallback}`;
   }
   const cadence = interval === 1 ? 'hver måned' : `hver ${interval}. måned`;
   const fallback = Number(recurrence.dayOfMonth) > 28 ? ' Måneder uten denne datoen bruker månedens siste dag.' : '';
@@ -1882,7 +1907,7 @@ function updateRecurrenceForm(useDueDateDefaults = false) {
   monthly?.classList.toggle('hidden', frequency !== 'monthly');
   note?.classList.toggle('hidden', !frequency);
   const unit = document.getElementById('task-recurrence-interval-unit');
-  if (unit) unit.textContent = frequency === 'monthly' ? 'måned' : 'uke';
+  if (unit) unit.textContent = frequency === 'monthly' ? 'måned' : frequency === 'yearly' ? 'år' : 'uke';
   const readonly = document.getElementById('task-recurrence-settings')?.classList.contains('is-readonly');
   document.getElementById('task-recurrence-interval').disabled = !frequency || readonly;
   document.getElementById('task-recurrence-weekday').disabled = frequency !== 'weekly' || readonly;

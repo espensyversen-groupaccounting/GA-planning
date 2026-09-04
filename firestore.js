@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.13.0';
-const CLIENT_BUILD = 11300;
+const CLIENT_APP_VERSION = '1.13.1';
+const CLIENT_BUILD = 11301;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
