@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.12.1';
+const APP_VERSION = '1.13.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -23,6 +23,7 @@ const state = {
   activeTaskId: null,
   activeTaskDetailsUpdatedAt: null,
   activeTaskSubtasks: [],
+  activeTaskOriginalRecurrence: null,
   commentUnsub: null,
   editMode: false,
   quickFilter: '',
@@ -41,6 +42,13 @@ const state = {
 };
 
 let activeConfirmCancel = null;
+let recurrenceGenerationTimer = null;
+let recurrenceGenerationRunning = false;
+let recurrenceGenerationAllPending = false;
+const recurrenceGenerationPendingIds = new Set();
+
+const RECURRENCE_HORIZON_DAYS = 90;
+const RECURRENCE_BATCH_SIZE = 100;
 
 // ============================================================
 // UTILITIES
@@ -62,6 +70,176 @@ function formatDate(ts) {
   if (!ts) return '';
   const d = ts.toDate ? ts.toDate() : new Date(ts);
   return d.toLocaleDateString('no-NO', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+
+function dateStringToUtc(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date;
+}
+
+function utcDateToString(date) {
+  return date instanceof Date && !Number.isNaN(date.getTime()) ? date.toISOString().slice(0, 10) : '';
+}
+
+function timestampToDateString(value) {
+  if (!value) return '';
+  const date = value.toDate ? value.toDate() : new Date(value);
+  return utcDateToString(date);
+}
+
+function todayDateString() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function addDateStringDays(value, days) {
+  const date = dateStringToUtc(value);
+  if (!date) return '';
+  date.setUTCDate(date.getUTCDate() + Number(days || 0));
+  return utcDateToString(date);
+}
+
+function dateStringDayDifference(fromValue, toValue) {
+  const from = dateStringToUtc(fromValue);
+  const to = dateStringToUtc(toValue);
+  if (!from || !to) return 0;
+  return Math.round((to.getTime() - from.getTime()) / 86400000);
+}
+
+function recurrenceSignature(recurrence) {
+  if (!recurrence) return '';
+  return JSON.stringify({
+    frequency: recurrence.frequency || '',
+    interval: Number(recurrence.interval) || 1,
+    weekday: recurrence.frequency === 'weekly' ? Number(recurrence.weekday) : null,
+    dayOfMonth: recurrence.frequency === 'monthly' ? Number(recurrence.dayOfMonth) : null,
+    anchorDate: recurrence.anchorDate || '',
+    endDate: recurrence.endDate || null,
+  });
+}
+
+function nextRecurrenceDate(template, afterDate) {
+  const recurrence = template?.recurrence;
+  const anchor = dateStringToUtc(recurrence?.anchorDate);
+  const after = dateStringToUtc(afterDate);
+  const interval = Math.max(1, Math.floor(Number(recurrence?.interval) || 1));
+  if (!anchor || !after || !['weekly', 'monthly'].includes(recurrence?.frequency)) return null;
+
+  if (recurrence.frequency === 'weekly') {
+    const weekday = Number(recurrence.weekday);
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return null;
+    const anchorWeek = new Date(anchor);
+    anchorWeek.setUTCDate(anchorWeek.getUTCDate() - ((anchorWeek.getUTCDay() + 6) % 7));
+    const candidate = new Date(Math.max(after.getTime(), anchor.getTime()));
+    for (let dayOffset = 1; dayOffset <= interval * 7 + 7; dayOffset += 1) {
+      candidate.setUTCDate(candidate.getUTCDate() + 1);
+      if (candidate.getUTCDay() !== weekday) continue;
+      const candidateWeek = new Date(candidate);
+      candidateWeek.setUTCDate(candidateWeek.getUTCDate() - ((candidateWeek.getUTCDay() + 6) % 7));
+      const weeksFromAnchor = Math.round((candidateWeek.getTime() - anchorWeek.getTime()) / (7 * 86400000));
+      if (weeksFromAnchor >= 0 && weeksFromAnchor % interval === 0) return utcDateToString(candidate);
+    }
+    return null;
+  }
+
+  const dayOfMonth = Number(recurrence.dayOfMonth);
+  if (!Number.isInteger(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 31) return null;
+  const anchorMonthIndex = anchor.getUTCFullYear() * 12 + anchor.getUTCMonth();
+  const afterMonthIndex = after.getUTCFullYear() * 12 + after.getUTCMonth();
+  let cycle = Math.max(0, Math.floor((afterMonthIndex - anchorMonthIndex) / interval) * interval);
+  for (let attempt = 0; attempt < 2400; attempt += 1, cycle += interval) {
+    const monthIndex = anchorMonthIndex + cycle;
+    const year = Math.floor(monthIndex / 12);
+    const month = monthIndex % 12;
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const candidate = new Date(Date.UTC(year, month, Math.min(dayOfMonth, lastDay)));
+    if (candidate > after && candidate > anchor) return utcDateToString(candidate);
+  }
+  return null;
+}
+
+function recurrenceSummary(recurrence) {
+  if (!recurrence) return 'Gjentas ikke';
+  const interval = Math.max(1, Math.floor(Number(recurrence.interval) || 1));
+  const end = recurrence.endDate ? ` til ${formatDateString(recurrence.endDate)}` : ' uten sluttdato';
+  if (recurrence.frequency === 'weekly') {
+    const weekdays = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag'];
+    const cadence = interval === 1 ? 'hver uke' : `hver ${interval}. uke`;
+    return `Gjentas ${cadence} på ${weekdays[Number(recurrence.weekday)] || 'valgt ukedag'}${end}`;
+  }
+  const cadence = interval === 1 ? 'hver måned' : `hver ${interval}. måned`;
+  const fallback = Number(recurrence.dayOfMonth) > 28 ? ' Måneder uten denne datoen bruker månedens siste dag.' : '';
+  return `Gjentas den ${Number(recurrence.dayOfMonth)}. ${cadence}${end}.${fallback}`;
+}
+
+function buildRecurringTaskPlan(template, horizonDate, maxInstances = RECURRENCE_BATCH_SIZE) {
+  const recurrence = template?.recurrence;
+  if (!recurrence || template.deletedAt || !dateStringToUtc(recurrence.anchorDate)) {
+    return { occurrences: [], generatedUntil: null, hasMore: false };
+  }
+  const endLimit = recurrence.endDate && recurrence.endDate < horizonDate ? recurrence.endDate : horizonDate;
+  let cursor = template.recurrenceGeneratedUntil || recurrence.anchorDate;
+  if (!dateStringToUtc(cursor) || cursor < recurrence.anchorDate) cursor = recurrence.anchorDate;
+  if (cursor >= endLimit) return { occurrences: [], generatedUntil: cursor, hasMore: false };
+
+  const occurrences = [];
+  let next = nextRecurrenceDate(template, cursor);
+  while (next && next <= endLimit && occurrences.length < maxInstances) {
+    occurrences.push(next);
+    cursor = next;
+    next = nextRecurrenceDate(template, cursor);
+  }
+  const hasMore = Boolean(next && next <= endLimit);
+  return {
+    occurrences,
+    generatedUntil: hasMore ? cursor : endLimit,
+    hasMore,
+  };
+}
+
+function recurringTaskInstanceData(template, instanceDate) {
+  const templateDueDate = timestampToDateString(template.dueDate) || template.recurrence?.anchorDate;
+  const templateStartDate = timestampToDateString(template.startDate);
+  const startOffset = templateStartDate ? dateStringDayDifference(templateDueDate, templateStartDate) : null;
+  const startDate = startOffset === null ? null : addDateStringDays(instanceDate, startOffset);
+  const subtasks = (Array.isArray(template.subtasks) ? template.subtasks : []).map((subtask, index) => {
+    const dueOffset = subtask.dueDate ? dateStringDayDifference(templateDueDate, subtask.dueDate) : null;
+    return {
+      id: `${instanceDate}-${index + 1}`,
+      title: subtask.title || '',
+      completed: false,
+      dueDate: dueOffset === null ? null : addDateStringDays(instanceDate, dueOffset),
+      assignedTo: subtask.assignedTo || null,
+      assignedToName: subtask.assignedToName || null,
+    };
+  });
+  const timestamp = value => value
+    ? firebase.firestore.Timestamp.fromDate(new Date(`${value}T00:00:00.000Z`))
+    : null;
+  return {
+    title: template.title || '',
+    description: template.description || '',
+    priority: template.priority || 'medium',
+    categoryId: template.categoryId || null,
+    categoryName: template.categoryName || null,
+    categoryColor: template.categoryColor || null,
+    status: 'ikke_startet',
+    assignedTo: template.assignedTo || null,
+    assignedToName: template.assignedToName || null,
+    collaborators: Array.isArray(template.collaborators) ? [...template.collaborators] : [],
+    collaboratorNames: Array.isArray(template.collaboratorNames) ? [...template.collaboratorNames] : [],
+    startDate: timestamp(startDate),
+    dueDate: timestamp(instanceDate),
+    dependencies: template.dependencies || '',
+    subtasks,
+    recurrence: null,
+    recurrenceTemplateId: template.id,
+    recurrenceInstanceDate: instanceDate,
+    recurrenceGeneratedUntil: null,
+  };
 }
 
 function timeAgo(ts) {
@@ -656,6 +834,49 @@ function setupUI() {
   renderTodoPanel();
 }
 
+function scheduleRecurringTaskGeneration(templateId = null) {
+  if (!canEdit()) return;
+  if (templateId) recurrenceGenerationPendingIds.add(templateId);
+  else recurrenceGenerationAllPending = true;
+  if (recurrenceGenerationRunning || recurrenceGenerationTimer) return;
+  recurrenceGenerationTimer = setTimeout(runRecurringTaskGeneration, 0);
+}
+
+async function runRecurringTaskGeneration() {
+  recurrenceGenerationTimer = null;
+  if (!canEdit() || recurrenceGenerationRunning) return;
+  recurrenceGenerationRunning = true;
+
+  const generateAll = recurrenceGenerationAllPending;
+  recurrenceGenerationAllPending = false;
+  const requestedIds = [...recurrenceGenerationPendingIds];
+  recurrenceGenerationPendingIds.clear();
+  const templateIds = generateAll
+    ? state.tasks.filter(task => task.recurrence && !task.deletedAt).map(task => task.id)
+    : requestedIds;
+  const horizonDate = addDateStringDays(todayDateString(), RECURRENCE_HORIZON_DAYS);
+
+  try {
+    for (const templateId of [...new Set(templateIds)]) {
+      try {
+        await generateRecurringTaskInstances(
+          templateId,
+          horizonDate,
+          buildRecurringTaskPlan,
+          recurringTaskInstanceData
+        );
+      } catch (error) {
+        console.error(`Recurring task generation failed for ${templateId}:`, error);
+      }
+    }
+  } finally {
+    recurrenceGenerationRunning = false;
+    if (recurrenceGenerationAllPending || recurrenceGenerationPendingIds.size) {
+      scheduleRecurringTaskGeneration();
+    }
+  }
+}
+
 function subscribeToRealtime() {
   const shownRealtimeErrors = new Set();
   const onRealtimeError = (area, message) => (e) => {
@@ -670,6 +891,7 @@ function subscribeToRealtime() {
       state.tasks = tasks;
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'tasks') renderTasksList();
+      scheduleRecurringTaskGeneration();
     }, onRealtimeError('tasks', 'Kunne ikke laste oppgaver. Prøv å oppdatere appen.')),
     subscribeToTodos(todos => {
       state.todos = todos;
@@ -1206,6 +1428,19 @@ function taskMineContextHtml(task) {
   return `<div class="task-involvement-reason">${parts.join(' · ')}</div>`;
 }
 
+function taskRecurrenceBadgeHtml(task) {
+  if (!task?.recurrence) return '';
+  const label = recurrenceSummary(task.recurrence);
+  return `
+    <span class="task-recurrence-badge" role="img" title="${esc(label)}" aria-label="${esc(label)}">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+        <path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+      </svg>
+      <span>Gjentakende</span>
+    </span>`;
+}
+
 function taskCardHtml(task, compact = false) {
   const prog = subtaskProgress(task.subtasks);
   const dateClass = dueDateClass(task.dueDate);
@@ -1248,6 +1483,7 @@ function taskCardHtml(task, compact = false) {
   const signalHtml = taskSignals(task).map(s => `<span class="risk-badge ${s.key}">${s.label}</span>`).join('');
   const collaboratorsHtml = taskCollaboratorsHtml(task);
   const involvementHtml = taskMineContextHtml(task);
+  const recurrenceHtml = taskRecurrenceBadgeHtml(task);
 
   if (compact) {
     return `
@@ -1259,6 +1495,7 @@ function taskCardHtml(task, compact = false) {
         </div>
         <div class="task-card-meta">
           ${signalHtml}
+          ${recurrenceHtml}
           ${categoryHtml}
           ${assigneeHtml}
           ${collaboratorsHtml}
@@ -1281,6 +1518,7 @@ function taskCardHtml(task, compact = false) {
       </div>
       <div class="task-row-bottom">
         ${signalHtml}
+        ${recurrenceHtml}
         ${categoryHtml}
         <span class="status-badge ${task.status}">${statusLabel(task.status)}</span>
         <span class="priority-badge ${task.priority}">
@@ -1569,6 +1807,7 @@ async function openTaskModal(taskId = null, prefetchedTask = null) {
     document.getElementById('modal-title').textContent = task.title;
     state.activeTaskDetailsUpdatedAt = task.detailsUpdatedAt || task.updatedAt || null;
     state.activeTaskSubtasks = task.subtasks || [];
+    state.activeTaskOriginalRecurrence = task.recurrence ? { ...task.recurrence } : null;
     fillTaskForm(task);
     updateStatusStepper(task.status, task);
     updateModalButtons(task);
@@ -1581,10 +1820,12 @@ async function openTaskModal(taskId = null, prefetchedTask = null) {
     document.getElementById('task-id').value = '';
     state.activeTaskDetailsUpdatedAt = null;
     state.activeTaskSubtasks = [];
+    state.activeTaskOriginalRecurrence = null;
     document.getElementById('subtasks-list').innerHTML = '';
     renderSubtaskTimeline([]);
     document.getElementById('comments-list').innerHTML = '';
     renderCollaboratorPicker([]);
+    renderRecurrenceForm(null);
     renderTaskQualityControls({ status: 'ikke_startet', subtasks: [], qualityExceptions: [] });
     updateStatusStepper('ikke_startet');
     updateModalButtons(null);
@@ -1604,6 +1845,98 @@ function closeTaskModal() {
   state.activeTaskId = null;
   state.activeTaskDetailsUpdatedAt = null;
   state.activeTaskSubtasks = [];
+  state.activeTaskOriginalRecurrence = null;
+}
+
+function recurrenceFormDraft(task = {}) {
+  const frequency = document.getElementById('task-recurrence-frequency')?.value || '';
+  if (!frequency) return null;
+  const dueDate = document.getElementById('task-due-date')?.value || '';
+  const existingAnchor = task.recurrence?.anchorDate || state.activeTaskOriginalRecurrence?.anchorDate;
+  return {
+    frequency,
+    interval: Math.max(1, Math.min(52, Math.floor(Number(document.getElementById('task-recurrence-interval')?.value) || 1))),
+    weekday: frequency === 'weekly' ? Number(document.getElementById('task-recurrence-weekday')?.value) : null,
+    dayOfMonth: frequency === 'monthly' ? Number(document.getElementById('task-recurrence-monthday')?.value) : null,
+    anchorDate: existingAnchor || dueDate,
+    endDate: document.getElementById('task-recurrence-end-date')?.value || null,
+  };
+}
+
+function setRecurrenceError(message = '') {
+  const error = document.getElementById('task-recurrence-error');
+  if (!error) return;
+  error.textContent = message;
+  error.classList.toggle('hidden', !message);
+  document.getElementById('task-recurrence-settings')?.classList.toggle('has-error', Boolean(message));
+}
+
+function updateRecurrenceForm(useDueDateDefaults = false) {
+  const frequency = document.getElementById('task-recurrence-frequency')?.value || '';
+  const controls = document.getElementById('task-recurrence-controls');
+  const weekly = document.getElementById('task-recurrence-weekday-group');
+  const monthly = document.getElementById('task-recurrence-monthday-group');
+  const note = document.getElementById('task-recurrence-note');
+  controls?.classList.toggle('hidden', !frequency);
+  weekly?.classList.toggle('hidden', frequency !== 'weekly');
+  monthly?.classList.toggle('hidden', frequency !== 'monthly');
+  note?.classList.toggle('hidden', !frequency);
+  const unit = document.getElementById('task-recurrence-interval-unit');
+  if (unit) unit.textContent = frequency === 'monthly' ? 'måned' : 'uke';
+  const readonly = document.getElementById('task-recurrence-settings')?.classList.contains('is-readonly');
+  document.getElementById('task-recurrence-interval').disabled = !frequency || readonly;
+  document.getElementById('task-recurrence-weekday').disabled = frequency !== 'weekly' || readonly;
+  document.getElementById('task-recurrence-monthday').disabled = frequency !== 'monthly' || readonly;
+  document.getElementById('task-recurrence-end-date').disabled = !frequency || readonly;
+
+  const dueDate = document.getElementById('task-due-date')?.value || '';
+  const due = dateStringToUtc(dueDate);
+  if (frequency && useDueDateDefaults && due) {
+    if (frequency === 'weekly') document.getElementById('task-recurrence-weekday').value = String(due.getUTCDay());
+    if (frequency === 'monthly') document.getElementById('task-recurrence-monthday').value = String(due.getUTCDate());
+  }
+
+  const summary = document.getElementById('task-recurrence-summary');
+  if (!frequency) {
+    if (summary) summary.textContent = 'Gjentas ikke';
+    setRecurrenceError();
+    return;
+  }
+  const draft = recurrenceFormDraft(state.tasks.find(task => task.id === state.activeTaskId) || {});
+  if (summary) summary.textContent = recurrenceSummary(draft);
+  setRecurrenceError(dueDate ? '' : 'Legg inn en ferdigdato før gjentakelse kan aktiveres.');
+}
+
+function renderRecurrenceForm(task) {
+  const recurrence = task?.recurrence || null;
+  document.getElementById('task-recurrence-frequency').value = recurrence?.frequency || '';
+  document.getElementById('task-recurrence-interval').value = String(recurrence?.interval || 1);
+  const dueDate = timestampToDateString(task?.dueDate) || todayDateString();
+  const due = dateStringToUtc(dueDate);
+  document.getElementById('task-recurrence-weekday').value = String(recurrence?.weekday ?? due?.getUTCDay() ?? 1);
+  document.getElementById('task-recurrence-monthday').value = String(recurrence?.dayOfMonth ?? due?.getUTCDate() ?? 1);
+  document.getElementById('task-recurrence-end-date').value = recurrence?.endDate || '';
+  updateRecurrenceForm(false);
+}
+
+function validatedRecurrenceFromForm(currentTask, dueDate) {
+  const recurrence = recurrenceFormDraft(currentTask || {});
+  if (!recurrence) return null;
+  if (!dueDate) {
+    const message = 'Legg inn en ferdigdato før du aktiverer gjentakelse.';
+    setRecurrenceError(message);
+    showToast(message, 'error');
+    throw new Error('RECURRENCE_DUE_DATE_REQUIRED');
+  }
+  if (!dateStringToUtc(recurrence.anchorDate)) recurrence.anchorDate = dueDate;
+  if (recurrence.endDate && recurrence.endDate < recurrence.anchorDate) {
+    const message = 'Sluttdatoen for gjentakelsen kan ikke være før første forekomst.';
+    setRecurrenceError(message);
+    showToast(message, 'error');
+    throw new Error('RECURRENCE_END_BEFORE_ANCHOR');
+  }
+  setRecurrenceError();
+  return recurrence;
 }
 
 function fillTaskForm(task) {
@@ -1634,6 +1967,7 @@ function fillTaskForm(task) {
   } else {
     document.getElementById('task-due-date').value = '';
   }
+  renderRecurrenceForm(task);
   renderTaskQualityControls(task);
 }
 
@@ -1711,11 +2045,17 @@ function updateModalButtons(task) {
 }
 
 function setFormReadOnly(readonly) {
-  ['task-title','task-description','task-priority','task-category','task-assignee','task-start-date','task-due-date','task-dependencies']
+  [
+    'task-title','task-description','task-priority','task-category','task-assignee',
+    'task-start-date','task-due-date','task-dependencies','task-recurrence-frequency',
+    'task-recurrence-interval','task-recurrence-weekday','task-recurrence-monthday',
+    'task-recurrence-end-date'
+  ]
     .forEach(id => {
       const el = document.getElementById(id);
       if (el) el.disabled = readonly;
     });
+  document.getElementById('task-recurrence-settings')?.classList.toggle('is-readonly', readonly);
   document.querySelectorAll('#task-collaborators-options input').forEach(input => {
     input.disabled = readonly;
   });
@@ -1726,6 +2066,7 @@ function setFormReadOnly(readonly) {
   const statusEl = document.getElementById('task-status');
   const activeTask = state.tasks.find(task => task.id === state.activeTaskId);
   if (statusEl) statusEl.disabled = Boolean(activeTask) && !canEdit() && !canUpdateTaskStatus(activeTask);
+  updateRecurrenceForm(false);
 }
 
 async function handleSaveTask() {
@@ -1743,6 +2084,14 @@ async function handleSaveTask() {
   const dueStr    = document.getElementById('task-due-date').value;
   const deps      = document.getElementById('task-dependencies').value.trim();
   const currentTask = state.tasks.find(t => t.id === taskId);
+  let recurrence = currentTask?.recurrence || null;
+  if (canEdit()) {
+    try {
+      recurrence = validatedRecurrenceFromForm(currentTask, dueStr);
+    } catch (error) {
+      return;
+    }
+  }
   const activeQualityKeys = dataQualityIssues({
     status,
     assignedTo: assigneeId || null,
@@ -1780,6 +2129,21 @@ async function handleSaveTask() {
     dependencies: deps,
     qualityExceptions,
   };
+  if (canEdit()) {
+    data.recurrence = recurrence;
+    const recurrenceChanged = recurrenceSignature(currentTask?.recurrence) !== recurrenceSignature(recurrence);
+    if (!recurrence) {
+      data.recurrenceGeneratedUntil = null;
+      if (!currentTask) {
+        data.recurrenceTemplateId = null;
+        data.recurrenceInstanceDate = null;
+      }
+    } else {
+      data.recurrenceTemplateId = null;
+      data.recurrenceInstanceDate = null;
+      if (!currentTask || recurrenceChanged) data.recurrenceGeneratedUntil = recurrence.anchorDate;
+    }
+  }
 
   const saveBtn = document.getElementById('btn-save-task');
   saveBtn.disabled = true;
@@ -1817,6 +2181,7 @@ async function handleSaveTask() {
         }
       }
       showToast('Oppgave oppdatert');
+      if (recurrence) scheduleRecurringTaskGeneration(taskId);
     } else {
       const newId = await createTask(data);
       if (assigneeId && assigneeId !== state.user.uid) {
@@ -1828,6 +2193,7 @@ async function handleSaveTask() {
         });
       }
       showToast('Oppgave opprettet');
+      if (recurrence) scheduleRecurringTaskGeneration(newId);
     }
     closeTaskModal();
   } catch(e) {
@@ -2922,6 +3288,10 @@ document.addEventListener('DOMContentLoaded', () => {
   ['task-assignee', 'task-start-date', 'task-due-date'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', refreshTaskQualityControls);
   });
+  document.getElementById('task-recurrence-frequency').addEventListener('change', () => updateRecurrenceForm(true));
+  ['task-recurrence-interval','task-recurrence-weekday','task-recurrence-monthday','task-recurrence-end-date']
+    .forEach(id => document.getElementById(id)?.addEventListener('input', () => updateRecurrenceForm(false)));
+  document.getElementById('task-due-date').addEventListener('change', () => updateRecurrenceForm(false));
 
   // Subtask add
   document.getElementById('btn-add-subtask').addEventListener('click', handleAddSubtask);

@@ -628,6 +628,20 @@ body {
 .risk-badge.upcoming,
 .risk-badge.subtask { background: #FEF3C7; color: #92400E; }
 .risk-badge.unassigned { background: #111111; color: var(--white); }
+.task-recurrence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  color: var(--text-2);
+  background: var(--white);
+  font-size: .68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
 .status-badge {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 8px; border-radius: 99px;
@@ -1300,6 +1314,59 @@ body {
 .form-input:focus { outline: none; border-color: var(--coral); }
 .form-textarea { resize: vertical; min-height: 80px; }
 
+.task-recurrence-settings {
+  margin: 10px 0 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.task-recurrence-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.task-recurrence-heading-row h3 { margin: 0; font-size: .86rem; }
+.task-recurrence-heading-row p {
+  margin: 3px 0 0;
+  color: var(--text-3);
+  font-size: .72rem;
+}
+.task-recurrence-frequency {
+  width: min(180px, 44%);
+  flex: 0 0 auto;
+}
+.task-recurrence-controls { margin-top: 12px; }
+.task-recurrence-interval {
+  display: grid;
+  grid-template-columns: auto minmax(64px, 84px) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  color: var(--text-2);
+  font-size: .8rem;
+}
+.task-recurrence-interval .form-input { width: 100%; }
+.task-recurrence-end-group { max-width: calc(50% - 6px); }
+.task-recurrence-end-group .form-label span { color: var(--text-3); font-weight: 500; }
+.task-recurrence-summary {
+  margin: 9px 0 0;
+  color: var(--text);
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.task-recurrence-note,
+.task-recurrence-error {
+  margin: 4px 0 0;
+  font-size: .72rem;
+  line-height: 1.4;
+}
+.task-recurrence-note { color: var(--text-3); }
+.task-recurrence-error { color: #B91C1C; font-weight: 700; }
+.task-recurrence-settings.has-error { border-bottom-color: #FCA5A5; }
+.task-recurrence-settings.is-readonly .task-recurrence-heading-row p { display: none; }
+
 .task-quality-settings {
   margin-top: 12px;
   border-top: 1px solid var(--border);
@@ -1952,6 +2019,18 @@ body {
 
   .modal-body {
     padding: 18px;
+  }
+
+  .task-recurrence-heading-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .task-recurrence-frequency,
+  .task-recurrence-end-group {
+    width: 100%;
+    max-width: none;
   }
 
   .subtask-progress-card {

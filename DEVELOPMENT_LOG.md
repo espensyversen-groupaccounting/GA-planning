@@ -1,5 +1,33 @@
 # Development Log
 
+## v1.13.0 - 2026-09-04
+
+### Gjentakende oppgaver
+- La til ukentlig og månedlig gjentakelse i oppgavemodalen med intervall, ukedag/dag i måneden, valgfri sluttdato, norsk oppsummering og forklaring av hvordan eksisterende forekomster behandles.
+- Gjentakelse krever ferdigdato. Første ferdigdato lagres som et stabilt `anchorDate`; senere endring av malens ferdigdato flytter ikke ankeret eller hele serien.
+- Månedlig dag 29–31 bruker månedens siste dag når datoen ikke finnes. Datoberegningen ligger samlet i den rene funksjonen `nextRecurrenceDate()`.
+- Maler får et diskret gjentakelsesmerke på oppgavekort. Genererte forekomster vises som ordinære oppgaver uten eget merke.
+
+### Bakgrunnsgenerering og samtidighet
+- Genererer manglende forekomster gjennom 90 dager fra i dag etter første oppgavesnapshot og umiddelbart etter lagring. Arbeidet køes med `setTimeout` etter rendering og blokkerer ikke dashboard eller modal.
+- Generering kjøres kun for Admin og Teamleder (`canEdit()`), i tråd med eksisterende Firestore-regler. Et Medlem alene utløser derfor ikke nye forekomster.
+- Bruker deterministiske dokument-ID-er basert på mal-ID og forekomstdato, kombinert med en Firestore-transaksjon som leser malen og forekomstene før skriving. Samtidige faner kan ikke lage duplikater, og eksisterende forekomster overskrives aldri.
+- Transaksjonene behandler maksimalt 100 kandidater per pulje. Det gir høyst 101 dokumentlesinger og 101 dokumentskrivinger i en pulje, godt under grensen på 500. Vanlig 90-dagersgenerering gir maksimalt omtrent 13 ukentlige eller 3 månedlige forekomster.
+- Ved endring av mønsteret settes `recurrenceGeneratedUntil` tilbake til ankeret. Gamle forekomster beholdes; fjerning av gjentakelse eller arkivering av malen stopper videre generering.
+
+### Kopiering og datoer
+- Forekomster kopierer planleggingsfelter, ansvarlig, deltakere, kategori, avhengigheter og deloppgavenes tittel/ansvar. Status settes til `ikke_startet`, og deloppgaver settes til ikke fullført.
+- Startdato og deloppgavefrister beholder sin opprinnelige avstand til ferdigdato. Kommentarer, slettemarkører og kvalitetsunntak kopieres ikke.
+- JSON-backupen tar automatisk med de nye råfeltene. CSV-kode, kolonner og filformat er uendret.
+
+### Kontroll
+- Isolert datotest består med 22 assertions for månedlig dag 4, annenhver uke, februar ved dag 31 i normalår og skuddår, sluttdato, mønsterendring, puljing og forskyvning av start-/deloppgavefrister.
+- Emulatorbasert transaksjonstest består med 12 assertions: to samtidige kjøringer oppretter én forekomst per dato; redigert tittel og fullført deloppgave blir ikke overskrevet ved gjentatt lasting; dag 4 og dag 20 kan eksistere side om side etter mønsterendring; stoppet og arkivert mal genererer ingenting.
+- Lokal Chrome-kontroll består på desktop og 390 px mobil for ferdigdatovalidering, betingede felt, månedssluttforklaring, stabilt anker etter endret ferdigdato, kortmerke, Medlem-skrivelås og responsiv bredde uten horisontal overflow. Køtesten bekrefter at genereringen starter etter gjeldende kallstakk for Admin og ikke starter for Medlem.
+- Eksisterende Firestore-emulatortester består 24/24. `node --check` består for alle fire JavaScript-filer.
+- `classifyDashboardItem()`, `taskSignals()`, `dataQualityIssues()`, dashboardets toppkort/seksjoner, ToDo-modulen, Firestore-reglene og regeltestene er uendret.
+- Versjon bumpet til `1.13.0` i alle tre versjonskilder; klientbuild er `11300`.
+
 ## v1.12.1 - 2026-09-04
 
 ### Rettet layout og rulling

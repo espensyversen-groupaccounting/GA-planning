@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.12.1';
-const CLIENT_BUILD = 11201;
+const CLIENT_APP_VERSION = '1.13.0';
+const CLIENT_BUILD = 11300;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -221,6 +221,57 @@ function todoArchiveData() {
 async function createTask(data) {
   const ref = await db.collection('tasks').add(taskCreateData(data));
   return ref.id;
+}
+
+function recurrenceInstanceDocumentId(templateId, instanceDate) {
+  return `${templateId}__${String(instanceDate).replace(/-/g, '')}`;
+}
+
+async function generateRecurringTaskInstances(templateId, horizonDate, buildPlan, buildInstanceData) {
+  let created = 0;
+  let hasMore = true;
+  let batches = 0;
+
+  while (hasMore && batches < 100) {
+    const result = await db.runTransaction(async tx => {
+      const templateRef = db.collection('tasks').doc(templateId);
+      const templateDoc = await tx.get(templateRef);
+      if (!templateDoc.exists) return { created: 0, hasMore: false };
+
+      const template = { id: templateDoc.id, ...templateDoc.data() };
+      if (template.deletedAt || !template.recurrence) return { created: 0, hasMore: false };
+
+      const plan = buildPlan(template, horizonDate, 100);
+      const instanceRefs = plan.occurrences.map(instanceDate =>
+        db.collection('tasks').doc(recurrenceInstanceDocumentId(templateId, instanceDate))
+      );
+      const instanceDocs = await Promise.all(instanceRefs.map(ref => tx.get(ref)));
+
+      let batchCreated = 0;
+      plan.occurrences.forEach((instanceDate, index) => {
+        if (instanceDocs[index].exists) return;
+        tx.set(instanceRefs[index], taskCreateData(buildInstanceData(template, instanceDate)));
+        batchCreated += 1;
+      });
+
+      if (plan.generatedUntil && plan.generatedUntil !== template.recurrenceGeneratedUntil) {
+        tx.update(templateRef, {
+          recurrenceGeneratedUntil: plan.generatedUntil,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          lastEditedBy: auth.currentUser.uid,
+          ...writeMeta()
+        });
+      }
+      return { created: batchCreated, hasMore: plan.hasMore };
+    });
+
+    created += result.created;
+    hasMore = result.hasMore;
+    batches += 1;
+  }
+
+  if (hasMore) throw new Error('RECURRENCE_GENERATION_LIMIT');
+  return created;
 }
 
 async function updateTask(taskId, data) {

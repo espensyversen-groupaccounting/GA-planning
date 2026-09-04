@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.12.1`
+Gjeldende appversjon: `v1.13.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -106,6 +106,10 @@ Opprettes eller oppdateres automatisk ved første innlogging etter at brukeren f
 - `dependencies`
 - `subtasks`: array av `{ id, title, completed, dueDate, assignedTo, assignedToName }`, der `dueDate` er `YYYY-MM-DD` eller null og ansvarligfeltene er valgfrie
 - `qualityExceptions`: valgfritt array med bevisste unntak for `startDate`, `dueDate`, `assignee` og `subtaskDueDate`; manglende felt behandles som tomt
+- `recurrence`: objekt eller null med `frequency` (`weekly`/`monthly`), `interval`, valgfri `weekday`/`dayOfMonth`, stabil `anchorDate` og valgfri `endDate`
+- `recurrenceTemplateId`: malens oppgave-ID på genererte forekomster, ellers null
+- `recurrenceInstanceDate`: forekomstdato som `YYYY-MM-DD` på genererte forekomster, ellers null
+- `recurrenceGeneratedUntil`: datoen malen er ferdig generert gjennom
 - `deletedAt`, `deletedBy`: soft-delete/arkivering
 - `createdBy`, `createdAt`, `updatedAt`
 - write metadata
@@ -275,6 +279,15 @@ Deltakerfeltet bruker én eksplisitt SVG-indikator i høyre kant. Indikatoren ro
 Lagrede deltakere og deloppgaveansvarlige som ikke lenger finnes i `state.users`, beholdes med snapshot-navnet og merkes som inaktive til de fjernes eksplisitt. Bare aktive brukere kan velges på nytt, og inaktive personer telles ikke i teamoversikten.
 
 Deloppgaver er fortsatt et array inne i oppgavedokumentet. Firestore-reglene kan derfor ikke gi et Medlem skrivetilgang bare til sitt eget arrayelement. Deloppgaveansvar i v1.11.0 er et koordineringsverktøy: personen ser oppgaven i `Mine`, men kan ikke krysse av eller redigere deloppgaven. Det krever egne deloppgavedokumenter i en senere arkitektur.
+
+## Gjentakende oppgaver
+Admin og Teamleder kan gjøre en oppgave ukentlig eller månedlig gjentakende fra Detaljer-fanen. Gjentakelse krever ferdigdato. Når serien opprettes, lagres ferdigdatoen som `recurrence.anchorDate`; malen er den første forekomsten, og genererte forekomster kommer etter denne datoen. Endres malens ferdigdato senere, beholdes ankeret slik at hele serien ikke forskyves utilsiktet.
+
+Klienten genererer forekomster gjennom 90 dager fra dagens dato. Ved månedlig dag 29, 30 eller 31 brukes månedens siste dag når den valgte datoen ikke finnes. Startdato og deloppgavefrister forskyves med samme avstand til ferdigdatoen som på malen. Nye forekomster starter som `ikke_startet`, og deloppgaver starter som ikke fullført.
+
+Genereringen starter i bakgrunnen etter at oppgavene er lastet og umiddelbart etter lagring av en gjentakende oppgave. Den blokkerer ikke første rendering eller lukking av modalen. Dagens Firestore-regler tillater bare Admin og Teamleder å opprette oppgaver, så genereringen kjøres bare når `canEdit()` er sann. En ny forekomst opprettes derfor først når en Admin eller Teamleder åpner appen; innlogging fra kun et Medlem utløser ikke generering.
+
+Forekomst-ID-en utledes deterministisk av mal-ID og dato. Generering skjer i transaksjonelle puljer på maksimalt 100 kandidater: transaksjonen leser den autoritative malen og alle aktuelle forekomster, oppretter bare dokumenter som ikke finnes, og oppdaterer `recurrenceGeneratedUntil` atomisk. Samtidige faner kan derfor ikke lage duplikater, og en eksisterende forekomst overskrives aldri. Ved mønsterendring settes markøren tilbake til ankeret; tidligere forekomster beholdes urørt. Fjerning av gjentakelse eller soft-delete av malen stopper videre generering.
 
 ## Eksport og sikkerhetskopi
 Admin har et eget kort under Administrasjon for å laste ned en manuell øyeblikkskopi. Eksporten henter ett rått snapshot fra hver av samlingene `tasks`, `todos`, `categories`, `users`, `allowedUsers` og `comments`. Soft-slettede oppgaver og ToDo-er er med; varsler utelates fordi de er avledede og forgjengelige.

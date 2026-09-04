@@ -586,6 +586,54 @@
                 <input type="date" id="task-due-date" class="form-input" />
               </div>
             </div>
+            <section id="task-recurrence-settings" class="task-recurrence-settings" aria-labelledby="task-recurrence-heading">
+              <div class="task-recurrence-heading-row">
+                <div>
+                  <h3 id="task-recurrence-heading">Gjentakelse</h3>
+                  <p>Opprett nye forekomster automatisk fremover.</p>
+                </div>
+                <select id="task-recurrence-frequency" class="form-input task-recurrence-frequency" aria-label="Velg gjentakelse">
+                  <option value="">Ingen</option>
+                  <option value="weekly">Ukentlig</option>
+                  <option value="monthly">Månedlig</option>
+                </select>
+              </div>
+              <div id="task-recurrence-controls" class="task-recurrence-controls hidden">
+                <div class="form-row">
+                  <div class="form-group task-recurrence-interval-group">
+                    <label class="form-label" for="task-recurrence-interval">Intervall</label>
+                    <div class="task-recurrence-interval">
+                      <span>Hver</span>
+                      <input type="number" id="task-recurrence-interval" class="form-input" min="1" max="52" step="1" value="1" inputmode="numeric" />
+                      <span id="task-recurrence-interval-unit">uke</span>
+                    </div>
+                  </div>
+                  <div id="task-recurrence-weekday-group" class="form-group">
+                    <label class="form-label" for="task-recurrence-weekday">Ukedag</label>
+                    <select id="task-recurrence-weekday" class="form-input">
+                      <option value="1">Mandag</option>
+                      <option value="2">Tirsdag</option>
+                      <option value="3">Onsdag</option>
+                      <option value="4">Torsdag</option>
+                      <option value="5">Fredag</option>
+                      <option value="6">Lørdag</option>
+                      <option value="0">Søndag</option>
+                    </select>
+                  </div>
+                  <div id="task-recurrence-monthday-group" class="form-group hidden">
+                    <label class="form-label" for="task-recurrence-monthday">Dag i måneden</label>
+                    <input type="number" id="task-recurrence-monthday" class="form-input" min="1" max="31" step="1" value="1" inputmode="numeric" />
+                  </div>
+                </div>
+                <div class="form-group task-recurrence-end-group">
+                  <label class="form-label" for="task-recurrence-end-date">Sluttdato <span>(valgfritt)</span></label>
+                  <input type="date" id="task-recurrence-end-date" class="form-input" />
+                </div>
+              </div>
+              <p id="task-recurrence-summary" class="task-recurrence-summary">Gjentas ikke</p>
+              <p id="task-recurrence-error" class="task-recurrence-error hidden" role="alert"></p>
+              <p id="task-recurrence-note" class="task-recurrence-note hidden">Endringer gjelder bare nye forekomster. Oppgaver som allerede er opprettet, beholdes uendret.</p>
+            </section>
             <div class="form-group">
               <label class="form-label" for="task-dependencies">Avhengigheter / Venter på</label>
               <input type="text" id="task-dependencies" class="form-input" placeholder="F.eks. venter på svar fra økonomiavdelingen..." />
