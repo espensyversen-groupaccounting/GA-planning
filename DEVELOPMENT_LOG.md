@@ -1,5 +1,18 @@
 # Development Log
 
+## v1.11.1 - 2026-09-04
+
+### Én indikator i deltakerfeltet
+- Fjernet den ekstra CSS-genererte pilen fra deltakerkontrollen. Markupens eksisterende SVG er nå eneste indikator og ligger konsekvent i høyre kant.
+- SVG-en roteres når `<details>` åpnes. Hele summary-feltet er fortsatt klikkbart og tastaturfokuserbart, og `focus-within` gir samme korallfargede fokusramme som øvrige skjemafelt.
+- Lang oppsummeringstekst avkortes med ellipse uten å flytte indikatoren. Flervalg, eierfiltrering, inaktive snapshots og bevaring ved brukeroppdatering er urørt.
+
+### Kontroll
+- Lukket og åpen kontroll er visuelt kontrollert på desktop og mobil med én høyrejustert indikator og korrekt rotasjon.
+- Valg og fjerning, eierfiltrering, inaktiv deltaker og tastaturåpning er regresjonskontrollert.
+- `node --check` består for alle fire JavaScript-filer. Firestore-emulatortestene består 24/24.
+- Versjon bumpet til `1.11.1` i alle tre versjonskilder; klientbuild er `11101`.
+
 ## v1.11.0 - 2026-09-04
 
 ### Samarbeid om oppgaver

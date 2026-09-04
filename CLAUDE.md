@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.11.0`
+Gjeldende appversjon: `v1.11.1`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -266,6 +266,8 @@ Deloppgaver kan ha egne deadlines. Disse brukes i dashboardets hasteberegning og
 I oppgavemodalen vises deloppgaver stigende etter frist, med deloppgaver uten frist sist. Sorteringen skjer bare på en visningskopi som beholder indeks til det lagrede arrayet; avkryssing, ansvarsendring, fristendring og sletting oppdaterer derfor riktig element uten å endre rekkefølgen i Firestore. Begge modal-fanene viser ansvarlig og alltid absolutt dato sammen med den relative etiketten `Forfalt`, `I dag`, `I morgen` eller `Om N d` når den er relevant. Fullførte deloppgaver viser `Fullført`, og udaterte viser `Ingen frist`.
 
 Oppgaver har fortsatt nøyaktig én hovedansvarlig i `assignedTo`, men kan i tillegg ha flere deltakere. Hovedansvarlig filtreres bort fra deltakerlisten ved lagring. Kort viser deltakerne kompakt, mens `taskInvolvement()` er felles kilde for `Mine`, hurtigfiltrene, teamoversikten og klientens statuskontroller. Hovedansvarlig og deltaker kan endre hovedstatus; en bruker som kun er deloppgaveansvarlig kan ikke endre hovedstatus.
+
+Deltakerfeltet bruker én eksplisitt SVG-indikator i høyre kant. Indikatoren roteres når feltet åpnes; nettleserens innebygde `summary`-markør er skjult.
 
 Lagrede deltakere og deloppgaveansvarlige som ikke lenger finnes i `state.users`, beholdes med snapshot-navnet og merkes som inaktive til de fjernes eksplisitt. Bare aktive brukere kan velges på nytt, og inaktive personer telles ikke i teamoversikten.
 
