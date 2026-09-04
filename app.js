@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.11.1';
+const APP_VERSION = '1.12.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -22,6 +22,7 @@ const state = {
   unsubscribers: [],
   activeTaskId: null,
   activeTaskDetailsUpdatedAt: null,
+  activeTaskSubtasks: [],
   commentUnsub: null,
   editMode: false,
   quickFilter: '',
@@ -30,6 +31,7 @@ const state = {
   dashboardSectionCollapsed: {
     inProgress: localStorage.getItem('dashboardInProgressCollapsed') === 'true',
     later: localStorage.getItem('dashboardLaterCollapsed') === 'true',
+    quality: localStorage.getItem('dashboardQualityCollapsed') !== 'false',
   },
   todoViewFilter: 'open',
   todoViewPriority: '',
@@ -105,6 +107,30 @@ function taskDueDays(task) {
 
 function isDoneItem(item) {
   return item && (item.status === 'fullfort' || item.status === 'done');
+}
+
+const DATA_QUALITY_ISSUES = [
+  { key: 'assignee', label: 'Mangler ansvarlig' },
+  { key: 'dueDate', label: 'Mangler frist' },
+  { key: 'startDate', label: 'Mangler startdato' },
+  { key: 'subtaskDueDate', label: 'Deloppgave uten frist' },
+];
+
+function dataQualityIssues(item, type = 'task') {
+  if (!item || item.deletedAt || isDoneItem(item)) return [];
+  const exceptions = type === 'task' && Array.isArray(item.qualityExceptions)
+    ? item.qualityExceptions.filter(key => DATA_QUALITY_ISSUES.some(issue => issue.key === key))
+    : [];
+  const conditions = {
+    assignee: !item.assignedTo,
+    dueDate: type === 'task' && !item.dueDate,
+    startDate: type === 'task' && !item.startDate,
+    subtaskDueDate: type === 'task' && (Array.isArray(item.subtasks) ? item.subtasks : [])
+      .some(subtask => !subtask.completed && !subtask.dueDate),
+  };
+  return DATA_QUALITY_ISSUES
+    .filter(issue => conditions[issue.key])
+    .map(issue => ({ ...issue, suppressed: exceptions.includes(issue.key) }));
 }
 
 function isMineItem(item) {
@@ -761,8 +787,6 @@ function renderDashboard() {
   const todos = scopedTodos();
   const open = tasks.filter(t => !isDoneItem(t));
   const openTodos = todos.filter(t => !isDoneItem(t));
-  const unassigned = open.filter(t => !t.assignedTo);
-  const unassignedTodos = openTodos.filter(t => !t.assignedTo);
   const entries = dashboardEntries(open, openTodos);
   const classifiedEntries = entries.filter(entry => entry.section);
   const sections = {
@@ -846,12 +870,14 @@ function renderDashboard() {
   updateDashboardSection('later', sections.later.length);
   updateDashboardSectionVisibility(filteredSections, otherResults);
 
-  const unassignedItems = [
-    ...unassigned,
-    ...unassignedTodos.map(todo => ({ ...todo, _isTodo: true }))
-  ].sort(compareTasksByUrgency);
-  document.getElementById('unassigned-section-count').textContent = unassignedItems.length;
-  renderCompactList('unassigned-tasks-list', unassignedItems, 'Alle åpne oppgaver og ToDo-er har ansvarlig');
+  const qualityItems = [
+    ...open.map(item => ({ item, type: 'task', issues: dataQualityIssues(item, 'task').filter(issue => !issue.suppressed) })),
+    ...openTodos.map(item => ({ item, type: 'todo', issues: dataQualityIssues(item, 'todo') })),
+  ]
+    .filter(entry => entry.issues.length)
+    .sort((a, b) => b.issues.length - a.issues.length || compareTasksByUrgency(a.item, b.item));
+  renderDataQualityList(qualityItems);
+  updateDashboardSection('quality', qualityItems.length);
   renderTeamWorkload([...open, ...openTodos]);
   renderTodoPanel();
 }
@@ -948,16 +974,25 @@ function renderTeamWorkload(openItems) {
     </button>`).join('');
 }
 
-function renderCompactList(containerId, tasks, emptyMsg) {
-  const el = document.getElementById(containerId);
-  if (!tasks.length) {
-    el.innerHTML = `<div class="empty-state compact-empty"><p>${emptyMsg}</p></div>`;
+function renderDataQualityList(entries) {
+  const el = document.getElementById('data-quality-list');
+  if (!el) return;
+  if (!entries.length) {
+    el.innerHTML = '<div class="empty-state compact-empty"><p>Alt er utfylt for de åpne elementene.</p></div>';
     return;
   }
-  el.innerHTML = tasks.map(t => t._isTodo
-    ? todoCardHtml(t, { sortable: false })
-    : taskCardHtml(t, true)
-  ).join('');
+  el.innerHTML = entries.map(entry => {
+    const card = entry.type === 'todo'
+      ? todoCardHtml(entry.item, { sortable: false })
+      : taskCardHtml(entry.item, true);
+    return `
+      <div class="data-quality-item">
+        ${card}
+        <div class="data-quality-badges" aria-label="Mangler informasjon">
+          ${entry.issues.map(issue => `<span class="data-quality-badge">${esc(issue.label)}</span>`).join('')}
+        </div>
+      </div>`;
+  }).join('');
 }
 
 function dashboardItemKindIconHtml(type) {
@@ -1058,6 +1093,13 @@ const dashboardSectionElements = {
     contentId: 'later-list',
     storageKey: 'dashboardLaterCollapsed',
   },
+  quality: {
+    countId: 'data-quality-count',
+    sectionId: 'dashboard-data-quality-section',
+    contentId: 'data-quality-list',
+    storageKey: 'dashboardQualityCollapsed',
+    preserveCollapseWithFilter: true,
+  },
 };
 
 function updateDashboardSection(sectionKey, count) {
@@ -1066,7 +1108,8 @@ function updateDashboardSection(sectionKey, count) {
   const countEl = document.getElementById(config.countId);
   if (countEl) countEl.textContent = count;
   if (!config.sectionId) return;
-  const collapsed = Boolean(state.dashboardSectionCollapsed[sectionKey]) && !state.dashboardFilter;
+  const collapsed = Boolean(state.dashboardSectionCollapsed[sectionKey]) &&
+    (!state.dashboardFilter || config.preserveCollapseWithFilter);
   const section = document.getElementById(config.sectionId);
   const content = document.getElementById(config.contentId);
   const button = section?.querySelector('.dashboard-section-toggle');
@@ -1525,6 +1568,7 @@ async function openTaskModal(taskId = null, prefetchedTask = null) {
     }
     document.getElementById('modal-title').textContent = task.title;
     state.activeTaskDetailsUpdatedAt = task.detailsUpdatedAt || task.updatedAt || null;
+    state.activeTaskSubtasks = task.subtasks || [];
     fillTaskForm(task);
     updateStatusStepper(task.status, task);
     updateModalButtons(task);
@@ -1536,10 +1580,12 @@ async function openTaskModal(taskId = null, prefetchedTask = null) {
     document.getElementById('task-form').reset();
     document.getElementById('task-id').value = '';
     state.activeTaskDetailsUpdatedAt = null;
+    state.activeTaskSubtasks = [];
     document.getElementById('subtasks-list').innerHTML = '';
     renderSubtaskTimeline([]);
     document.getElementById('comments-list').innerHTML = '';
     renderCollaboratorPicker([]);
+    renderTaskQualityControls({ status: 'ikke_startet', subtasks: [], qualityExceptions: [] });
     updateStatusStepper('ikke_startet');
     updateModalButtons(null);
   }
@@ -1557,6 +1603,7 @@ function closeTaskModal() {
   if (state.commentUnsub) { state.commentUnsub(); state.commentUnsub = null; }
   state.activeTaskId = null;
   state.activeTaskDetailsUpdatedAt = null;
+  state.activeTaskSubtasks = [];
 }
 
 function fillTaskForm(task) {
@@ -1587,6 +1634,56 @@ function fillTaskForm(task) {
   } else {
     document.getElementById('task-due-date').value = '';
   }
+  renderTaskQualityControls(task);
+}
+
+function selectedQualityExceptions() {
+  return Array.from(document.querySelectorAll('#task-quality-options input:checked'))
+    .map(input => input.value);
+}
+
+function taskQualityDraft(task = {}) {
+  return {
+    ...task,
+    status: document.getElementById('task-status')?.value || task.status || 'ikke_startet',
+    assignedTo: document.getElementById('task-assignee')?.value || null,
+    startDate: document.getElementById('task-start-date')?.value || null,
+    dueDate: document.getElementById('task-due-date')?.value || null,
+    subtasks: state.activeTaskSubtasks,
+  };
+}
+
+function renderTaskQualityControls(task = {}, preserveSelection = false) {
+  const el = document.getElementById('task-quality-options');
+  if (!el) return;
+  const selected = preserveSelection
+    ? selectedQualityExceptions()
+    : (Array.isArray(task.qualityExceptions) ? task.qualityExceptions : []);
+  const issues = new Map(dataQualityIssues({
+    ...taskQualityDraft(task),
+    qualityExceptions: selected,
+  }, 'task').map(issue => [issue.key, issue]));
+  el.innerHTML = DATA_QUALITY_ISSUES.map(definition => {
+    const issue = issues.get(definition.key);
+    const isApplicable = Boolean(issue);
+    const checked = isApplicable && issue.suppressed;
+    const fieldLabel = definition.label
+      .replace('Mangler ', '')
+      .replace(' uten frist', 'frister');
+    return `
+      <label class="task-quality-option ${isApplicable ? '' : 'is-resolved'}">
+        <input type="checkbox" value="${definition.key}" ${checked ? 'checked' : ''} ${isApplicable && canEdit() ? '' : 'disabled'} />
+        <span>
+          <strong>${esc(fieldLabel)} er ikke relevant</strong>
+          <small>${isApplicable ? 'Skjuler dette avviket fra dashboardet' : 'Ikke et avvik nå'}</small>
+        </span>
+      </label>`;
+  }).join('');
+}
+
+function refreshTaskQualityControls() {
+  const task = state.tasks.find(item => item.id === state.activeTaskId) || {};
+  renderTaskQualityControls(task, true);
 }
 
 function updateModalButtons(task) {
@@ -1622,6 +1719,9 @@ function setFormReadOnly(readonly) {
   document.querySelectorAll('#task-collaborators-options input').forEach(input => {
     input.disabled = readonly;
   });
+  document.querySelectorAll('#task-quality-options input').forEach(input => {
+    input.disabled = readonly || input.closest('.task-quality-option')?.classList.contains('is-resolved');
+  });
   document.getElementById('task-collaborators-picker')?.classList.toggle('is-readonly', readonly);
   const statusEl = document.getElementById('task-status');
   const activeTask = state.tasks.find(task => task.id === state.activeTaskId);
@@ -1642,6 +1742,17 @@ async function handleSaveTask() {
   const startStr  = document.getElementById('task-start-date').value;
   const dueStr    = document.getElementById('task-due-date').value;
   const deps      = document.getElementById('task-dependencies').value.trim();
+  const currentTask = state.tasks.find(t => t.id === taskId);
+  const activeQualityKeys = dataQualityIssues({
+    status,
+    assignedTo: assigneeId || null,
+    startDate: startStr || null,
+    dueDate: dueStr || null,
+    subtasks: state.activeTaskSubtasks,
+    qualityExceptions: [],
+  }, 'task').map(issue => issue.key);
+  const qualityExceptions = selectedQualityExceptions()
+    .filter(key => activeQualityKeys.includes(key));
 
   const assignee = state.users.find(u => u.id === assigneeId);
   const category = state.categories.find(c => c.id === categoryId);
@@ -1667,6 +1778,7 @@ async function handleSaveTask() {
     startDate: startStr ? firebase.firestore.Timestamp.fromDate(new Date(startStr)) : null,
     dueDate:   dueStr   ? firebase.firestore.Timestamp.fromDate(new Date(dueStr))   : null,
     dependencies: deps,
+    qualityExceptions,
   };
 
   const saveBtn = document.getElementById('btn-save-task');
@@ -1674,7 +1786,7 @@ async function handleSaveTask() {
 
   try {
     if (taskId) {
-      const oldTask = state.tasks.find(t => t.id === taskId);
+      const oldTask = currentTask;
 
       // If role is Medlem, only allow status update
       if (!canEdit()) {
@@ -1858,6 +1970,7 @@ function subtaskAssigneeOptions(subtask) {
 }
 
 function renderSubtasks(subtasks) {
+  state.activeTaskSubtasks = Array.isArray(subtasks) ? subtasks : [];
   const editable = canEdit();
   const el = document.getElementById('subtasks-list');
   const countEl = document.getElementById('subtasks-tab-count');
@@ -1866,6 +1979,7 @@ function renderSubtasks(subtasks) {
     el.innerHTML = '<p style="color:var(--text-3);font-size:.875rem;text-align:center;padding:20px 0">Ingen deloppgaver ennå</p>';
     countEl.textContent = '';
     renderSubtaskTimeline([]);
+    refreshTaskQualityControls();
     return;
   }
   const done = subtasks.filter(s => s.completed).length;
@@ -1891,6 +2005,7 @@ function renderSubtasks(subtasks) {
     </div>`).join('');
 
   renderSubtaskTimeline(subtasks);
+  refreshTaskQualityControls();
 }
 
 async function updateSubtasksWithFeedback(taskId, transform, errorMessage) {
@@ -2804,6 +2919,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-delete-task').addEventListener('click', handleDeleteTask);
   document.getElementById('btn-undo-complete').addEventListener('click', handleUndoComplete);
   document.getElementById('task-assignee').addEventListener('change', handleTaskAssigneeChange);
+  ['task-assignee', 'task-start-date', 'task-due-date'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', refreshTaskQualityControls);
+  });
 
   // Subtask add
   document.getElementById('btn-add-subtask').addEventListener('click', handleAddSubtask);

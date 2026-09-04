@@ -187,9 +187,12 @@
               </div>
               <div id="other-results-list" class="priority-group-list"></div>
             </section>
-            <section class="dashboard-section">
-              <h2 class="section-title">Uten ansvarlig <span id="unassigned-section-count" class="dashboard-section-count">0</span></h2>
-              <div id="unassigned-tasks-list" class="task-list-compact unassigned-dashboard-list"></div>
+            <section id="dashboard-data-quality-section" class="dashboard-section dashboard-collapsible-section data-quality-section">
+              <button class="dashboard-section-toggle" type="button" onclick="toggleDashboardSection('quality')" aria-expanded="false" aria-controls="data-quality-list">
+                <span class="section-title">Trenger utfylling <span id="data-quality-count" class="dashboard-section-count">0</span></span>
+                <svg class="dashboard-section-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div id="data-quality-list" class="task-list-compact data-quality-dashboard-list dashboard-collapsible-content" hidden></div>
             </section>
             <section class="dashboard-section">
               <h2 class="section-title">Teamoversikt <span id="team-overview-count" class="dashboard-section-count">0</span></h2>
@@ -587,6 +590,14 @@
               <label class="form-label" for="task-dependencies">Avhengigheter / Venter på</label>
               <input type="text" id="task-dependencies" class="form-input" placeholder="F.eks. venter på svar fra økonomiavdelingen..." />
             </div>
+            <details id="task-quality-settings" class="task-quality-settings">
+              <summary>
+                <span>Ikke relevant for denne oppgaven</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+              </summary>
+              <p>Marker bare planleggingsinformasjon som bevisst ikke skal fylles ut.</p>
+              <div id="task-quality-options" class="task-quality-options"></div>
+            </details>
           </form>
         </div>
 

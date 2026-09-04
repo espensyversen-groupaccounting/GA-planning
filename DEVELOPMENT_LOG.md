@@ -1,5 +1,28 @@
 # Development Log
 
+## v1.12.0 - 2026-09-04
+
+### Datakvalitet på dashboardet
+- Erstattet den nederste `Uten ansvarlig`-listen med den tverrgående seksjonen `Trenger utfylling`, som samler åpne oppgaver med manglende ansvarlig, frist, startdato eller frist på åpne deloppgaver. ToDo-er tas bare med når ansvarlig mangler.
+- Samlet avviksberegningen i `dataQualityIssues()`. Dashboardet og modalens unntaksvalg bruker samme resultat, og elementer med flest aktive avvik sorteres først.
+- Seksjonen er dempet, kollapset som standard, husker tilstanden i `localStorage` og bruker intern rulling. Den følger Team/Mine, men påvirkes ikke av dashboardets midlertidige toppkortfiltre.
+- Beholdt toppkortet `Uten ansvarlig` med uendret telling og filteroppførsel.
+
+### Bevisste unntak
+- La til det valgfrie oppgavefeltet `qualityExceptions` med verdiene `startDate`, `dueDate`, `assignee` og `subtaskDueDate`.
+- La Admin og Teamleder markere manglende planleggingsinformasjon som ikke relevant fra en samlet, sammenleggbar seksjon nederst i Detaljer-fanen.
+- Ved lagring filtreres unntak mot de faktiske manglene, slik at et unntak automatisk fjernes når feltet senere fylles ut.
+
+### Avgrensning og versjon
+- `classifyDashboardItem()`, hasteberegning, `taskSignals()`, tidsseksjoner, toppkort, filtre, Oppgaver-fanen, ToDo-fanen, sidepanelet, eksport, Teamoversikt, Firestore-regler og regeltester er funksjonelt uendret.
+- Versjon bumpet til `1.12.0` i alle tre versjonskilder; klientbuild er `11200`.
+
+### Kontroll
+- Firestore-emulatortestene består uendret: 24 av 24.
+- `node --check` består for `app.js`, `js/todos.js`, `firestore.js` og `service-worker.js`.
+- Målrettet regresjonstest består med 32 assertions for avvikstyper, ToDo-avgrensning, fullførte/arkiverte elementer, eldre data, unntak, sortering, toppkort, filter, kollaps og versjon.
+- Isolert Chrome-test består på desktop og 390 px mobil for Team/Mine, første gangs kollaps, lagret kollapstilstand, tverrgående filteroppførsel, merker, responsiv bredde og automatisk opprydding i faktisk lagringspayload.
+
 ## v1.11.1 - 2026-09-04
 
 ### Én indikator i deltakerfeltet

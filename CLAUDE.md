@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.11.1`
+Gjeldende appversjon: `v1.12.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -105,6 +105,7 @@ Opprettes eller oppdateres automatisk ved første innlogging etter at brukeren f
 - `startDate`, `dueDate`: Firestore Timestamp eller null
 - `dependencies`
 - `subtasks`: array av `{ id, title, completed, dueDate, assignedTo, assignedToName }`, der `dueDate` er `YYYY-MM-DD` eller null og ansvarligfeltene er valgfrie
+- `qualityExceptions`: valgfritt array med bevisste unntak for `startDate`, `dueDate`, `assignee` og `subtaskDueDate`; manglende felt behandles som tomt
 - `deletedAt`, `deletedBy`: soft-delete/arkivering
 - `createdBy`, `createdAt`, `updatedAt`
 - write metadata
@@ -157,17 +158,19 @@ Toppkort:
 - `Uten ansvarlig`: åpne oppgaver eller ToDo-er uten tildelt person.
 - `Høy prioritet`: åpne oppgaver eller ToDo-er med høy prioritet.
 
-Kortene er midlertidige dashboardfiltre og navigerer ikke til Oppgaver-fanen. De tre første viser kun sin tidsseksjon. De to siste filtrerer på tvers av tidsseksjonene; treff utenfor tidsklassifiseringen vises da i den midlertidige seksjonen `Andre treff`. Aktivt filter kombineres med `Team`/`Mine`, nullstilles ved nytt klikk eller Escape og lagres ikke i `localStorage`. De nederste seksjonene `Uten ansvarlig` og `Teamoversikt` påvirkes ikke av filteret.
+Kortene er midlertidige dashboardfiltre og navigerer ikke til Oppgaver-fanen. De tre første viser kun sin tidsseksjon. De to siste filtrerer på tvers av tidsseksjonene; treff utenfor tidsklassifiseringen vises da i den midlertidige seksjonen `Andre treff`. Aktivt filter kombineres med `Team`/`Mine`, nullstilles ved nytt klikk eller Escape og lagres ikke i `localStorage`. De nederste seksjonene `Trenger utfylling` og `Teamoversikt` påvirkes ikke av filteret.
 
 Dashboardseksjoner:
 - `Forfalt og i dag`: åpne oppgaver, deloppgaver og ToDo-er med passert frist eller frist i dag.
 - `Neste 7 dager`: åpne oppgaver, deloppgaver og ToDo-er med frist fra i morgen til og med syv dager frem.
 - `I gang`: påbegynte oppgaver som ikke allerede er fanget av de to første tidsvinduene. Seksjonen er åpen som standard og kan kollapses.
 - `Kommer senere`: oppgaver og deloppgaver med frist 8–30 dager frem som ikke allerede ligger i en tidligere seksjon. ToDo-er tas ikke med. Seksjonen er åpen som standard for brukere uten lagret preferanse.
-- `Uten ansvarlig`: åpne oppgaver og ToDo-er som må delegeres. Listen viser alle elementene i samme hastegradssortering som ellers, men ruller internt når den blir høyere enn omtrent seks til syv kort.
+- `Trenger utfylling`: åpne oppgaver med manglende ansvarlig, frist, startdato eller frist på en åpen deloppgave, samt ToDo-er uten ansvarlig. Bevisste unntak på oppgaver skjuler det aktuelle avviket. Listen er kollapset som standard, sorterer flest avvik først og ruller internt når den blir høy.
 - `Teamoversikt`: viser åpne oppgaver/ToDo-er som personen eier og, når tallet er større enn null, hvor mange åpne oppgaver personen bidrar til som deltaker eller deloppgaveansvarlig. Bidrag telles ikke dobbelt med eide oppgaver, og risiko beregnes fortsatt bare fra eide oppgaver. Kun aktive personer i `state.users` vises. I `Mine`-visning skjules oversikten og brukeren får beskjed om å bytte til Team for teamfordeling.
 
-Dashboardets tidsvinduer klassifiseres ett sted i `classifyDashboardItem()`. Et element eies av den første seksjonen det kvalifiserer til, slik at det ikke dupliseres mellom hovedseksjonene. `Uten ansvarlig` og `Teamoversikt` er tverrgående unntak. Når en deloppgave utløser plasseringen, vises relevante deloppgaver med tittel, absolutt dato og relativ etikett under hovedkortet. I `I gang` vises utfylt `dependencies` som en escapet blokkertmelding.
+Dashboardets tidsvinduer klassifiseres ett sted i `classifyDashboardItem()`. Et element eies av den første seksjonen det kvalifiserer til, slik at det ikke dupliseres mellom hovedseksjonene. `Trenger utfylling` og `Teamoversikt` er tverrgående seksjoner. Når en deloppgave utløser plasseringen, vises relevante deloppgaver med tittel, absolutt dato og relativ etikett under hovedkortet. I `I gang` vises utfylt `dependencies` som en escapet blokkertmelding.
+
+Datakvalitetsavvik beregnes samlet i `dataQualityIssues()`, som brukes av både dashboardet og oppgavemodalens valg for «ikke relevant». Valgene ligger samlet i en diskret, sammenleggbar seksjon nederst i Detaljer-fanen. Ved lagring beholdes bare unntak for felt som fortsatt mangler; utfylte felt rydder dermed bort foreldede unntak automatisk. ToDo-er har ikke slike unntak og rapporteres bare når ansvarlig mangler.
 
 Oppgaver og ToDo-er i de blandede tidsseksjonene har to visuelt ulike typeikoner direkte ved tittelen, med tilgjengelig navn for skjermlesere. Skillet er derfor ikke avhengig av farge. Alle tidsseksjoner er gruppert etter prioritet og sortert med den eksisterende hasteberegningen. Kollapstilstanden for `I gang` og `Kommer senere` lagres lokalt i nettleseren.
 
