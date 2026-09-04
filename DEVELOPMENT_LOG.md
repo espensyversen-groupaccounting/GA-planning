@@ -1,5 +1,23 @@
 # Development Log
 
+## v1.12.1 - 2026-09-04
+
+### Rettet layout og rulling
+- Hindret flexelementene i `Trenger utfylling` fra å krympe inne i listen med maks høyde. Hvert kort følger nå innholdets faktiske høyde, og avviksmerkene blir liggende synlig under kortet.
+- Fjernet klippingen fra kortwrapperen og beholdt samlet bakgrunn, skygge og avrunding. Oppgave- og ToDo-titler i seksjonen brytes kontrollert over maksimalt tre linjer.
+- Endret vertikal `overscroll-behavior` fra `contain` til `auto`, slik at rulling går videre til siden ved listens topp og bunn. Ingen JavaScript-håndtering av wheel- eller touch-hendelser er lagt til.
+
+### Avgrensning og versjon
+- Avviksberegningen, hvilke elementer som rapporteres, modalens «Ikke relevant»-flyt, kollapstilstand, toppkort, øvrige dashboardseksjoner, hasteberegning, Teamoversikt, Firestore-regler og testfiler er uendret.
+- Versjon bumpet til `1.12.1` i alle tre versjonskilder; klientbuild er `11201`.
+
+### Kontroll
+- Chrome-test med 17 elementer målte 0 overlappende og 0 klippede kort. Alle avviksmerker var synlige, og et langt kort med tre avvik fulgte innholdshøyden og brukte trelinjers tittelklamping.
+- Listen hadde 2121 px innhold innenfor 420 px visningshøyde. Wheel-rulling flyttet først den interne listen, fortsatte deretter siden ved bunnen og fortsatte siden oppover ved toppen.
+- Med to elementer var innholds- og visningshøyden begge 308 px, uten aktiv intern rulling. Kollaps/utvid ga fortsatt korrekt layout.
+- Mobiltesten på 390 px hadde ingen horisontal overflow og lot siden fortsette å rulle ved listens grense.
+- Firestore-emulatortestene består 24/24, og `node --check` består for alle fire JavaScript-filer.
+
 ## v1.12.0 - 2026-09-04
 
 ### Datakvalitet på dashboardet

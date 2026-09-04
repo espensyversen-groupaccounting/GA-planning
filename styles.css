@@ -736,25 +736,43 @@ body {
 .data-quality-dashboard-list {
   max-height: min(560px, 60dvh);
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: auto;
   -webkit-overflow-scrolling: touch;
   padding-right: 4px;
 }
 .data-quality-section { color: var(--text-2); }
 .data-quality-section .dashboard-section-toggle { color: var(--text-2); }
 .data-quality-item {
-  overflow: hidden;
+  flex: 0 0 auto;
+  min-width: 0;
   border-radius: var(--radius);
+  background: var(--white);
   box-shadow: var(--shadow);
 }
 .data-quality-item .task-card,
-.data-quality-item .todo-card { box-shadow: none; border-radius: var(--radius) var(--radius) 0 0; }
+.data-quality-item .todo-card {
+  width: 100%;
+  box-shadow: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.data-quality-item .task-card-title,
+.data-quality-item .todo-title {
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
 .data-quality-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
   padding: 7px 10px 9px;
   border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
   background: #F7F7F7;
 }
 .data-quality-badge {

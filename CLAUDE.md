@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.12.0`
+Gjeldende appversjon: `v1.12.1`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -165,7 +165,7 @@ Dashboardseksjoner:
 - `Neste 7 dager`: åpne oppgaver, deloppgaver og ToDo-er med frist fra i morgen til og med syv dager frem.
 - `I gang`: påbegynte oppgaver som ikke allerede er fanget av de to første tidsvinduene. Seksjonen er åpen som standard og kan kollapses.
 - `Kommer senere`: oppgaver og deloppgaver med frist 8–30 dager frem som ikke allerede ligger i en tidligere seksjon. ToDo-er tas ikke med. Seksjonen er åpen som standard for brukere uten lagret preferanse.
-- `Trenger utfylling`: åpne oppgaver med manglende ansvarlig, frist, startdato eller frist på en åpen deloppgave, samt ToDo-er uten ansvarlig. Bevisste unntak på oppgaver skjuler det aktuelle avviket. Listen er kollapset som standard, sorterer flest avvik først og ruller internt når den blir høy.
+- `Trenger utfylling`: åpne oppgaver med manglende ansvarlig, frist, startdato eller frist på en åpen deloppgave, samt ToDo-er uten ansvarlig. Bevisste unntak på oppgaver skjuler det aktuelle avviket. Listen er kollapset som standard, sorterer flest avvik først og ruller internt når den blir høy. Kortene krymper ikke i rulleflaten, og rulling fortsetter på siden når listen når topp eller bunn.
 - `Teamoversikt`: viser åpne oppgaver/ToDo-er som personen eier og, når tallet er større enn null, hvor mange åpne oppgaver personen bidrar til som deltaker eller deloppgaveansvarlig. Bidrag telles ikke dobbelt med eide oppgaver, og risiko beregnes fortsatt bare fra eide oppgaver. Kun aktive personer i `state.users` vises. I `Mine`-visning skjules oversikten og brukeren får beskjed om å bytte til Team for teamfordeling.
 
 Dashboardets tidsvinduer klassifiseres ett sted i `classifyDashboardItem()`. Et element eies av den første seksjonen det kvalifiserer til, slik at det ikke dupliseres mellom hovedseksjonene. `Trenger utfylling` og `Teamoversikt` er tverrgående seksjoner. Når en deloppgave utløser plasseringen, vises relevante deloppgaver med tittel, absolutt dato og relativ etikett under hovedkortet. I `I gang` vises utfylt `dependencies` som en escapet blokkertmelding.
