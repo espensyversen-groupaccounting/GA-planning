@@ -1,5 +1,29 @@
 # Development Log
 
+## v1.15.1 - 2026-09-09
+
+### Vern mot nøstede serier
+- Genererte forekomster kan ikke gjøres gjentakende. Modalen viser en norsk forklaring, valget er deaktivert, og lagringsvalideringen avviser manipulerte forsøk.
+- Forekomster identifiseres bare ved `recurrenceTemplateId`; sperren gjelder derfor også når opprinnelig mal er arkivert, slettet eller ikke lenger finnes.
+- Generatorens kø hopper over forekomster, og `buildRecurringTaskPlan()` avviser dem på dokumentet som er lest inne i transaksjonen. En feilforekomst med både `recurrence` og `recurrenceTemplateId` lager dermed ingen nye forekomster.
+- Andre felt på en forekomst kan fortsatt redigeres. Lagring utelater alle seriefeltene, så eksisterende metadata og feilopprettede data endres eller ryddes ikke automatisk.
+
+### Tidslinjelayout
+- Tidslinjen fyller nå tilgjengelig høyde og har én intern vertikal og horisontal scrollflate. Den tidligere faste grensen `min(68dvh, 720px)` overstyres.
+- Månedsraden er klebrig ved vertikal rulling. Oppgavekolonnen er fortsatt klebrig vannrett, og hjørnecellen har eget lag over header og oppgaver.
+- Filterområdet kan skjules og utvides med én knapp. Utvidet er standard, tilstanden lagres i `localStorage`, og skjult tilstand viser en kompakt oppsummering av aktive filtre.
+- Periode og antall oppgaver er alltid synlig. Hjelpetekst og kategorilegende følger filterområdet.
+
+### Verifisering
+- Firestore-emulatortestene består 24/24. `node --check` består for `app.js`, `js/todos.js`, `js/timeline.js`, `firestore.js` og `service-worker.js`.
+- Isolert generatortest bekrefter at et dokument med både `recurrenceTemplateId` og `recurrence` gir null kandidater, uavhengig av om mal-ID-en peker på en aktiv, arkivert eller manglende mal.
+- Chrome-kontroll mot den faktiske app-DOM-en bekrefter deaktivert valg, synlig forklaring og valideringsstopp på forekomster. Vanlige oppgaver og seriemaler kan fortsatt konfigurere gjentakelse.
+- Chrome-kontroll bekrefter filterkollaps, kompakt oppsummering, synlig periode og telling, lagring i `localStorage` og korrekt gjenoppretting etter reload.
+- Layoutkontroll med 40 rader består på 1440 x 900 og 390 x 844: tidslinjen har intern rulling, fyller tilgjengelig høyde, kollaps frigjør mer høyde, månedsraden holder posisjonen ved 500 px vertikal rulling, hjørnecellen holder posisjonen ved horisontal rulling, og ingen oppgavesøyle tegnes i headeren.
+- HTML-kontroll finner 200 unike ID-er uten duplikater, og CSS-kommentarene er balanserte.
+- Oppgavefelter, generatorens dato- og transaksjonslogikk, datamodell, Firestore-regler og øvrige views er uendret.
+- Versjon bumpet til `1.15.1` i `app.js`, `service-worker.js` og `firestore.js`; klientbuild er `11501`.
+
 ## v1.15.0 - 2026-09-09
 
 ### Utvidet horisont for gjentakende oppgaver

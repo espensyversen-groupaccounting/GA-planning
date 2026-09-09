@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.15.0`
+Gjeldende appversjon: `v1.15.1`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -290,6 +290,10 @@ Genereringen starter i bakgrunnen etter at oppgavene er lastet og umiddelbart et
 
 Forekomst-ID-en utledes deterministisk av mal-ID og dato. Generering skjer i transaksjonelle puljer på maksimalt 100 kandidater: transaksjonen leser den autoritative malen og alle aktuelle forekomster, oppretter bare dokumenter som ikke finnes, og oppdaterer `recurrenceGeneratedUntil` atomisk. Én genereringskjøring behandler maksimalt 150 kandidater per mal, fordelt på høyst to transaksjoner; dette er en teknisk sikkerhetsgrense per kjøring og ikke et bestandig tak på antall dokumenter. Samtidige faner kan derfor ikke lage duplikater, og en eksisterende forekomst overskrives aldri. Ved mønsterendring settes markøren tilbake til ankeret; tidligere forekomster beholdes urørt. Fjerning av gjentakelse eller soft-delete av malen stopper videre generering.
 
+Forekomster identifiseres utelukkende ved at `recurrenceTemplateId` er satt. De kan ikke gjøres gjentakende, uansett om den opprinnelige malen fortsatt finnes, er arkivert eller er slettet. Gjentakelsesvalget er deaktivert med forklaring i modalen, mens øvrige oppgavefelt kan redigeres. Lagring av en forekomst skriver ikke til `recurrence`, `recurrenceTemplateId`, `recurrenceInstanceDate` eller `recurrenceGeneratedUntil`; eksisterende seriedata ryddes derfor ikke automatisk.
+
+Generatorens første utvalg hopper over forekomster. `buildRecurringTaskPlan()`, som mottar den ferske malen lest inne i Firestore-transaksjonen, avviser også alle dokumenter med `recurrenceTemplateId`. Denne kontrollen er autoritativ i klientgeneratoren og stopper også en eldre feilforekomst som både har `recurrence` og `recurrenceTemplateId`, uten å endre eksisterende data eller allerede opprettede duplikater.
+
 ## Tidslinje
 Tidslinjen viser åpne, ikke-slettede oppgaver med ferdigdato. ToDo-er og fullførte oppgaver vises ikke. Oppgaver med både start- og ferdigdato vises som søyler, mens oppgaver uten startdato vises som fristmarkører. En oppgave med startdato etter ferdigdato vises også som en fristmarkør med signalet `Ugyldig periode`; datamodellen og dashboardets datakvalitetsberegning endres ikke av dette.
 
@@ -304,6 +308,10 @@ Standardrekkefølgen er effektiv startdato som i v1.14.0. Brukeren kan også gru
 Deloppgavemarkører med høyst 20 pikslers avstand mellom nabosentrene samles i alle tidsvinduer. Samlemarkøren viser antallet og tooltipen lister hver deloppgave med tittel, dato, status og ansvarlig. Klyngingen endrer aldri radantallet eller oppgavens kategorifarge.
 
 Tidslinjen bruker CSS Grid uten eksternt diagram- eller Gantt-bibliotek. Tittelkolonnen er klebrig og tidsaksen kan rulles horisontalt, også på mobil. Rullingen bruker CSS `overscroll-behavior` og ingen JavaScript-håndtering av rullehendelser. Dagens dato vises når den ligger i vinduet, elementer som fortsetter utenfor vinduet markeres visuelt, og hele raden kan åpne oppgavemodalen med mus eller tastatur.
+
+Filterområdet er utvidet som standard og kan skjules med `Skjul filtre`. Tilstanden lagres i `localStorage` under `timelineFiltersCollapsed`. Når området er skjult, vises en kompakt oppsummering av aktive person-, kategori- og statusfiltre, avvikende sortering og deloppgavefrister. Periode og antall oppgaver er alltid synlig.
+
+Tidslinjevisningen fyller den tilgjengelige høyden mellom toppheader og mobilmeny. Selve tidslinjen eier den vertikale og horisontale rullingen; siden skal ikke rulle mens brukeren arbeider i tabellen. Månedsraden er klebrig ved vertikal rulling, tittelkolonnen er klebrig ved horisontal rulling, og hjørnecellen ligger over begge uten at oppgavesøyler kan tegnes inn i headeren.
 
 Gjentakende forekomster vises først når de faktisk er generert innenfor appens 12-månedershorisont. Tidslinjen opplyser om dette, slik at senere arbeidsår ikke feilaktig tolkes som komplette serier.
 

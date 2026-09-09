@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.15.0';
+const APP_VERSION = '1.15.1';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -214,7 +214,7 @@ function recurrenceSummary(recurrence) {
 
 function buildRecurringTaskPlan(template, horizonDate, maxInstances = RECURRENCE_BATCH_SIZE) {
   const recurrence = template?.recurrence;
-  if (!recurrence || template.deletedAt || !dateStringToUtc(recurrence.anchorDate)) {
+  if (!recurrence || template.deletedAt || template.recurrenceTemplateId || !dateStringToUtc(recurrence.anchorDate)) {
     return { occurrences: [], generatedUntil: null, hasMore: false };
   }
   const endLimit = recurrence.endDate && recurrence.endDate < horizonDate ? recurrence.endDate : horizonDate;
@@ -891,7 +891,7 @@ async function runRecurringTaskGeneration() {
   const requestedIds = [...recurrenceGenerationPendingIds];
   recurrenceGenerationPendingIds.clear();
   const templateIds = generateAll
-    ? state.tasks.filter(task => task.recurrence && !task.deletedAt).map(task => task.id)
+    ? state.tasks.filter(task => task.recurrence && !task.deletedAt && !task.recurrenceTemplateId).map(task => task.id)
     : requestedIds;
   const horizonDate = addDateStringMonths(todayDateString(), RECURRENCE_HORIZON_MONTHS);
 
@@ -1945,22 +1945,36 @@ function setRecurrenceError(message = '') {
 }
 
 function updateRecurrenceForm(useDueDateDefaults = false) {
+  const activeTask = state.tasks.find(task => task.id === state.activeTaskId) || null;
+  const isInstance = Boolean(activeTask?.recurrenceTemplateId);
   const frequency = document.getElementById('task-recurrence-frequency')?.value || '';
   const controls = document.getElementById('task-recurrence-controls');
   const weekly = document.getElementById('task-recurrence-weekday-group');
   const monthly = document.getElementById('task-recurrence-monthday-group');
   const note = document.getElementById('task-recurrence-note');
-  controls?.classList.toggle('hidden', !frequency);
-  weekly?.classList.toggle('hidden', frequency !== 'weekly');
-  monthly?.classList.toggle('hidden', frequency !== 'monthly');
-  note?.classList.toggle('hidden', !frequency);
+  const instanceNote = document.getElementById('task-recurrence-instance-note');
+  controls?.classList.toggle('hidden', !frequency || isInstance);
+  weekly?.classList.toggle('hidden', frequency !== 'weekly' || isInstance);
+  monthly?.classList.toggle('hidden', frequency !== 'monthly' || isInstance);
+  note?.classList.toggle('hidden', !frequency || isInstance);
+  instanceNote?.classList.toggle('hidden', !isInstance);
   const unit = document.getElementById('task-recurrence-interval-unit');
   if (unit) unit.textContent = frequency === 'monthly' ? 'måned' : frequency === 'yearly' ? 'år' : 'uke';
-  const readonly = document.getElementById('task-recurrence-settings')?.classList.contains('is-readonly');
-  document.getElementById('task-recurrence-interval').disabled = !frequency || readonly;
-  document.getElementById('task-recurrence-weekday').disabled = frequency !== 'weekly' || readonly;
-  document.getElementById('task-recurrence-monthday').disabled = frequency !== 'monthly' || readonly;
-  document.getElementById('task-recurrence-end-date').disabled = !frequency || readonly;
+  const settings = document.getElementById('task-recurrence-settings');
+  const readonly = settings?.classList.contains('is-readonly');
+  settings?.classList.toggle('is-recurrence-instance', isInstance);
+  document.getElementById('task-recurrence-frequency').disabled = readonly || isInstance;
+  document.getElementById('task-recurrence-interval').disabled = !frequency || readonly || isInstance;
+  document.getElementById('task-recurrence-weekday').disabled = frequency !== 'weekly' || readonly || isInstance;
+  document.getElementById('task-recurrence-monthday').disabled = frequency !== 'monthly' || readonly || isInstance;
+  document.getElementById('task-recurrence-end-date').disabled = !frequency || readonly || isInstance;
+
+  const summary = document.getElementById('task-recurrence-summary');
+  if (isInstance) {
+    if (summary) summary.textContent = 'Gjentakelse styres fra den opprinnelige oppgaven';
+    setRecurrenceError();
+    return;
+  }
 
   const dueDate = document.getElementById('task-due-date')?.value || '';
   const due = dateStringToUtc(dueDate);
@@ -1969,19 +1983,18 @@ function updateRecurrenceForm(useDueDateDefaults = false) {
     if (frequency === 'monthly') document.getElementById('task-recurrence-monthday').value = String(due.getUTCDate());
   }
 
-  const summary = document.getElementById('task-recurrence-summary');
   if (!frequency) {
     if (summary) summary.textContent = 'Gjentas ikke';
     setRecurrenceError();
     return;
   }
-  const draft = recurrenceFormDraft(state.tasks.find(task => task.id === state.activeTaskId) || {});
+  const draft = recurrenceFormDraft(activeTask || {});
   if (summary) summary.textContent = recurrenceSummary(draft);
   setRecurrenceError(dueDate ? '' : 'Legg inn en ferdigdato før gjentakelse kan aktiveres.');
 }
 
 function renderRecurrenceForm(task) {
-  const recurrence = task?.recurrence || null;
+  const recurrence = task?.recurrenceTemplateId ? null : task?.recurrence || null;
   document.getElementById('task-recurrence-frequency').value = recurrence?.frequency || '';
   document.getElementById('task-recurrence-interval').value = String(recurrence?.interval || 1);
   const dueDate = timestampToDateString(task?.dueDate) || todayDateString();
@@ -1993,6 +2006,17 @@ function renderRecurrenceForm(task) {
 }
 
 function validatedRecurrenceFromForm(currentTask, dueDate) {
+  const selectedFrequency = document.getElementById('task-recurrence-frequency')?.value || '';
+  if (currentTask?.recurrenceTemplateId) {
+    if (selectedFrequency) {
+      const message = 'En generert forekomst kan ikke gjøres gjentakende. Endre den opprinnelige oppgaven i serien.';
+      setRecurrenceError(message);
+      showToast(message, 'error');
+      throw new Error('RECURRENCE_INSTANCE_CANNOT_REPEAT');
+    }
+    return null;
+  }
+
   const recurrence = recurrenceFormDraft(currentTask || {});
   if (!recurrence) return null;
   if (!dueDate) {
@@ -2202,7 +2226,7 @@ async function handleSaveTask() {
     dependencies: deps,
     qualityExceptions,
   };
-  if (canEdit()) {
+  if (canEdit() && !currentTask?.recurrenceTemplateId) {
     data.recurrence = recurrence;
     const recurrenceChanged = recurrenceSignature(currentTask?.recurrence) !== recurrenceSignature(recurrence);
     if (!recurrence) {

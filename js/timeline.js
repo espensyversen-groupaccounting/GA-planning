@@ -4,6 +4,7 @@
 // ============================================================
 
 const TIMELINE_WINDOW_KEY = 'timelineWindow';
+const TIMELINE_FILTERS_COLLAPSED_KEY = 'timelineFiltersCollapsed';
 const TIMELINE_DEFAULT_WINDOW = '3m';
 const TIMELINE_VALID_WINDOWS = new Set(['3m', '12m', '18m', 'workyear']);
 const TIMELINE_NEUTRAL_COLOR = '#9CA3AF';
@@ -19,6 +20,7 @@ const timelineViewState = {
   status: '',
   sort: 'start',
   showSubtasks: false,
+  filtersCollapsed: localStorage.getItem(TIMELINE_FILTERS_COLLAPSED_KEY) === 'true',
 };
 
 function timelineDate(value) {
@@ -227,6 +229,45 @@ function timelinePeriodLabel(bounds) {
   return `${timelineFormatDate(bounds.start)} - ${timelineFormatDate(bounds.end)}`;
 }
 
+function timelineSelectedOptionLabel(id) {
+  const select = document.getElementById(id);
+  return select?.selectedOptions?.[0]?.textContent?.trim() || '';
+}
+
+function timelineFilterSummaryText() {
+  const parts = [];
+  if (timelineViewState.person) parts.push(`Person: ${timelineSelectedOptionLabel('timeline-person-filter')}`);
+  if (timelineViewState.category) parts.push(`Kategori: ${timelineSelectedOptionLabel('timeline-category-filter')}`);
+  if (timelineViewState.status) parts.push(`Status: ${timelineSelectedOptionLabel('timeline-status-filter')}`);
+  if (timelineViewState.sort !== 'start') parts.push(`Sortert: ${timelineSelectedOptionLabel('timeline-sort')}`);
+  if (timelineViewState.showSubtasks) parts.push('Deloppgavefrister vises');
+  return parts.length ? parts.join(' · ') : 'Ingen aktive filtre';
+}
+
+function updateTimelineFilterPanel() {
+  const panel = document.getElementById('timeline-filter-panel');
+  const toggle = document.getElementById('timeline-filter-toggle');
+  const summary = document.getElementById('timeline-filter-summary');
+  const collapsed = timelineViewState.filtersCollapsed;
+  if (panel) panel.hidden = collapsed;
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.classList.toggle('is-collapsed', collapsed);
+    const label = toggle.querySelector('span');
+    if (label) label.textContent = collapsed ? 'Vis filtre' : 'Skjul filtre';
+  }
+  if (summary) {
+    summary.textContent = timelineFilterSummaryText();
+    summary.classList.toggle('hidden', !collapsed);
+  }
+}
+
+function toggleTimelineFilters() {
+  timelineViewState.filtersCollapsed = !timelineViewState.filtersCollapsed;
+  localStorage.setItem(TIMELINE_FILTERS_COLLAPSED_KEY, String(timelineViewState.filtersCollapsed));
+  updateTimelineFilterPanel();
+}
+
 function timelineTaskPeople(task) {
   const ids = [
     task.assignedTo,
@@ -430,7 +471,8 @@ function timelineGridColumns(mode) {
 
 function renderTimeline() {
   const root = document.getElementById('timeline-root');
-  if (!root) return;
+  const legend = document.getElementById('timeline-legend-container');
+  if (!root || !legend) return;
   const bounds = timelineWindowBounds(timelineViewState.window, todayDateString(), timelineViewState.workYearOffset);
   if (!bounds) return;
   const today = timelineDate(todayDateString());
@@ -451,12 +493,15 @@ function renderTimeline() {
   document.getElementById('timeline-period-label').textContent = timelinePeriodLabel(bounds);
   document.getElementById('timeline-workyear-nav').classList.toggle('hidden', timelineViewState.window !== 'workyear');
   document.getElementById('timeline-result-count').textContent = `${entries.length} ${entries.length === 1 ? 'oppgave' : 'oppgaver'}`;
+  legend.innerHTML = timelineLegendHtml(entries);
+  updateTimelineFilterPanel();
 
   root.innerHTML = entries.length ? `
-    ${timelineLegendHtml(entries)}
     <div class="timeline-frame"><div class="timeline-scroll" tabindex="0" aria-label="Tidslinje. Rull vannrett for å se flere datoer.">
       <div class="timeline-grid" style="--timeline-axis-width:${timelineAxisWidth(timelineViewState.window)}px;--timeline-grid-columns:${timelineGridColumns(timelineViewState.window)}">
-        <div class="timeline-corner">Oppgave</div>${timelineAxisHeaderHtml(bounds, today)}
+        <div class="timeline-header-row">
+          <div class="timeline-corner">Oppgave</div>${timelineAxisHeaderHtml(bounds, today)}
+        </div>
         ${timelineRowsHtml(entries, bounds, today)}
       </div>
     </div></div>
@@ -477,6 +522,7 @@ function shiftTimelineWorkYear(direction) {
 }
 
 function initTimeline() {
+  document.getElementById('timeline-filter-toggle')?.addEventListener('click', toggleTimelineFilters);
   document.querySelectorAll('[data-timeline-window]').forEach(button => button.addEventListener('click', () => setTimelineWindow(button.dataset.timelineWindow)));
   document.getElementById('timeline-workyear-prev')?.addEventListener('click', () => shiftTimelineWorkYear(-1));
   document.getElementById('timeline-workyear-next')?.addEventListener('click', () => shiftTimelineWorkYear(1));
