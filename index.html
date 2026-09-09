@@ -299,6 +299,19 @@
                   <option value="i_gang">I gang</option>
                 </select>
               </label>
+              <label>
+                <span>Sorter etter</span>
+                <select id="timeline-sort" class="filter-select">
+                  <option value="start">Startdato</option>
+                  <option value="category">Kategori</option>
+                  <option value="assignee">Ansvarlig</option>
+                </select>
+              </label>
+              <label class="timeline-subtask-toggle">
+                <input id="timeline-show-subtasks" type="checkbox" />
+                <span class="timeline-toggle-control" aria-hidden="true"></span>
+                <span class="timeline-toggle-text">Vis deloppgavefrister</span>
+              </label>
             </div>
           </div>
           <p class="timeline-recurrence-note">Gjentakende forekomster vises når de er opprettet innenfor 90-dagershorisonten.</p>

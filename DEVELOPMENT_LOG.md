@@ -1,5 +1,32 @@
 # Development Log
 
+## v1.14.1 - 2026-09-09
+
+### Sortering og deloppgavefrister i tidslinjen
+- La til `Sorter etter` med standarden `Startdato` samt gruppering etter `Kategori` og `Ansvarlig`. Standardvalget bruker uendret v1.14.0-sortering.
+- Gruppeoverskrifter viser navn og antall filtrerte oppgaver. Masterkategorier følger `sortOrder` og navn, snapshot-kategorier følger alfabetisk med `Ikke aktiv`-merke, og `Uten kategori` ligger sist. Ansvarlige sorteres alfabetisk med `Ikke tildelt` sist.
+- Ansvarliggrupper bruker kun hovedansvarlig. Deltakere og deloppgaveansvarlige påvirker personfilteret, men oppgaven rendres fortsatt bare én gang.
+- La til bryteren `Vis deloppgavefrister`, av som standard. Alle deloppgaver med frist vises på oppgavens eksisterende rad når bryteren er aktiv.
+- Åpne, fullførte og åpne forfalte deloppgaver har egne markøruttrykk. Fullførte markeres ikke som forfalt. Tooltip/trykk viser tittel, absolutt og relativ dato, status og ansvarlig med eksisterende hjelpefunksjoner.
+- Deloppgavefrister kan ligge utenfor hovedsøylens periode så lenge de ligger i valgt tidsvindu. Frister utenfor selve vinduet skjules. Det ble ikke lagt til et ekstra signal for skjulte frister, fordi dette ville gi mye støy på lange oppgaver; de blir synlige ved å velge et bredere vindu.
+- Markører med høyst 20 px mellom nabosentrene samles i alle tidsvinduer. Samlemarkøren viser antall, mens tooltipen lister alle deloppgavene.
+- Markørene er fokuserbare knapper med minst 28 x 28 px trykkflate. Trykk åpner informasjon eksplisitt og stopper hendelsen før den kan åpne hovedoppgaven.
+
+### Kompatibilitet og tester
+- Radantallet er identisk med bryteren av og på. Oppgaver uten deloppgaver påvirkes ikke, og kategorifargene er uendret.
+- Chrome-test bekrefter eksisterende startdatosortering, begge gruppevarianter, antall, kategori-/ansvarligrekkefølge, snapshot-merke og kombinasjon med person-, kategori- og statusfilter.
+- Impairment-fixture med fire separate frister viser fire markører. Åpen, fullført og åpen forfalt status, markør utenfor hovedperioden og markør på en oppgave uten startdato er verifisert.
+- Fire deloppgaver med samme dato samles til én markør med tallet 4 i 3-, 12- og 18-månedersvinduet samt arbeidsår.
+- Trykk på deloppgavemarkør viser informasjon uten modalåpning; klikk på søylen åpner fortsatt den eksisterende oppgavemodalen.
+- Mobil er kontrollert ved 390 x 844 px: sortering og bryter er synlige, markørflatene er minst 28 x 28 px, og visningen lager ingen dokument-overflow.
+- Service worker v1.14.1 cacher fortsatt `js/timeline.js`.
+- `node --check` består for `app.js`, `js/todos.js`, `js/timeline.js`, `firestore.js` og `service-worker.js`.
+- Firestore-emulatortestene består: `24/24`.
+- Tidsvinduer, arbeidsårsberegning, overlappsregel, eksisterende filtre, dashboard, Oppgaver, ToDo-er, sidepanel, modal, datamodell og Firestore-regler er uendret.
+
+### Versjon
+- Versjon bumpet til `1.14.1` i `app.js`, `service-worker.js` og `firestore.js`; klientbuild er `11401`.
+
 ## v1.14.0 - 2026-09-09
 
 ### Tidslinjevisning

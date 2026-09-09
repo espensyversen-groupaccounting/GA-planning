@@ -7,6 +7,7 @@ const TIMELINE_WINDOW_KEY = 'timelineWindow';
 const TIMELINE_DEFAULT_WINDOW = '3m';
 const TIMELINE_VALID_WINDOWS = new Set(['3m', '12m', '18m', 'workyear']);
 const TIMELINE_NEUTRAL_COLOR = '#9CA3AF';
+const TIMELINE_CLUSTER_THRESHOLD_PX = 20;
 
 const timelineViewState = {
   window: TIMELINE_VALID_WINDOWS.has(localStorage.getItem(TIMELINE_WINDOW_KEY))
@@ -16,6 +17,8 @@ const timelineViewState = {
   person: '',
   category: '',
   status: '',
+  sort: 'start',
+  showSubtasks: false,
 };
 
 function timelineDate(value) {
@@ -113,6 +116,68 @@ function timelineSortEntries(entries) {
   });
 }
 
+function timelineCategoryGroup(entry) {
+  const { task } = entry;
+  if (!task.categoryId && !task.categoryName) {
+    return { key: '__none', name: 'Uten kategori', type: 'none', sortOrder: Number.MAX_SAFE_INTEGER };
+  }
+  const master = task.categoryId
+    ? state.categories.find(category => String(category.id) === String(task.categoryId))
+    : null;
+  if (master) {
+    const order = Number(master.sortOrder);
+    return {
+      key: `master:${master.id}`,
+      name: master.name || task.categoryName || 'Uten navn',
+      type: 'master',
+      sortOrder: Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER,
+    };
+  }
+  return {
+    key: `snapshot:${task.categoryId || task.categoryName}`,
+    name: task.categoryName || 'Tidligere kategori',
+    type: 'snapshot',
+    sortOrder: Number.MAX_SAFE_INTEGER,
+  };
+}
+
+function timelineAssigneeGroup(entry) {
+  const { task } = entry;
+  if (!task.assignedTo) return { key: '__unassigned', name: 'Ikke tildelt', type: 'none' };
+  const user = state.users.find(candidate => candidate.id === task.assignedTo);
+  return {
+    key: String(task.assignedTo),
+    name: user?.displayName || user?.email || task.assignedToName || 'Ukjent bruker',
+    type: user ? 'active' : 'snapshot',
+  };
+}
+
+function timelineGroupedEntries(entries) {
+  if (timelineViewState.sort === 'start') return null;
+  const groupFor = timelineViewState.sort === 'category' ? timelineCategoryGroup : timelineAssigneeGroup;
+  const groups = new Map();
+  entries.forEach(entry => {
+    const details = groupFor(entry);
+    if (!groups.has(details.key)) groups.set(details.key, { ...details, entries: [] });
+    groups.get(details.key).entries.push(entry);
+  });
+  const result = [...groups.values()];
+  result.forEach(group => { group.entries = timelineSortEntries(group.entries); });
+  if (timelineViewState.sort === 'category') {
+    return result.sort((a, b) => {
+      const rank = type => type === 'master' ? 0 : type === 'snapshot' ? 1 : 2;
+      return rank(a.type) - rank(b.type)
+        || a.sortOrder - b.sortOrder
+        || a.name.localeCompare(b.name, 'no');
+    });
+  }
+  return result.sort((a, b) => {
+    if (a.type === 'none') return 1;
+    if (b.type === 'none') return -1;
+    return a.name.localeCompare(b.name, 'no');
+  });
+}
+
 function timelineMonthSegments(bounds) {
   const totalDays = timelineDayDiff(bounds.start, bounds.end) + 1;
   const result = [];
@@ -183,6 +248,64 @@ function timelineTooltip(task, range) {
   const ownerName = task.assignedToName || owner?.displayName || owner?.email || 'Ikke tildelt';
   const period = range.marker ? `Frist ${timelineFormatDate(range.due)}` : `${timelineFormatDate(range.start)} - ${timelineFormatDate(range.due)}`;
   return `${task.title || 'Uten tittel'} · ${ownerName} · ${period} · ${task.categoryName || 'Uten kategori'}${range.invalid ? ' · Ugyldig periode' : ''}`;
+}
+
+function timelineSubtaskTooltip(subtask) {
+  const assignee = subtaskAssigneeInfo(subtask);
+  const dueLabel = subtask.completed
+    ? formatDateString(subtask.dueDate)
+    : subtaskDueLabel(subtask);
+  const status = subtask.completed
+    ? 'Fullført'
+    : subtaskDueClass(subtask) === 'overdue' ? 'Forfalt' : 'Åpen';
+  return `${subtask.title || 'Uten tittel'} · ${dueLabel} · ${status} · ${assignee?.name || 'Ingen ansvarlig'}`;
+}
+
+function timelineSubtaskClusters(task, bounds) {
+  const axisWidth = timelineAxisWidth(timelineViewState.window);
+  const points = (Array.isArray(task.subtasks) ? task.subtasks : [])
+    .map((subtask, index) => ({ subtask, index, due: timelineDate(subtask.dueDate) }))
+    .filter(point => point.due && point.due >= bounds.start && point.due <= bounds.end)
+    .map(point => ({
+      ...point,
+      left: timelinePercent(bounds, point.due, true),
+      pixel: timelinePercent(bounds, point.due, true) / 100 * axisWidth,
+    }))
+    .sort((a, b) => a.pixel - b.pixel || a.index - b.index);
+  const clusters = [];
+  points.forEach(point => {
+    const current = clusters[clusters.length - 1];
+    if (current && point.pixel - current.lastPixel <= TIMELINE_CLUSTER_THRESHOLD_PX) {
+      current.points.push(point);
+      current.lastPixel = point.pixel;
+      current.left = current.points.reduce((sum, item) => sum + item.left, 0) / current.points.length;
+    } else {
+      clusters.push({ points: [point], left: point.left, lastPixel: point.pixel });
+    }
+  });
+  return clusters;
+}
+
+function timelineSubtaskMarkersHtml(task, bounds) {
+  if (!timelineViewState.showSubtasks) return '';
+  return timelineSubtaskClusters(task, bounds).map(cluster => {
+    const allCompleted = cluster.points.every(({ subtask }) => subtask.completed);
+    const hasOverdue = cluster.points.some(({ subtask }) => !subtask.completed && subtaskDueClass(subtask) === 'overdue');
+    const tooltip = cluster.points.map(({ subtask }) => timelineSubtaskTooltip(subtask)).join('\n');
+    const label = cluster.points.length > 1
+      ? `${cluster.points.length} deloppgaver. ${tooltip.replace(/\n/g, '. ')}`
+      : tooltip;
+    const classes = [
+      'timeline-subtask-marker',
+      cluster.points.length > 1 ? 'is-cluster' : '',
+      allCompleted ? 'is-completed' : '',
+      hasOverdue ? 'is-overdue' : '',
+    ].filter(Boolean).join(' ');
+    return `<button class="${classes}" type="button" data-timeline-subtask-task-id="${esc(task.id)}" data-subtask-count="${cluster.points.length}" style="left:${cluster.left}%"
+      aria-label="${esc(label)}" data-tooltip="${esc(tooltip)}">
+      <span aria-hidden="true">${cluster.points.length > 1 ? cluster.points.length : allCompleted ? '✓' : ''}</span>
+    </button>`;
+  }).join('');
 }
 
 function timelineCategoryOptions(entries) {
@@ -276,7 +399,25 @@ function timelineRowHtml(entry, bounds, today) {
         style="--timeline-color:${esc(category.color)};left:${geometry.left}%;${geometry.marker ? '' : `width:max(${geometry.width}%, 8px)`}">
         ${range.invalid ? '<span class="sr-only">Ugyldig periode.</span>' : ''}
       </button>
+      ${timelineSubtaskMarkersHtml(task, bounds)}
     </div>`;
+}
+
+function timelineGroupHeaderHtml(group) {
+  const inactive = group.type === 'snapshot' && timelineViewState.sort === 'category';
+  return `
+    <div class="timeline-group-title-cell">
+      <span>${esc(group.name)}</span>
+      ${inactive ? '<small>Ikke aktiv</small>' : ''}
+      <strong>${group.entries.length}</strong>
+    </div>
+    <div class="timeline-group-axis-cell" aria-hidden="true"></div>`;
+}
+
+function timelineRowsHtml(entries, bounds, today) {
+  const groups = timelineGroupedEntries(entries);
+  if (!groups) return entries.map(entry => timelineRowHtml(entry, bounds, today)).join('');
+  return groups.map(group => `${timelineGroupHeaderHtml(group)}${group.entries.map(entry => timelineRowHtml(entry, bounds, today)).join('')}`).join('');
 }
 
 function timelineAxisWidth(mode) {
@@ -305,6 +446,8 @@ function renderTimeline() {
   document.getElementById('timeline-status-filter').value = timelineViewState.status;
   document.getElementById('timeline-person-filter').value = timelineViewState.person;
   document.getElementById('timeline-category-filter').value = timelineViewState.category;
+  document.getElementById('timeline-sort').value = timelineViewState.sort;
+  document.getElementById('timeline-show-subtasks').checked = timelineViewState.showSubtasks;
   document.getElementById('timeline-period-label').textContent = timelinePeriodLabel(bounds);
   document.getElementById('timeline-workyear-nav').classList.toggle('hidden', timelineViewState.window !== 'workyear');
   document.getElementById('timeline-result-count').textContent = `${entries.length} ${entries.length === 1 ? 'oppgave' : 'oppgaver'}`;
@@ -314,7 +457,7 @@ function renderTimeline() {
     <div class="timeline-frame"><div class="timeline-scroll" tabindex="0" aria-label="Tidslinje. Rull vannrett for å se flere datoer.">
       <div class="timeline-grid" style="--timeline-axis-width:${timelineAxisWidth(timelineViewState.window)}px;--timeline-grid-columns:${timelineGridColumns(timelineViewState.window)}">
         <div class="timeline-corner">Oppgave</div>${timelineAxisHeaderHtml(bounds, today)}
-        ${entries.map(entry => timelineRowHtml(entry, bounds, today)).join('')}
+        ${timelineRowsHtml(entries, bounds, today)}
       </div>
     </div></div>
   ` : '<div class="empty-state timeline-empty"><p>Ingen oppgaver finnes i dette tidsvinduet med valgte filtre.</p></div>';
@@ -340,7 +483,19 @@ function initTimeline() {
   document.getElementById('timeline-person-filter')?.addEventListener('change', event => { timelineViewState.person = event.target.value; renderTimeline(); });
   document.getElementById('timeline-category-filter')?.addEventListener('change', event => { timelineViewState.category = event.target.value; renderTimeline(); });
   document.getElementById('timeline-status-filter')?.addEventListener('change', event => { timelineViewState.status = event.target.value; renderTimeline(); });
+  document.getElementById('timeline-sort')?.addEventListener('change', event => { timelineViewState.sort = event.target.value; renderTimeline(); });
+  document.getElementById('timeline-show-subtasks')?.addEventListener('change', event => { timelineViewState.showSubtasks = event.target.checked; renderTimeline(); });
   document.getElementById('timeline-root')?.addEventListener('click', event => {
+    const subtaskMarker = event.target.closest('.timeline-subtask-marker');
+    if (subtaskMarker) {
+      event.preventDefault();
+      event.stopPropagation();
+      const wasOpen = subtaskMarker.classList.contains('is-tooltip-open');
+      document.querySelectorAll('.timeline-subtask-marker.is-tooltip-open').forEach(marker => marker.classList.remove('is-tooltip-open'));
+      if (!wasOpen) subtaskMarker.classList.add('is-tooltip-open');
+      return;
+    }
+    document.querySelectorAll('.timeline-subtask-marker.is-tooltip-open').forEach(marker => marker.classList.remove('is-tooltip-open'));
     const target = event.target.closest('[data-timeline-task-id]');
     if (target) openTaskModal(target.dataset.timelineTaskId);
   });

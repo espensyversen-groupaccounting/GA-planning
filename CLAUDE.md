@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.14.0`
+Gjeldende appversjon: `v1.14.1`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -296,6 +296,12 @@ Tidslinjen viser åpne, ikke-slettede oppgaver med ferdigdato. ToDo-er og fullf�
 Tilgjengelige vinduer er tre, tolv og atten måneder fra dagens dato, samt arbeidsår fra 1. august til 31. juli. Arbeidsår kan flyttes ett år frem eller tilbake. Et element er med når perioden overlapper vinduet etter den inklusive regelen `dueDate >= windowStart && startDate <= windowEnd`. For fristmarkører uten gyldig startdato brukes `dueDate` på begge sider av sammenligningen.
 
 Visningen rendres deterministisk fra gjeldende `state.tasks` ved hver endring av vindu, filter eller sanntidsdata. Det brukes ingen intern tidslinjecache. Filtrene kan kombineres for person, kategori og status. Personfilteret bruker `taskInvolvement()` og finner derfor hovedansvarlig, deltakere og deloppgaveansvarlige. Kategorifilteret er unionen av aktive masterkategorier og kategorisnapshots på oppgavene i det valgte vinduet; snapshot-kategorier som ikke lenger finnes i masterdata merkes som inaktive.
+
+Standardrekkefølgen er effektiv startdato som i v1.14.0. Brukeren kan også gruppere etter kategori eller hovedansvarlig. Kategorigrupper følger masterdataenes `sortOrder` og deretter navn; snapshot-kategorier følger alfabetisk etter masterkategoriene og merkes `Ikke aktiv`, mens `Uten kategori` ligger sist. Ansvarliggrupper sorteres alfabetisk, med `Ikke tildelt` sist. Hver oppgave vises én gang og ligger bare i hovedansvarliges gruppe; deltakere brukes fortsatt bare av personfilteret. Sorteringsvalget lagres ikke.
+
+`Vis deloppgavefrister` er av som standard. Når bryteren er på, vises alle daterte deloppgaver som små, fokuserbare markører på oppgavens eksisterende rad. Åpne, fullførte og åpne forfalte deloppgaver har ulike uttrykk; fullførte markeres aldri som forfalt. Markørene bruker de eksisterende dato-, status- og ansvarlighjelperne, og trykk viser informasjon uten å åpne hovedoppgaven. En deloppgave utenfor hovedperioden vises når datoen ligger i valgt tidsvindu. Datoer utenfor selve vinduet skjules uten et ekstra radmerke for å unngå vedvarende visuell støy.
+
+Deloppgavemarkører med høyst 20 pikslers avstand mellom nabosentrene samles i alle tidsvinduer. Samlemarkøren viser antallet og tooltipen lister hver deloppgave med tittel, dato, status og ansvarlig. Klyngingen endrer aldri radantallet eller oppgavens kategorifarge.
 
 Tidslinjen bruker CSS Grid uten eksternt diagram- eller Gantt-bibliotek. Tittelkolonnen er klebrig og tidsaksen kan rulles horisontalt, også på mobil. Rullingen bruker CSS `overscroll-behavior` og ingen JavaScript-håndtering av rullehendelser. Dagens dato vises når den ligger i vinduet, elementer som fortsetter utenfor vinduet markeres visuelt, og hele raden kan åpne oppgavemodalen med mus eller tastatur.
 

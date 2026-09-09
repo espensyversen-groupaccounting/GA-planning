@@ -2763,6 +2763,56 @@ body.todo-is-dragging {
 .timeline-filter-row .filter-select {
   width: 100%;
 }
+.timeline-filter-row .timeline-subtask-toggle {
+  align-self: flex-end;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 4px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.timeline-subtask-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.timeline-toggle-control {
+  position: relative;
+  width: 36px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 99px;
+  background: #D1D5DB;
+  transition: background .15s ease;
+}
+.timeline-toggle-control::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 1px 3px rgba(0,0,0,.24);
+  transition: transform .15s ease;
+}
+.timeline-subtask-toggle input:checked + .timeline-toggle-control { background: var(--black); }
+.timeline-subtask-toggle input:checked + .timeline-toggle-control::after { transform: translateX(14px); }
+.timeline-subtask-toggle input:focus-visible + .timeline-toggle-control {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
+}
+.timeline-filter-row .timeline-toggle-text {
+  color: var(--text-2);
+  font-size: .74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
 .timeline-recurrence-note {
   margin: 0 0 12px;
   color: var(--text-3);
@@ -2861,6 +2911,55 @@ body.todo-is-dragging {
 .timeline-axis-cell {
   min-height: 66px;
   border-bottom: 1px solid var(--border);
+}
+.timeline-group-title-cell,
+.timeline-group-axis-cell {
+  min-height: 34px;
+  border-bottom: 1px solid var(--border);
+  background: #F3F4F6;
+}
+.timeline-group-title-cell {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-right: 1px solid var(--border);
+  color: var(--text);
+  font-size: .72rem;
+  font-weight: 800;
+}
+.timeline-group-title-cell > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.timeline-group-title-cell small {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #E5E7EB;
+  color: var(--text-2);
+  font-size: .57rem;
+  font-weight: 700;
+}
+.timeline-group-title-cell strong {
+  min-width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--white);
+  color: var(--text-2);
+  font-size: .62rem;
+  font-variant-numeric: tabular-nums;
 }
 .timeline-task-cell {
   position: sticky;
@@ -2970,7 +3069,8 @@ body.todo-is-dragging {
   outline: 3px solid var(--black);
   outline-offset: 2px;
 }
-.timeline-item::after {
+.timeline-item::after,
+.timeline-subtask-marker::after {
   content: attr(data-tooltip);
   position: absolute;
   left: 50%;
@@ -2993,7 +3093,10 @@ body.todo-is-dragging {
   z-index: 20;
 }
 .timeline-item:hover::after,
-.timeline-item:focus-visible::after {
+.timeline-item:focus-visible::after,
+.timeline-subtask-marker:hover::after,
+.timeline-subtask-marker:focus::after,
+.timeline-subtask-marker.is-tooltip-open::after {
   opacity: 1;
 }
 .timeline-bar {
@@ -3034,6 +3137,65 @@ body.todo-is-dragging {
   color: #92400E;
   font-size: .68rem;
   font-weight: 900;
+}
+.timeline-subtask-marker {
+  position: absolute;
+  top: 19px;
+  z-index: 4;
+  width: 28px;
+  height: 28px;
+  margin-left: -14px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.timeline-subtask-marker > span {
+  width: 11px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #111827;
+  border-radius: 6px;
+  background: var(--white);
+  color: #111827;
+  font-size: .55rem;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,.18);
+}
+.timeline-subtask-marker.is-cluster > span {
+  width: 22px;
+  height: 20px;
+  border-radius: 99px;
+  background: #111827;
+  color: var(--white);
+}
+.timeline-subtask-marker.is-completed > span {
+  border-color: #9CA3AF;
+  background: #E5E7EB;
+  color: #4B5563;
+}
+.timeline-subtask-marker.is-overdue > span {
+  border-color: #B91C1C;
+  background: #DC2626;
+  color: var(--white);
+  box-shadow: 0 0 0 2px #FEE2E2;
+}
+.timeline-subtask-marker:focus-visible {
+  outline: 2px solid var(--black);
+  outline-offset: 0;
+}
+.timeline-subtask-marker::after {
+  top: calc(100% + 4px);
+  bottom: auto;
+  white-space: pre-line;
 }
 .timeline-item.is-overdue {
   outline: 2px solid #DC2626;
@@ -3095,6 +3257,13 @@ body.todo-is-dragging {
   }
   .timeline-filter-row label:last-child {
     grid-column: 1 / -1;
+  }
+  .timeline-filter-row .timeline-subtask-toggle {
+    min-height: 42px;
+    padding: 2px 4px;
+  }
+  .timeline-filter-row .timeline-toggle-text {
+    white-space: normal;
   }
   .timeline-grid {
     --timeline-title-width: 132px;
