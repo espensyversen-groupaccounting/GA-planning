@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.14.1';
-const CLIENT_BUILD = 11401;
+const CLIENT_APP_VERSION = '1.15.0';
+const CLIENT_BUILD = 11500;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -227,12 +227,14 @@ function recurrenceInstanceDocumentId(templateId, instanceDate) {
   return `${templateId}__${String(instanceDate).replace(/-/g, '')}`;
 }
 
-async function generateRecurringTaskInstances(templateId, horizonDate, buildPlan, buildInstanceData) {
+async function generateRecurringTaskInstances(templateId, horizonDate, buildPlan, buildInstanceData, maxInstancesPerRun = Infinity) {
   let created = 0;
+  let candidatesProcessed = 0;
   let hasMore = true;
   let batches = 0;
 
-  while (hasMore && batches < 100) {
+  while (hasMore && batches < 100 && candidatesProcessed < maxInstancesPerRun) {
+    const batchLimit = Math.min(100, maxInstancesPerRun - candidatesProcessed);
     const result = await db.runTransaction(async tx => {
       const templateRef = db.collection('tasks').doc(templateId);
       const templateDoc = await tx.get(templateRef);
@@ -241,7 +243,7 @@ async function generateRecurringTaskInstances(templateId, horizonDate, buildPlan
       const template = { id: templateDoc.id, ...templateDoc.data() };
       if (template.deletedAt || !template.recurrence) return { created: 0, hasMore: false };
 
-      const plan = buildPlan(template, horizonDate, 100);
+      const plan = buildPlan(template, horizonDate, batchLimit);
       const instanceRefs = plan.occurrences.map(instanceDate =>
         db.collection('tasks').doc(recurrenceInstanceDocumentId(templateId, instanceDate))
       );
@@ -262,15 +264,16 @@ async function generateRecurringTaskInstances(templateId, horizonDate, buildPlan
           ...writeMeta()
         });
       }
-      return { created: batchCreated, hasMore: plan.hasMore };
+      return { created: batchCreated, candidates: plan.occurrences.length, hasMore: plan.hasMore };
     });
 
     created += result.created;
+    candidatesProcessed += result.candidates || 0;
     hasMore = result.hasMore;
     batches += 1;
   }
 
-  if (hasMore) throw new Error('RECURRENCE_GENERATION_LIMIT');
+  if (hasMore && batches >= 100) throw new Error('RECURRENCE_GENERATION_LIMIT');
   return created;
 }
 

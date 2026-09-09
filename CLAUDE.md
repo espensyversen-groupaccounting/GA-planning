@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.14.1`
+Gjeldende appversjon: `v1.15.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -169,7 +169,7 @@ Dashboardseksjoner:
 - `Forfalt og i dag`: åpne oppgaver, deloppgaver og ToDo-er med passert frist eller frist i dag.
 - `Neste 7 dager`: åpne oppgaver, deloppgaver og ToDo-er med frist fra i morgen til og med syv dager frem.
 - `I gang`: påbegynte oppgaver som ikke allerede er fanget av de to første tidsvinduene. Seksjonen er åpen som standard og kan kollapses.
-- `Kommer senere`: oppgaver og deloppgaver med frist 8–30 dager frem som ikke allerede ligger i en tidligere seksjon. ToDo-er tas ikke med. Seksjonen er åpen som standard for brukere uten lagret preferanse.
+- `Kommer senere`: viser som standard unike oppgaver med hovedfrist eller åpen deloppgavefrist 8–30 dager frem som ikke allerede ligger i en tidligere seksjon. Bryteren `Alt fremover` legger til ellers uklassifiserte åpne hovedoppgaver der hovedfrist eller åpen deloppgavefrist ligger mer enn 30 dager frem. Oppgaver som allerede vises i `Forfalt og i dag`, `Neste 7 dager` eller `I gang` dupliseres ikke. ToDo-er tas ikke med. Utvalget følger `Team`/`Mine`, overskriftstallet er alltid antall unike synlige oppgaver, og visningsvalget lagres lokalt med komprimert visning som standard. Den utvidede listen ruller internt ved behov.
 - `Trenger utfylling`: åpne oppgaver med manglende ansvarlig, frist, startdato eller frist på en åpen deloppgave, samt ToDo-er uten ansvarlig. Bevisste unntak på oppgaver skjuler det aktuelle avviket. Listen er kollapset som standard, sorterer flest avvik først og ruller internt når den blir høy. Kortene krymper ikke i rulleflaten, og rulling fortsetter på siden når listen når topp eller bunn.
 - `Teamoversikt`: viser åpne oppgaver/ToDo-er som personen eier og, når tallet er større enn null, hvor mange åpne oppgaver personen bidrar til som deltaker eller deloppgaveansvarlig. Bidrag telles ikke dobbelt med eide oppgaver, og risiko beregnes fortsatt bare fra eide oppgaver. Kun aktive personer i `state.users` vises. I `Mine`-visning skjules oversikten og brukeren får beskjed om å bytte til Team for teamfordeling.
 
@@ -284,11 +284,11 @@ Deloppgaver er fortsatt et array inne i oppgavedokumentet. Firestore-reglene kan
 ## Gjentakende oppgaver
 Admin og Teamleder kan gjøre en oppgave ukentlig, månedlig eller årlig gjentakende fra Detaljer-fanen. Gjentakelse krever ferdigdato. Når serien opprettes, lagres ferdigdatoen som `recurrence.anchorDate`; malen er den første forekomsten, og genererte forekomster kommer etter denne datoen. Endres malens ferdigdato senere, beholdes ankeret slik at hele serien ikke forskyves utilsiktet.
 
-Klienten genererer forekomster gjennom 90 dager fra dagens dato. Ved månedlig dag 29, 30 eller 31 brukes månedens siste dag når den valgte datoen ikke finnes. Årlig gjentakelse bruker måned og dag fra ankerdatoen; 29. februar blir 28. februar i år som ikke er skuddår. Startdato og deloppgavefrister forskyves med samme avstand til ferdigdatoen som på malen. Nye forekomster starter som `ikke_startet`, og deloppgaver starter som ikke fullført.
+Klienten genererer forekomster gjennom 12 kalendermåneder fra dagens dato, med horisontens sluttdato inkludert. Ved månedlig dag 29, 30 eller 31 brukes månedens siste dag når den valgte datoen ikke finnes. Årlig gjentakelse bruker måned og dag fra ankerdatoen; 29. februar blir 28. februar i år som ikke er skuddår. Startdato og deloppgavefrister forskyves med samme avstand til ferdigdatoen som på malen. Nye forekomster starter som `ikke_startet`, og deloppgaver starter som ikke fullført.
 
 Genereringen starter i bakgrunnen etter at oppgavene er lastet og umiddelbart etter lagring av en gjentakende oppgave. Den blokkerer ikke første rendering eller lukking av modalen. Dagens Firestore-regler tillater bare Admin og Teamleder å opprette oppgaver, så genereringen kjøres bare når `canEdit()` er sann. En ny forekomst opprettes derfor først når en Admin eller Teamleder åpner appen; innlogging fra kun et Medlem utløser ikke generering.
 
-Forekomst-ID-en utledes deterministisk av mal-ID og dato. Generering skjer i transaksjonelle puljer på maksimalt 100 kandidater: transaksjonen leser den autoritative malen og alle aktuelle forekomster, oppretter bare dokumenter som ikke finnes, og oppdaterer `recurrenceGeneratedUntil` atomisk. Samtidige faner kan derfor ikke lage duplikater, og en eksisterende forekomst overskrives aldri. Ved mønsterendring settes markøren tilbake til ankeret; tidligere forekomster beholdes urørt. Fjerning av gjentakelse eller soft-delete av malen stopper videre generering.
+Forekomst-ID-en utledes deterministisk av mal-ID og dato. Generering skjer i transaksjonelle puljer på maksimalt 100 kandidater: transaksjonen leser den autoritative malen og alle aktuelle forekomster, oppretter bare dokumenter som ikke finnes, og oppdaterer `recurrenceGeneratedUntil` atomisk. Én genereringskjøring behandler maksimalt 150 kandidater per mal, fordelt på høyst to transaksjoner; dette er en teknisk sikkerhetsgrense per kjøring og ikke et bestandig tak på antall dokumenter. Samtidige faner kan derfor ikke lage duplikater, og en eksisterende forekomst overskrives aldri. Ved mønsterendring settes markøren tilbake til ankeret; tidligere forekomster beholdes urørt. Fjerning av gjentakelse eller soft-delete av malen stopper videre generering.
 
 ## Tidslinje
 Tidslinjen viser åpne, ikke-slettede oppgaver med ferdigdato. ToDo-er og fullførte oppgaver vises ikke. Oppgaver med både start- og ferdigdato vises som søyler, mens oppgaver uten startdato vises som fristmarkører. En oppgave med startdato etter ferdigdato vises også som en fristmarkør med signalet `Ugyldig periode`; datamodellen og dashboardets datakvalitetsberegning endres ikke av dette.
@@ -305,7 +305,7 @@ Deloppgavemarkører med høyst 20 pikslers avstand mellom nabosentrene samles i 
 
 Tidslinjen bruker CSS Grid uten eksternt diagram- eller Gantt-bibliotek. Tittelkolonnen er klebrig og tidsaksen kan rulles horisontalt, også på mobil. Rullingen bruker CSS `overscroll-behavior` og ingen JavaScript-håndtering av rullehendelser. Dagens dato vises når den ligger i vinduet, elementer som fortsetter utenfor vinduet markeres visuelt, og hele raden kan åpne oppgavemodalen med mus eller tastatur.
 
-Gjentakende forekomster vises først når de faktisk er generert innenfor appens 90-dagershorisont. Tidslinjen opplyser om dette, slik at senere arbeidsår ikke feilaktig tolkes som komplette serier.
+Gjentakende forekomster vises først når de faktisk er generert innenfor appens 12-månedershorisont. Tidslinjen opplyser om dette, slik at senere arbeidsår ikke feilaktig tolkes som komplette serier.
 
 ## Eksport og sikkerhetskopi
 Admin har et eget kort under Administrasjon for å laste ned en manuell øyeblikkskopi. Eksporten henter ett rått snapshot fra hver av samlingene `tasks`, `todos`, `categories`, `users`, `allowedUsers` og `comments`. Soft-slettede oppgaver og ToDo-er er med; varsler utelates fordi de er avledede og forgjengelige.

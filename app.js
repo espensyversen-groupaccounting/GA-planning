@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.14.1';
+const APP_VERSION = '1.15.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -34,6 +34,7 @@ const state = {
     later: localStorage.getItem('dashboardLaterCollapsed') === 'true',
     quality: localStorage.getItem('dashboardQualityCollapsed') !== 'false',
   },
+  dashboardLaterExpanded: localStorage.getItem('dashboardLaterExpanded') === 'true',
   todoViewFilter: 'open',
   todoViewPriority: '',
   todoViewAssignee: '',
@@ -47,8 +48,9 @@ let recurrenceGenerationRunning = false;
 let recurrenceGenerationAllPending = false;
 const recurrenceGenerationPendingIds = new Set();
 
-const RECURRENCE_HORIZON_DAYS = 90;
+const RECURRENCE_HORIZON_MONTHS = 12;
 const RECURRENCE_BATCH_SIZE = 100;
+const RECURRENCE_MAX_INSTANCES_PER_RUN = 150;
 
 // ============================================================
 // UTILITIES
@@ -100,6 +102,16 @@ function addDateStringDays(value, days) {
   if (!date) return '';
   date.setUTCDate(date.getUTCDate() + Number(days || 0));
   return utcDateToString(date);
+}
+
+function addDateStringMonths(value, months) {
+  const date = dateStringToUtc(value);
+  if (!date) return '';
+  const monthIndex = date.getUTCFullYear() * 12 + date.getUTCMonth() + Number(months || 0);
+  const year = Math.floor(monthIndex / 12);
+  const month = monthIndex % 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return utcDateToString(new Date(Date.UTC(year, month, Math.min(date.getUTCDate(), lastDay))));
 }
 
 function dateStringDayDifference(fromValue, toValue) {
@@ -881,7 +893,7 @@ async function runRecurringTaskGeneration() {
   const templateIds = generateAll
     ? state.tasks.filter(task => task.recurrence && !task.deletedAt).map(task => task.id)
     : requestedIds;
-  const horizonDate = addDateStringDays(todayDateString(), RECURRENCE_HORIZON_DAYS);
+  const horizonDate = addDateStringMonths(todayDateString(), RECURRENCE_HORIZON_MONTHS);
 
   try {
     for (const templateId of [...new Set(templateIds)]) {
@@ -890,7 +902,8 @@ async function runRecurringTaskGeneration() {
           templateId,
           horizonDate,
           buildRecurringTaskPlan,
-          recurringTaskInstanceData
+          recurringTaskInstanceData,
+          RECURRENCE_MAX_INSTANCES_PER_RUN
         );
       } catch (error) {
         console.error(`Recurring task generation failed for ${templateId}:`, error);
@@ -996,6 +1009,16 @@ function dashboardEntries(tasks, todos) {
   ].map(entry => ({ ...entry, ...classifyDashboardItem(entry.item, entry.type) }));
 }
 
+function extendedLaterEntry(entry) {
+  if (entry.type !== 'task' || entry.section) return null;
+  const triggerSubtasks = (entry.item.subtasks || [])
+    .filter(subtask => !subtask.completed && subtask.dueDate && subtaskDueDays(subtask) > 30)
+    .sort((a, b) => subtaskDueDays(a) - subtaskDueDays(b));
+  const ownDueDays = taskDueDays(entry.item);
+  if (!(Number.isFinite(ownDueDays) && ownDueDays > 30) && !triggerSubtasks.length) return null;
+  return { ...entry, section: 'later', triggerSubtasks };
+}
+
 const dashboardFilterLabels = {
   overdueToday: 'Forfalt og i dag',
   nextSeven: 'Neste 7 dager',
@@ -1047,6 +1070,9 @@ function renderDashboard() {
     inProgress: classifiedEntries.filter(entry => entry.section === 'inProgress'),
     later: classifiedEntries.filter(entry => entry.section === 'later'),
   };
+  const extendedLaterEntries = state.dashboardLaterExpanded
+    ? entries.map(extendedLaterEntry).filter(Boolean)
+    : [];
   const crossSectionCounts = {
     unassigned: entries.filter(entry => !entry.item.assignedTo).length,
     high: entries.filter(entry => entry.item.priority === 'høy').length,
@@ -1063,8 +1089,13 @@ function renderDashboard() {
       filteredEntries.filter(entry => entry.section === section),
     ])
   );
+  const visibleExtendedLaterEntries = filter
+    ? extendedLaterEntries.filter(entry => dashboardEntryMatchesFilter(entry, filter))
+    : extendedLaterEntries;
+  filteredSections.later = [...filteredSections.later, ...visibleExtendedLaterEntries];
+  const extendedLaterKeys = new Set(visibleExtendedLaterEntries.map(entry => `${entry.type}:${entry.item.id}`));
   const otherResults = isCrossSectionFilter
-    ? filteredEntries.filter(entry => !entry.section)
+    ? filteredEntries.filter(entry => !entry.section && !extendedLaterKeys.has(`${entry.type}:${entry.item.id}`))
     : [];
   const activeFilterCount = filter ? filteredEntries.length : classifiedEntries.length;
 
@@ -1112,14 +1143,20 @@ function renderDashboard() {
   renderDashboardPrioritySection(
     'later-list',
     filteredSections.later,
-    'Ingen oppgaver eller deloppgaver er planlagt 8–30 dager frem.'
+    state.dashboardLaterExpanded
+      ? 'Ingen oppgaver eller deloppgaver er planlagt lenger frem.'
+      : 'Ingen oppgaver eller deloppgaver er planlagt 8–30 dager frem.'
   );
+  const laterList = document.getElementById('later-list');
+  laterList?.classList.toggle('is-expanded', state.dashboardLaterExpanded);
+  const laterRangeToggle = document.getElementById('dashboard-later-range-toggle');
+  if (laterRangeToggle) laterRangeToggle.checked = state.dashboardLaterExpanded;
   renderDashboardPrioritySection('other-results-list', otherResults, '');
   document.getElementById('other-results-count').textContent = otherResults.length;
   updateDashboardSection('overdueToday', sections.overdueToday.length);
   updateDashboardSection('nextSeven', sections.nextSeven.length);
   updateDashboardSection('inProgress', sections.inProgress.length);
-  updateDashboardSection('later', sections.later.length);
+  updateDashboardSection('later', filteredSections.later.length);
   updateDashboardSectionVisibility(filteredSections, otherResults);
 
   const qualityItems = [
@@ -1177,6 +1214,12 @@ function updateDashboardScopeButtons() {
 function setDashboardScope(scope) {
   state.dashboardScope = scope === 'mine' ? 'mine' : 'team';
   localStorage.setItem('dashboardScope', state.dashboardScope);
+  renderDashboard();
+}
+
+function setDashboardLaterExpanded(expanded) {
+  state.dashboardLaterExpanded = Boolean(expanded);
+  localStorage.setItem('dashboardLaterExpanded', String(state.dashboardLaterExpanded));
   renderDashboard();
 }
 

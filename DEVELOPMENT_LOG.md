@@ -1,5 +1,27 @@
 # Development Log
 
+## v1.15.0 - 2026-09-09
+
+### Utvidet horisont for gjentakende oppgaver
+- Utvidet genereringshorisonten fra 90 dager til 12 kalendermåneder fra dagens dato, med sluttdatoen inkludert. Horisonten styres av `RECURRENCE_HORIZON_MONTHS` i `app.js`.
+- La til `RECURRENCE_MAX_INSTANCES_PER_RUN = 150`. Grensen gjelder kandidater per mal per generator-kjøring, ikke totalt antall dokumenter. Dagens ukentlige, månedlige og årlige mønstre kan ikke nå grensen ved normal bruk.
+- Beholdt transaksjonspuljer på maksimalt 100 kandidater. En kjøring på 150 fordeles derfor på 100 + 50 kandidater; hver transaksjon holder seg godt under Firestores grense på 500 operasjoner.
+- Generatoren starter fortsatt etter første rendering, kjører maler sekvensielt og beholder vellykkede puljer dersom en senere mal eller pulje feiler. Deterministiske ID-er og eksisterende forekomster behandles som før.
+
+### Kommer senere
+- Standardvisningen viser fortsatt unike oppgaver med hoved- eller åpen deloppgavefrist 8–30 dager frem.
+- La til bryteren `Alt fremover`, lagret i `localStorage` og av som standard. Utvidet visning legger til ellers uklassifiserte åpne hovedoppgaver der hovedfrist eller åpen deloppgavefrist ligger mer enn 30 dager frem.
+- Oppgaver som allerede ligger i `Forfalt og i dag`, `Neste 7 dager` eller `I gang` dupliseres ikke. Utvalget følger `Team`/`Mine` og aktive toppkortfiltre, og seksjonstallet viser alltid antall unike synlige oppgaver.
+- Den utvidede listen har maks høyde og intern rulling med CSS `overscroll-behavior`; ToDo-er og dashboardets klassifisering er uendret.
+- Oppdaterte hjelpetekster i oppgavemodalen og tidslinjen fra 90 dager til 12 måneder. Alle forekomster av 90-dagersformuleringen i gjeldende grensesnitt og aktuell arkitekturdokumentasjon er gjennomgått; eldre versjonsoppføringer beholdes som historikk.
+
+### Avgrensning
+- `classifyDashboardItem()`, toppkortene, hasteberegningen, datakvalitet, Firestore-regler, datamodell, Oppgaver-/ToDo-visning, eksport og `js/timeline.js` er uendret.
+- Isolerte Node-kontroller består 16/16 for 12 kalendermåneder, månedsslutt i skuddår, inklusivt endepunkt, månedlig årsplan, ukentlig sluttdato og kontrollert stopp ved kunstig lav generatorgrense.
+- Lokal Chrome-kontroll består 24/24 for standarden 8–30 dager, utvidet visning, unike tellinger, toppkort, toppkortfilter, Team/Mine, `localStorage`, desktop-/mobilbredde og intern rulling med både 24 og 2 oppgaver.
+- Firestore-emulatortestene består 24/24. `node --check` består for `app.js`, `js/todos.js`, `js/timeline.js`, `firestore.js` og `service-worker.js`.
+- Versjon bumpet til `1.15.0` i `app.js`, `service-worker.js` og `firestore.js`; klientbuild er `11500`.
+
 ## v1.14.1 - 2026-09-09
 
 ### Sortering og deloppgavefrister i tidslinjen
