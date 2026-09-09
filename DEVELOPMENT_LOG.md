@@ -1,5 +1,38 @@
 # Development Log
 
+## v1.14.0 - 2026-09-09
+
+### Tidslinjevisning
+- La til den nye, skrivebeskyttede fanen `Tidslinje` for alle roller på desktop og mobil. ToDo-sidepanelet skjules i denne visningen slik at tidslinjen bruker hele arbeidsflaten.
+- Oppgaver med gyldig start- og ferdigdato tegnes som kategorifargede søyler. Oppgaver med bare ferdigdato tegnes som markører, og ugyldige perioder (`startDate > dueDate`) vises som markør med tydelig avvikssignal.
+- Åpne oppgaver filtreres med den inklusive overlappsregelen `dueDate >= windowStart && startDate <= windowEnd`. Fullførte, arkiverte og udaterte oppgaver samt alle ToDo-er utelates.
+- La til vinduene 3, 12 og 18 måneder samt arbeidsår 1. august–31. juli med navigasjon mellom arbeidsår. Første besøk bruker 3 måneder, og valgt vindu lagres i `localStorage`; filtrene nullstilles ved sidelasting.
+- La til kombinerbare person-, kategori- og statusfiltre. Personfilteret gjenbruker `taskInvolvement()`. Kategorifilteret inkluderer både masterdata og snapshots som faktisk forekommer, og utgåtte snapshot-kategorier merkes som inaktive.
+- Tidsaksen tegnes med HTML og CSS Grid uten nye biblioteker. Dagens dato, forfalte oppgaver, perioder som fortsetter utenfor vinduet, kategorioversikt, avatarer, hover/fokus-info og tastaturåpning er med.
+- Mobil bruker en klebrig tittelkolonne og en horisontalt rullbar tidsakse. Bunnmenyen har fem jevne valg; ved 390 px får hvert valg 78 px og lesbar tekst på 10,4 px.
+- Gjentakende forekomster vises først når de er generert innenfor 90-dagershorisonten, og dette forklares i visningen.
+
+### Arkitektur og kompatibilitet
+- All tidslinjeberegning og rendering ligger i den nye klassiske scriptfilen `js/timeline.js`. `app.js` inneholder bare routing og rerender-wiring mot eksisterende sanntidsabonnementer.
+- Rendering skjer alltid deterministisk fra gjeldende `state.tasks`; ingen intern cache eller ny datamodell er innført.
+- `js/timeline.js` lastes etter `js/todos.js` og før `app.js`, og er lagt til i service workerens `APP_FILES`.
+- `firestore.rules`, Firestore-testene, dashboardets klassifisering og datakvalitetsberegning, Oppgaver-/ToDo-logikk, oppgavemodalen, eksporten og gjentakelseslogikken er funksjonelt uendret.
+- Observasjon for eventuell senere oppgave: ugyldig periode signaliseres nå i tidslinjen, men inngår ikke i `dataQualityIssues()` på dashboardet, i tråd med avtalt scope.
+
+### Testet
+- Chrome-test med syntetiske oppgaver bekrefter søyle, fristmarkør, ugyldig periode, inklusiv overlapp, clipping, dagens dato, forfaltmarkering, snapshot-farge, escaping og korrekt ekskludering av ToDo-er/fullførte/arkiverte/udaterte oppgaver.
+- Arbeidsår er kontrollert for datoer i begge kalenderhalvår, og navigasjon til et neste arbeidsår med en generert forekomst er verifisert.
+- Personfilteret finner hovedansvarlig, deltaker og ansvarlig for åpen deloppgave. Kombinerte filtre fungerer, og samme oppgave rendres bare én gang.
+- Klikk og Enter åpner den eksisterende modal-flyten, og endrede oppgavedata vises etter rerender.
+- Med 50 oppgaver fungerer intern vertikal rulling, og videre rulling ved bunnen går til siden uten JavaScript-håndtering av rullehendelser.
+- Mobil er kontrollert ved 390 x 844 px: fem navigasjonsvalg er lesbare og trykkbare, tittelkolonnen er klebrig, tidsaksen ruller horisontalt og dokumentet har ingen horisontal overflow.
+- Førstegangsstandard og gjenoppretting av valgt vindu etter sidelasting er verifisert. Service worker registreres og `js/timeline.js` finnes i `strawberry-plan-v1.14.0`-cachen; lokal HTTP-kontroll returnerer 200 for både modulen og service worker.
+- `node --check` består for `app.js`, `js/todos.js`, `js/timeline.js`, `firestore.js` og `service-worker.js`.
+- Firestore-emulatortestene består: `24/24`.
+
+### Versjon
+- Versjon bumpet til `1.14.0` i `app.js`, `service-worker.js` og `firestore.js`; klientbuild er `11400`.
+
 ## v1.13.1 - 2026-09-04
 
 ### Årlig gjentakelse

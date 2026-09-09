@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.13.1';
+const APP_VERSION = '1.14.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -702,6 +702,7 @@ function setupBackdropClose(overlay, onClose) {
 
 function showView(name) {
   state.currentView = name;
+  document.getElementById('content-area')?.classList.toggle('timeline-mode', name === 'timeline');
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === name));
   document.querySelectorAll('.bottom-btn').forEach(b => b.classList.toggle('active', b.dataset.view === name));
@@ -714,6 +715,7 @@ function showView(name) {
 
   if (name === 'dashboard')     renderDashboard();
   if (name === 'tasks')         renderTasksList();
+  if (name === 'timeline')      renderTimeline();
   if (name === 'todos')         renderTodosView();
   if (name === 'notifications') renderNotifications();
   if (name === 'admin')         renderAdmin();
@@ -916,6 +918,7 @@ function subscribeToRealtime() {
       state.tasks = tasks;
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'tasks') renderTasksList();
+      if (state.currentView === 'timeline') renderTimeline();
       scheduleRecurringTaskGeneration();
     }, onRealtimeError('tasks', 'Kunne ikke laste oppgaver. Prøv å oppdatere appen.')),
     subscribeToTodos(todos => {
@@ -929,6 +932,7 @@ function subscribeToRealtime() {
       populateAssigneeSelects();
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'tasks') renderTasksList();
+      if (state.currentView === 'timeline') renderTimeline();
       if (state.currentView === 'admin') renderAdmin();
       renderTodoPanel();
     }, onRealtimeError('users', 'Kunne ikke laste teammedlemmer. Prøv å oppdatere appen.')),
@@ -941,6 +945,7 @@ function subscribeToRealtime() {
       populateCategorySelects();
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'tasks') renderTasksList();
+      if (state.currentView === 'timeline') renderTimeline();
       if (state.currentView === 'admin') renderAdmin();
     }, onRealtimeError('categories', 'Kategorier kunne ikke lastes. Firestore-reglene må trolig oppdateres.')),
     subscribeToNotifications(state.user.uid, notifs => {
@@ -3185,6 +3190,8 @@ function updateAdminUpdateUI() {
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+  initTimeline();
+
   // Register service worker med oppdateringsdeteksjon
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./service-worker.js').then(reg => {

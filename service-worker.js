@@ -1,7 +1,7 @@
 // ============================================================
 // VERSJON – Bump denne ved hver deploy for å tvinge oppdatering
 // ============================================================
-const APP_VERSION = '1.13.1';
+const APP_VERSION = '1.14.0';
 const CACHE_NAME  = `strawberry-plan-v${APP_VERSION}`;
 
 const APP_FILES = [
@@ -10,6 +10,7 @@ const APP_FILES = [
   './app.js',
   './firestore.js',
   './js/todos.js',
+  './js/timeline.js',
   './firebase-config.js',
   './manifest.json',
   './icon-192.png',

@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.13.1`
+Gjeldende appversjon: `v1.14.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -30,7 +30,8 @@ Planning/
 ├── DEVELOPMENT_LOG.md  # Endrings- og utrullingslogg
 ├── app.js              # UI-logikk, routing og hendelseshåndtering
 ├── js/
-│   └── todos.js        # ToDo-visning, panel og handlinger
+│   ├── todos.js        # ToDo-visning, panel og handlinger
+│   └── timeline.js     # Tidslinje, datovinduer, filtre og rendering
 ├── manifest.json       # PWA-manifest
 ├── service-worker.js   # Caching og app-oppdatering
 ├── .nojekyll           # Hindrer GitHub Pages fra å kjøre Jekyll-prosessering
@@ -288,6 +289,17 @@ Klienten genererer forekomster gjennom 90 dager fra dagens dato. Ved månedlig d
 Genereringen starter i bakgrunnen etter at oppgavene er lastet og umiddelbart etter lagring av en gjentakende oppgave. Den blokkerer ikke første rendering eller lukking av modalen. Dagens Firestore-regler tillater bare Admin og Teamleder å opprette oppgaver, så genereringen kjøres bare når `canEdit()` er sann. En ny forekomst opprettes derfor først når en Admin eller Teamleder åpner appen; innlogging fra kun et Medlem utløser ikke generering.
 
 Forekomst-ID-en utledes deterministisk av mal-ID og dato. Generering skjer i transaksjonelle puljer på maksimalt 100 kandidater: transaksjonen leser den autoritative malen og alle aktuelle forekomster, oppretter bare dokumenter som ikke finnes, og oppdaterer `recurrenceGeneratedUntil` atomisk. Samtidige faner kan derfor ikke lage duplikater, og en eksisterende forekomst overskrives aldri. Ved mønsterendring settes markøren tilbake til ankeret; tidligere forekomster beholdes urørt. Fjerning av gjentakelse eller soft-delete av malen stopper videre generering.
+
+## Tidslinje
+Tidslinjen viser åpne, ikke-slettede oppgaver med ferdigdato. ToDo-er og fullførte oppgaver vises ikke. Oppgaver med både start- og ferdigdato vises som søyler, mens oppgaver uten startdato vises som fristmarkører. En oppgave med startdato etter ferdigdato vises også som en fristmarkør med signalet `Ugyldig periode`; datamodellen og dashboardets datakvalitetsberegning endres ikke av dette.
+
+Tilgjengelige vinduer er tre, tolv og atten måneder fra dagens dato, samt arbeidsår fra 1. august til 31. juli. Arbeidsår kan flyttes ett år frem eller tilbake. Et element er med når perioden overlapper vinduet etter den inklusive regelen `dueDate >= windowStart && startDate <= windowEnd`. For fristmarkører uten gyldig startdato brukes `dueDate` på begge sider av sammenligningen.
+
+Visningen rendres deterministisk fra gjeldende `state.tasks` ved hver endring av vindu, filter eller sanntidsdata. Det brukes ingen intern tidslinjecache. Filtrene kan kombineres for person, kategori og status. Personfilteret bruker `taskInvolvement()` og finner derfor hovedansvarlig, deltakere og deloppgaveansvarlige. Kategorifilteret er unionen av aktive masterkategorier og kategorisnapshots på oppgavene i det valgte vinduet; snapshot-kategorier som ikke lenger finnes i masterdata merkes som inaktive.
+
+Tidslinjen bruker CSS Grid uten eksternt diagram- eller Gantt-bibliotek. Tittelkolonnen er klebrig og tidsaksen kan rulles horisontalt, også på mobil. Rullingen bruker CSS `overscroll-behavior` og ingen JavaScript-håndtering av rullehendelser. Dagens dato vises når den ligger i vinduet, elementer som fortsetter utenfor vinduet markeres visuelt, og hele raden kan åpne oppgavemodalen med mus eller tastatur.
+
+Gjentakende forekomster vises først når de faktisk er generert innenfor appens 90-dagershorisont. Tidslinjen opplyser om dette, slik at senere arbeidsår ikke feilaktig tolkes som komplette serier.
 
 ## Eksport og sikkerhetskopi
 Admin har et eget kort under Administrasjon for å laste ned en manuell øyeblikkskopi. Eksporten henter ett rått snapshot fra hver av samlingene `tasks`, `todos`, `categories`, `users`, `allowedUsers` og `comments`. Soft-slettede oppgaver og ToDo-er er med; varsler utelates fordi de er avledede og forgjengelige.
