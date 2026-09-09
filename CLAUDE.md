@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.15.1`
+Gjeldende appversjon: `v1.16.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -23,7 +23,8 @@ Planning/
 ├── firebase-config.js  # Firebase config og INITIAL_USERS
 ├── firestore.js        # Firestore CRUD, subscriptions og write metadata
 ├── firestore.rules     # Firestore Security Rules - kilde for rules som deployes
-├── firebase.json       # Firestore-emulatorkonfigurasjon
+├── firestore.indexes.json # Sammensatte Firestore-indekser
+├── firebase.json       # Firestore-regler, indekser og emulatorkonfigurasjon
 ├── package.json        # Dev-avhengigheter og testkommando
 ├── tests/              # Automatiserte Firestore Rules-tester
 ├── TESTING.md          # Lokal testing og sjekkliste før publisering
@@ -52,8 +53,11 @@ Planning/
 6. Lim inn web app-konfigurasjon i `firebase-config.js`.
 7. Seed første Admin manuelt i `allowedUsers` hvis collectionen er tom.
 8. Publiser innholdet i `firestore.rules` i Firebase Console.
+9. Opprett indeksene fra `firestore.indexes.json` manuelt i Firebase Console -> Firestore Database -> Indexes -> Composite.
 
 `firestore.rules` i repoet er kilde til gjeldende rules. Når rules endres, kopier hele innholdet derfra til Firebase Console -> Firestore -> Rules og publiser.
+
+`firestore.indexes.json` er kilde til gjeldende sammensatte indekser. Kommentarspørringen krever en collection-indeks for `comments` med `taskId` stigende og deretter `createdAt` stigende. Vent til Console viser indeksen som aktiv før kommentarfanen produksjonstestes. `firebase.json` peker også på indeksfilen for en eventuell senere Firebase CLI-deploy.
 
 ## Rollemodell og regler
 Firestore Rules er sikkerhetsgrensen. Klientsjekker styrer bare hva UI-et viser.
@@ -143,6 +147,8 @@ Kategorier kan skjules eller slettes. Oppgaver lagrer også kategoriens navn/far
 ### `comments/{commentId}`
 - `taskId`, `userId`, `userDisplayName`, `userPhotoURL`
 - `text`, `createdAt`
+
+Kommentarer abonneres per oppgave og sorteres stigende på `createdAt`. Listener-feil vises vedvarende i Kommentarer-fanen og logges i konsollen. `Send kommentar` er en egen korallfarget handling; `Lagre` lagrer bare oppgaven. Ved usendt kommentartekst må brukeren bekrefte før oppgaven lukkes eller lagres uten kommentaren.
 
 ### `users/{userId}/notifications/{notifId}`
 - `type`: `task_assigned` | `comment_added` | `status_changed`

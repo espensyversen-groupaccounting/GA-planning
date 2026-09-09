@@ -1,5 +1,30 @@
 # Development Log
 
+## v1.16.0 - 2026-09-09
+
+### Kommentarer og Firestore-indeks
+- La til `firestore.indexes.json` med collection-indeksen `comments`: `taskId` stigende og `createdAt` stigende. `firebase.json` peker nå på indeksfilen.
+- Beholdt kommentarspørringen uendret. `subscribeToComments()` tar nå en feilcallback, og kommentarfanen viser en vedvarende norsk feilmelding samtidig som den tekniske feilen logges i konsollen.
+- Gjennomgang av alle spørringer i `firestore.js` fant ingen andre behov for sammensatte indekser. `categories`, `tasks`, `todos` og varsler bruker én sortering hver; `markAllNotificationsRead()` bruker bare ett likhetsfilter; øvrige kall er dokument- eller collection-lesinger.
+- Kommentarknappen heter nå `Send kommentar`, har sendeikon og egen korallfarge, slik at den skilles fra modalens `Lagre`.
+
+### Vern av usendt tekst
+- X, Avbryt, Escape og ekte backdrop-klikk varsler når kommentarfeltet inneholder usendt tekst.
+- `Lagre` varsler separat og lar brukeren lagre oppgaveendringene uten å sende kommentaren. Avbrytes bekreftelsen, beholdes både modalen og teksten.
+- Kommentarteksten tømmes først når modalen faktisk lukkes. En feil under lagring lar derfor teksten stå urørt.
+- Eksisterende stack-håndtering i `showConfirm()` er beholdt: Escape lukker bare bekreftelsen, rydder lytterne og løser promise-en med `false`.
+
+### Verifisering
+- `firestore.indexes.json` og `firebase.json` består JSON-parsing, og indeksfeltene/rekkefølgen er kontrollert.
+- Lokal headless Chrome-test består for vedvarende listener-feil, konsolllogging, eksisterende kommentarsending, tydelig sendeknapp og usendt-tekstvarsel via X, Avbryt, Escape, backdrop og Lagre.
+- Fortsett-valget er testet med stubbet Firestore-skriving: oppgaveendringen lagres, kommentaren sendes ikke, og teksten tømmes først etter vellykket lukking. Avbryt beholder både modal og tekst.
+- Mobilkontroll ved 390 x 844 px bekrefter at sendeknappen er synlig og holder seg innenfor modalbredden.
+- `node --check` består for alle fem JavaScript-filer. Firestore-emulatortestene består 24/24.
+
+### Avgrensning og versjon
+- Kommentarens datamodell, `addComment()`, Firestore-spørringen, regler, regeltester og øvrige appfunksjoner er uendret.
+- Versjon bumpet til `1.16.0` i `app.js`, `service-worker.js` og `firestore.js`; klientbuild er `11600`.
+
 ## v1.15.1 - 2026-09-09
 
 ### Vern mot nøstede serier

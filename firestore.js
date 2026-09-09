@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.15.1';
-const CLIENT_BUILD = 11501;
+const CLIENT_APP_VERSION = '1.16.0';
+const CLIENT_BUILD = 11600;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -435,13 +435,13 @@ async function convertTodoToTask(todoId, taskData) {
 
 // ---- Comments ----
 
-function subscribeToComments(taskId, callback) {
+function subscribeToComments(taskId, callback, onError) {
   return db.collection('comments')
     .where('taskId', '==', taskId)
     .orderBy('createdAt', 'asc')
     .onSnapshot(snap => {
       callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    }, onError);
 }
 
 async function addComment(taskId, text) {

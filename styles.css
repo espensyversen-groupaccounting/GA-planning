@@ -1802,6 +1802,34 @@ body {
   padding: 10px 14px;
 }
 .add-comment-wrap { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); padding-top: 16px; }
+.comments-loading {
+  color: var(--text-3);
+  font-size: .875rem;
+  text-align: center;
+  padding: 20px 0;
+}
+.btn-comment-send {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--coral);
+  color: var(--white);
+}
+.btn-comment-send:hover { background: #E6494E; }
+.comments-load-error {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid #FECACA;
+  border-radius: var(--radius);
+  background: #FEF2F2;
+  color: #991B1B;
+  font-size: .82rem;
+  line-height: 1.45;
+}
+.comments-load-error strong { font-size: .875rem; }
 
 /* ---- Todo edit modal ---- */
 .todo-edit-container {

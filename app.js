@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.15.1';
+const APP_VERSION = '1.16.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -1915,10 +1915,36 @@ function closeTaskModal() {
   document.getElementById('task-modal').classList.add('hidden');
   document.body.style.overflow = '';
   if (state.commentUnsub) { state.commentUnsub(); state.commentUnsub = null; }
+  const commentInput = document.getElementById('new-comment-input');
+  if (commentInput) commentInput.value = '';
   state.activeTaskId = null;
   state.activeTaskDetailsUpdatedAt = null;
   state.activeTaskSubtasks = [];
   state.activeTaskOriginalRecurrence = null;
+}
+
+function hasUnsentComment() {
+  return Boolean(document.getElementById('new-comment-input')?.value.trim());
+}
+
+async function confirmUnsentComment(action) {
+  if (!hasUnsentComment()) return true;
+  const saving = action === 'save';
+  return showConfirm(
+    'Usendt kommentar',
+    saving
+      ? 'Kommentaren er ikke sendt. Vil du lagre oppgaveendringene uten kommentaren?'
+      : 'Kommentaren er ikke sendt. Vil du lukke oppgaven og forkaste kommentaren?',
+    {
+      confirmText: saving ? 'Lagre uten kommentar' : 'Forkast kommentar',
+      confirmStyle: 'primary',
+    }
+  );
+}
+
+async function requestCloseTaskModal() {
+  if (!await confirmUnsentComment('close')) return;
+  closeTaskModal();
 }
 
 function recurrenceFormDraft(task = {}) {
@@ -2241,6 +2267,8 @@ async function handleSaveTask() {
       if (!currentTask || recurrenceChanged) data.recurrenceGeneratedUntil = recurrence.anchorDate;
     }
   }
+
+  if (!await confirmUnsentComment('save')) return;
 
   const saveBtn = document.getElementById('btn-save-task');
   saveBtn.disabled = true;
@@ -2665,10 +2693,25 @@ function updateStatusStepper(currentStatus, taskOverride = null) {
 
 function startCommentListener(taskId) {
   if (state.commentUnsub) state.commentUnsub();
+  document.getElementById('comments-list').innerHTML =
+    '<p class="comments-loading">Laster kommentarer...</p>';
   state.commentUnsub = subscribeToComments(taskId, comments => {
     renderComments(comments);
     document.getElementById('comments-tab-count').textContent = comments.length || '';
+  }, error => {
+    console.error('Kunne ikke laste kommentarer:', error);
+    renderCommentLoadError();
+    document.getElementById('comments-tab-count').textContent = '!';
   });
+}
+
+function renderCommentLoadError() {
+  const el = document.getElementById('comments-list');
+  el.innerHTML = `
+    <div class="comments-load-error" role="alert">
+      <strong>Kommentarene kunne ikke lastes</strong>
+      <span>Det kan finnes kommentarer som ikke vises akkurat nå. Prøv igjen senere.</span>
+    </div>`;
 }
 
 function renderComments(comments) {
@@ -3370,9 +3413,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Modal close
-  document.getElementById('modal-close').addEventListener('click', closeTaskModal);
-  document.getElementById('btn-cancel-task').addEventListener('click', closeTaskModal);
-  setupBackdropClose(document.getElementById('task-modal'), closeTaskModal);
+  document.getElementById('modal-close').addEventListener('click', () => { void requestCloseTaskModal(); });
+  document.getElementById('btn-cancel-task').addEventListener('click', () => { void requestCloseTaskModal(); });
+  setupBackdropClose(document.getElementById('task-modal'), () => { void requestCloseTaskModal(); });
 
   // Modal tabs
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -3436,7 +3479,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (!document.getElementById('task-modal').classList.contains('hidden')) {
-      closeTaskModal();
+      void requestCloseTaskModal();
       return;
     }
     if (state.dashboardFilter) clearDashboardFilter();
