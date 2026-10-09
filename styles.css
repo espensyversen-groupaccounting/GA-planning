@@ -1134,6 +1134,23 @@ body {
   font-size: .82rem;
   line-height: 1.55;
 }
+.task-rank-start { max-width: 100%; white-space: normal; flex-shrink: 0; }
+.tasks-toolbar { flex-wrap: wrap; }
+.task-rank-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 0; margin-bottom: 16px; border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border); font-size: .85rem;
+}
+.task-rank-banner > span { min-width: 0; overflow-wrap: anywhere; }
+.task-rank-banner > button { flex-shrink: 0; }
+.task-rank-number {
+  display: inline-block; min-width: 24px; margin-right: 8px;
+  color: var(--text-2); font-size: .8rem; font-weight: 600; text-align: center;
+}
+#view-tasks :disabled { cursor: default; opacity: .55; }
+@media (max-width: 599px) {
+  .task-rank-banner { align-items: flex-start; }
+}
 .backup-export-status {
   min-height: 20px;
   margin: 12px 0 0;

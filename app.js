@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.21.0';
+const APP_VERSION = '1.22.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -29,6 +29,7 @@ const state = {
   commentUnsub: null,
   editMode: false,
   quickFilter: '',
+  taskRankPersonId: null,
   dashboardScope: localStorage.getItem('dashboardScope') || 'mine',
   dashboardFilter: '',
   dashboardSectionCollapsed: {
@@ -716,6 +717,7 @@ function setupBackdropClose(overlay, onClose) {
 // ============================================================
 
 function showView(name) {
+  leaveRankingView(name);
   state.currentView = name;
   document.getElementById('content-area')?.classList.toggle('timeline-mode', name === 'timeline');
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -1065,7 +1067,7 @@ function clearDashboardFilter() {
 }
 
 function renderDashboard() {
-  if (deferDashboardRankRender()) return;
+  if (deferRankRender()) return;
   updateDashboardScopeButtons();
   renderDashboardReview();
   const tasks = scopedTasks();
@@ -1347,7 +1349,7 @@ function dashboardItemHtml(entry, options = {}) {
       ${itemHtml}
       ${dashboardSubtaskLinesHtml(entry.triggerSubtasks)}
       ${blockedHtml}
-      ${options.ranking ? dashboardRankHandleHtml(entry) : ''}
+      ${options.ranking ? rankHandleHtml(entry) : ''}
     </div>`;
 }
 
@@ -1379,7 +1381,7 @@ function renderDashboardPrioritySection(containerId, entries, emptyMsg, options 
           <span class="priority-dot ${group.key}"></span>
           <span>${group.label}</span>
           <span class="priority-group-count">${groupEntries.length}</span>
-          ${ranking && groupEntries.some(entry => dashboardRankValue(entry) !== null)
+          ${ranking && groupEntries.some(entry => rankValue(entry) !== null)
             ? '<button type="button" class="dashboard-rank-reset" data-dashboard-rank-reset title="Gå tilbake til sortering etter frist og hastegrad" aria-label="Gå tilbake til sortering etter frist og hastegrad">Nullstill rekkefølge</button>' : ''}
         </div>
         <div class="task-list-compact">
@@ -1636,6 +1638,9 @@ function taskCardHtml(task, compact = false) {
 // ============================================================
 
 function renderTasksList() {
+  if (deferRankRender()) return;
+  updateTaskRankingControls();
+  if (state.taskRankPersonId) { renderTaskRankingList(); return; }
   const status   = document.getElementById('filter-status').value;
   const priority = document.getElementById('filter-priority').value;
   const assignee = document.getElementById('filter-assignee').value;
@@ -3749,7 +3754,9 @@ function updateAdminUpdateUI() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initTimeline();
-  initDashboardRanking();
+  initRanking();
+  document.getElementById('task-rank-start').addEventListener('click', startTaskRanking);
+  document.getElementById('task-rank-done').addEventListener('click', () => stopTaskRanking());
   document.addEventListener('click', event => {
     const button = event.target.closest('[data-review-action]');
     if (!button) return;

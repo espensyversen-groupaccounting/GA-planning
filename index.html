@@ -267,7 +267,13 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input type="text" id="task-search" class="search-input" placeholder="Søk etter oppgave..." />
             </div>
+            <button id="task-rank-start" class="btn btn-secondary task-rank-start hidden" type="button"></button>
           </div>
+          <div id="task-rank-banner" class="task-rank-banner hidden">
+            <span id="task-rank-message"></span>
+            <button id="task-rank-done" class="btn btn-secondary" type="button">Ferdig</button>
+          </div>
+          <div id="task-rank-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
           <div id="tasks-list" class="tasks-list"></div>
         </div>
 

@@ -1,5 +1,40 @@
 # Development Log
 
+## v1.22.0 - 2026-10-09
+
+### Endringer
+- workRank[P] er en felles kø per person. Admin/Teamleder setter andres rekkefølge fra Oppgaver-siden; personen bruker samme verdi i Mine på dashboardet.
+- Ny knapp ved filterraden når en bestemt aktiv ansvarlig er valgt. Rangeringsmodus har banner/Ferdig, deaktiverte filtre med bevarte verdier, prioriteringsgrupper og plassnummer for rangerte kort. Bare personens egne åpne hovedoppgaver, uten review og ToDo-er. Sidebytte avslutter modusen.
+- js/worklist.js har én felles motor: initRanking, saveGroupRanks, rankChanges og person-/visningsadaptere. Mus, 200 ms berøringshold, tastatur, gruppebegrensning, automatisk rulling, nullstilling og rollback deles. Ingen duplisert dra-logikk.
+- renderDashboard og renderTasksList utsetter DOM-rendering under dragging/lagring. Fersk gruppe valideres før skriving; endret medlemssett avvises.
+- writeWorkRanks/workRankWriteArgs er uendret: FieldPath for valgt P og writeMeta, ingen updatedAt/detailsUpdatedAt/lastEditedBy. Andre personers nøkler bevares. Regler skiller ikke på hvilken nøkkel Admin/Teamleder skriver; Medlem kan ikke rangere.
+- Dashboardets eksisterende oppførsel, ToDo-panelet, tidslinjen, vanlig Oppgaver-sortering, classifyDashboardItem og kopiering ved konvertering/gjentakelse er uendret.
+- Endrede filer: app.js, js/worklist.js, index.html, styles.css, firestore.js, service-worker.js, CLAUDE.md, DEVELOPMENT_LOG.md. Ingen nye filer. Firestore.js er bare versjonsbump. Versjon 1.22.0 / build 12200.
+
+### Verifikasjon
+Lokale automatiserte Chrome-tester (desktop og 390 px), native berøringshendelser via CDP og autentiserte Firestore-emulatorbrukere. Dette er ikke manuelle tester med Espen/Christine i produksjon eller på fysisk mobil.
+
+| Test | Resultat |
+| --- | --- |
+| 1 | Bestått: knappen er skjult for Alle/Uten ansvarlig/Medlem, synlig for bestemt aktiv person. |
+| 2 | Bestått: bare egne åpne hovedoppgaver, tre prioritetsgrupper, ingen review/fullførte/slettede/ToDo-er/deltakeroppgaver; disabled filtre og Ferdig gjenoppretter alle verdier. |
+| 3 | Bestått lokalt: lederens rangering vises i personens Mine-gruppe. Autentisert emulator-lytter mottar skriving for personens nøkkel uten omlasting. |
+| 4 | Bestått lokalt: personens dashboardflytting vises i ledermodus; motsatt autentisert emulator-lytter mottar endringen. |
+| 5 | Bestått: Admins egen rang og andre personers nøkler beholdes ved skriving for Teamleder. |
+| 6 | Bestått med faktisk SDK: gamle og nyere detaljtokens kan lagres etter rangering; updatedAt, detailsUpdatedAt og lastEditedBy urørt. |
+| 7 | Bestått: A skriver ett dokument, B promoterer prefiks, liten luke normaliseres for P, nullstilling bevarer andre nøkler, plassnummer oppdateres. 501 endringer avvises uten skriving. |
+| 8 | Bestått: snapshot under dragging og lagring bygger ikke om listen; endring vises etter avslutning. |
+| 9 | Bestått: hele lokale v1.21.0-regresjonen, inkludert Mine/Team/filter, ToDo-samspill, flyttet gruppe, rollback, mus, tastatur og berøring. |
+| 10 | Bestått: kortklikk åpner, dragging åpner ikke; tastatur/aria-live/Escape, mus innen samme gruppe og native berøringshold med automatisk rulling av 15 elementer. |
+| 11 | Bestått: simulert skriveavvisning gir rollback, ny innhenting av faktiske dokumenter og norsk toast. |
+| 12 | Bestått: sidebytte avslutter modusen og gjenoppretter filterverdiene. |
+| 13 | Bestått: syntakssjekk av alle JS-filer, uendrede emulatortester 24/24, ingen pageerrors. Fersk inkognito aktiverer SW 1.22.0 og cacher worklist.js med HTTP 200. |
+
+Visuelt kontrollert desktop/mobil: full Oppgaver-kortvisning, separate håndtak, plassnummer og samme gruppeoverskrifter som dashboardet. Ingen horisontal overflow.
+
+### Utrulling
+Ikke deployet. Ingen regel- eller indeksendring nødvendig. Etter publisering: Oppdater app og kontroller leder/person i to faktiske produksjonsøkter samt på fysisk mobil.
+
 ## v1.21.0 - 2026-10-09
 
 ### Rangering inne i dashboardets prioritetsgrupper
