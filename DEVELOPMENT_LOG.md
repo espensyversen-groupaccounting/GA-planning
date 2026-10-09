@@ -1,5 +1,36 @@
 # Development Log
 
+## v1.19.1 - 2026-10-09
+
+### Fristsortering i tidslinjen
+- Nytt valg Frist (due) rett etter Startdato. Flat sortering etter dueDate, deretter tidslinjens startdato og norsk tittelsortering. Fristmarkører og ugyldige perioder bruker fristen som sin effektive startdato.
+- timelineGroupedEntries() returnerer null for både start og due. Frist gir ingen grupper. De eksisterende startdato-, kategori- og ansvarliggrenene og intern rekkefølge er uendret.
+- Eksisterende filteroppsummering henter etiketten fra menyen og viser Sortert: Frist. Startdato er fortsatt standard ved lasting; sorteringsvalget lagres ikke.
+- Overlappsregelen er uendret. Forfalte oppgaver kommer først dersom de faktisk er i vinduet, som i gjeldende Arbeidsår. Rullerende 3/12/18-månedersvinduer starter i dag og viser derfor ikke oppgaver med passert hovedfrist.
+- Endrede filer: js/timeline.js, index.html, app.js, firestore.js, service-worker.js, CLAUDE.md, DEVELOPMENT_LOG.md. App/firestore/service-worker har kun versjon/build-endring til 1.19.1 / 11901.
+- Ingen endringer i dashboardet, tidsvinduer, filtre, markører, farger, datamodell, Firestore-regler eller testfiler.
+
+### Tester
+Lokale automatiserte Playwright-tester i Chrome med syntetiske oppgaver; ikke manuelle produksjonstester.
+
+| Krav | Resultat |
+|---|---|
+| 1: Stigende frister i fire vinduer | Bestått i 3m, 12m, 18m og workyear med kontroll av rendret radrekkefølge. |
+| 2: Forfalt først | Bestått i Arbeidsår med en forfalt oppgave innenfor vinduet; overlappsregelen beholdes. |
+| 3: Like frister | Bestått: startdato først, deretter tittel ved lik startdato. |
+| 4: Fristmarkør | Bestått: uten startdato sorteres sammen med søylene; ugyldig periode sorteres også etter frist. |
+| 5: Filtre | Bestått med person, kategori og status samtidig. |
+| 6: Ingen grupper | Bestått: null fra grupperingsfunksjonen og ingen gruppeoverskrifter i alle fire vinduer. |
+| 7: Tidligere sortering | Bestått: startrekkefølge, kategori-sortOrder, alfabetisk ansvarlig og intern startrekkefølge i grupper. |
+| 8: Deloppgavefrister | Bestått: markør rendres med due aktivert; markørkode er uendret. |
+| 9: Skjult filterområde | Bestått: Sortert: Frist vises i den kompakte oppsummeringen. |
+
+- Ekte klikk i sorteringsmenyen bekrefter bytte Startdato/Frist. Reload går tilbake til Startdato.
+- Desktop- og mobilskjermbilder kontrollert; ved 390 x 844 px ligger fristvalget riktig og siden har ingen horisontal overflow.
+- node --check: bestått for alle fem JavaScript-filer.
+- Uendrede emulatortester via npm test: 24/24 bestått.
+- Ikke deployet.
+
 ## v1.19.0 - 2026-10-09
 
 ### Godkjent review og trygg fullføring

@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.19.0`
+Gjeldende appversjon: `v1.19.1`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -330,6 +330,8 @@ Forekomster identifiseres utelukkende ved at `recurrenceTemplateId` er satt. De 
 Generatorens første utvalg hopper over forekomster. `buildRecurringTaskPlan()`, som mottar den ferske malen lest inne i Firestore-transaksjonen, avviser også alle dokumenter med `recurrenceTemplateId`. Denne kontrollen er autoritativ i klientgeneratoren og stopper også en eldre feilforekomst som både har `recurrence` og `recurrenceTemplateId`, uten å endre eksisterende data eller allerede opprettede duplikater.
 
 ## Tidslinje
+Sorter etter Frist gir flat stigende sortering på dueDate, deretter tidslinjens startdato (frist for markører), deretter tittel. Startdato er fortsatt standard; sorteringsvalget lagres ikke. Både start og due returnerer null fra timelineGroupedEntries(), og eksisterende kategorier/ansvarlige og gruppenes interne startdatosortering er uendret. Skjult filterområde viser Sortert: Frist via eksisterende oppsummering. Sortering endrer ikke overlappsregelen: forfalte oppgaver vises bare når fristen ligger innenfor vinduet, for eksempel gjeldende Arbeidsår; rullerende vinduer starter i dag.
+
 Tidslinjen viser åpne, ikke-slettede oppgaver med ferdigdato. ToDo-er og fullførte oppgaver vises ikke. Oppgaver med både start- og ferdigdato vises som søyler, mens oppgaver uten startdato vises som fristmarkører. En oppgave med startdato etter ferdigdato vises også som en fristmarkør med signalet `Ugyldig periode`; datamodellen og dashboardets datakvalitetsberegning endres ikke av dette.
 
 Tilgjengelige vinduer er tre, tolv og atten måneder fra dagens dato, samt arbeidsår fra 1. august til 31. juli. Arbeidsår kan flyttes ett år frem eller tilbake. Et element er med når perioden overlapper vinduet etter den inklusive regelen `dueDate >= windowStart && startDate <= windowEnd`. For fristmarkører uten gyldig startdato brukes `dueDate` på begge sider av sammenligningen.

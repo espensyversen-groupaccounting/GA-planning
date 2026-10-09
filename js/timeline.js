@@ -113,7 +113,9 @@ function timelineFilteredEntries(entries) {
 
 function timelineSortEntries(entries) {
   return [...entries].sort((a, b) => {
-    const dateDiff = a.range.start - b.range.start || a.range.due - b.range.due;
+    const dateDiff = timelineViewState.sort === 'due'
+      ? a.range.due - b.range.due || a.range.start - b.range.start
+      : a.range.start - b.range.start || a.range.due - b.range.due;
     return dateDiff || String(a.task.title || '').localeCompare(String(b.task.title || ''), 'no');
   });
 }
@@ -155,7 +157,7 @@ function timelineAssigneeGroup(entry) {
 }
 
 function timelineGroupedEntries(entries) {
-  if (timelineViewState.sort === 'start') return null;
+  if (timelineViewState.sort === 'start' || timelineViewState.sort === 'due') return null;
   const groupFor = timelineViewState.sort === 'category' ? timelineCategoryGroup : timelineAssigneeGroup;
   const groups = new Map();
   entries.forEach(entry => {
