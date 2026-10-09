@@ -18,7 +18,8 @@ const timelineViewState = {
   person: '',
   category: '',
   status: '',
-  sort: 'start',
+  group: 'none',
+  order: 'start',
   showSubtasks: false,
   filtersCollapsed: localStorage.getItem(TIMELINE_FILTERS_COLLAPSED_KEY) === 'true',
 };
@@ -113,7 +114,7 @@ function timelineFilteredEntries(entries) {
 
 function timelineSortEntries(entries) {
   return [...entries].sort((a, b) => {
-    const dateDiff = timelineViewState.sort === 'due'
+    const dateDiff = timelineViewState.order === 'due'
       ? a.range.due - b.range.due || a.range.start - b.range.start
       : a.range.start - b.range.start || a.range.due - b.range.due;
     return dateDiff || String(a.task.title || '').localeCompare(String(b.task.title || ''), 'no');
@@ -157,8 +158,8 @@ function timelineAssigneeGroup(entry) {
 }
 
 function timelineGroupedEntries(entries) {
-  if (timelineViewState.sort === 'start' || timelineViewState.sort === 'due') return null;
-  const groupFor = timelineViewState.sort === 'category' ? timelineCategoryGroup : timelineAssigneeGroup;
+  if (timelineViewState.group === 'none') return null;
+  const groupFor = timelineViewState.group === 'category' ? timelineCategoryGroup : timelineAssigneeGroup;
   const groups = new Map();
   entries.forEach(entry => {
     const details = groupFor(entry);
@@ -167,7 +168,7 @@ function timelineGroupedEntries(entries) {
   });
   const result = [...groups.values()];
   result.forEach(group => { group.entries = timelineSortEntries(group.entries); });
-  if (timelineViewState.sort === 'category') {
+  if (timelineViewState.group === 'category') {
     return result.sort((a, b) => {
       const rank = type => type === 'master' ? 0 : type === 'snapshot' ? 1 : 2;
       return rank(a.type) - rank(b.type)
@@ -241,7 +242,8 @@ function timelineFilterSummaryText() {
   if (timelineViewState.person) parts.push(`Person: ${timelineSelectedOptionLabel('timeline-person-filter')}`);
   if (timelineViewState.category) parts.push(`Kategori: ${timelineSelectedOptionLabel('timeline-category-filter')}`);
   if (timelineViewState.status) parts.push(`Status: ${timelineSelectedOptionLabel('timeline-status-filter')}`);
-  if (timelineViewState.sort !== 'start') parts.push(`Sortert: ${timelineSelectedOptionLabel('timeline-sort')}`);
+  if (timelineViewState.group !== 'none') parts.push(`Gruppert: ${timelineSelectedOptionLabel('timeline-group')}`);
+  if (timelineViewState.order !== 'start') parts.push(`Sortert: ${timelineSelectedOptionLabel('timeline-sort')}`);
   if (timelineViewState.showSubtasks) parts.push('Deloppgavefrister vises');
   return parts.length ? parts.join(' · ') : 'Ingen aktive filtre';
 }
@@ -447,7 +449,7 @@ function timelineRowHtml(entry, bounds, today) {
 }
 
 function timelineGroupHeaderHtml(group) {
-  const inactive = group.type === 'snapshot' && timelineViewState.sort === 'category';
+  const inactive = group.type === 'snapshot' && timelineViewState.group === 'category';
   return `
     <div class="timeline-group-title-cell">
       <span>${esc(group.name)}</span>
@@ -472,6 +474,7 @@ function timelineGridColumns(mode) {
 }
 
 function renderTimeline() {
+  hideTimelineTooltip();
   const root = document.getElementById('timeline-root');
   const legend = document.getElementById('timeline-legend-container');
   if (!root || !legend) return;
@@ -490,7 +493,8 @@ function renderTimeline() {
   document.getElementById('timeline-status-filter').value = timelineViewState.status;
   document.getElementById('timeline-person-filter').value = timelineViewState.person;
   document.getElementById('timeline-category-filter').value = timelineViewState.category;
-  document.getElementById('timeline-sort').value = timelineViewState.sort;
+  document.getElementById('timeline-group').value = timelineViewState.group;
+  document.getElementById('timeline-sort').value = timelineViewState.order;
   document.getElementById('timeline-show-subtasks').checked = timelineViewState.showSubtasks;
   document.getElementById('timeline-period-label').textContent = timelinePeriodLabel(bounds);
   document.getElementById('timeline-workyear-nav').classList.toggle('hidden', timelineViewState.window !== 'workyear');
@@ -523,7 +527,97 @@ function shiftTimelineWorkYear(direction) {
   renderTimeline();
 }
 
+let timelineTooltipTarget = null;
+let timelineTooltipHideTimer = null;
+
+function hideTimelineTooltip() {
+  clearTimeout(timelineTooltipHideTimer);
+  timelineTooltipHideTimer = null;
+  const tooltip = document.getElementById('timeline-tooltip');
+  if (tooltip) tooltip.hidden = true;
+  if (timelineTooltipTarget) {
+    const ids = (timelineTooltipTarget.getAttribute('aria-describedby') || '').split(/\s+/).filter(id => id && id !== 'timeline-tooltip');
+    if (ids.length) timelineTooltipTarget.setAttribute('aria-describedby', ids.join(' '));
+    else timelineTooltipTarget.removeAttribute('aria-describedby');
+    timelineTooltipTarget.classList.remove('is-tooltip-open');
+  }
+  timelineTooltipTarget = null;
+}
+
+function showTimelineTooltip(target) {
+  const scroll = target.closest('.timeline-scroll');
+  const tooltip = document.getElementById('timeline-tooltip');
+  if (!scroll || !tooltip) return;
+  const pinned = target.classList.contains('is-tooltip-open');
+  hideTimelineTooltip();
+  const rect = target.getBoundingClientRect();
+  const viewport = scroll.getBoundingClientRect();
+  const header = scroll.querySelector('.timeline-header-row').getBoundingClientRect();
+  const left = Math.max(8, viewport.left + 8);
+  const right = Math.min(innerWidth - 8, viewport.right - 8);
+  const top = Math.max(8, viewport.top + 8, header.bottom + 8);
+  const bottom = Math.min(innerHeight - 8, viewport.bottom - 8);
+  if (right <= left || bottom <= top || rect.bottom < top || rect.top > bottom) return;
+  tooltip.textContent = target.dataset.tooltip || '';
+  tooltip.style.width = `${Math.min(320, right - left)}px`;
+  tooltip.style.maxHeight = 'none';
+  tooltip.hidden = false;
+  const height = tooltip.getBoundingClientRect().height;
+  const above = Math.max(0, rect.top - 8 - top);
+  const below = Math.max(0, bottom - rect.bottom - 8);
+  const placeAbove = above >= height || (below < height && above > below);
+  const available = placeAbove ? above : below;
+  tooltip.style.maxHeight = `${Math.max(1, available)}px`;
+  const box = tooltip.getBoundingClientRect();
+  tooltip.style.left = `${Math.max(left, Math.min(rect.left + rect.width / 2 - box.width / 2, right - box.width))}px`;
+  tooltip.style.top = `${placeAbove ? rect.top - 8 - box.height : rect.bottom + 8}px`;
+  tooltip.dataset.placement = placeAbove ? 'above' : 'below';
+  timelineTooltipTarget = target;
+  if (pinned) target.classList.add('is-tooltip-open');
+  const ids = new Set((target.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
+  ids.add('timeline-tooltip');
+  target.setAttribute('aria-describedby', [...ids].join(' '));
+}
+
 function initTimeline() {
+  const tooltip = document.createElement('div');
+  tooltip.id = 'timeline-tooltip';
+  tooltip.className = 'timeline-tooltip';
+  tooltip.setAttribute('role', 'tooltip');
+  tooltip.hidden = true;
+  document.body.appendChild(tooltip);
+  const root = document.getElementById('timeline-root');
+  root.addEventListener('pointerover', event => {
+    if (event.pointerType === 'touch') return;
+    const target = event.target.closest('[data-tooltip]');
+    if (target) {
+      clearTimeout(timelineTooltipHideTimer);
+      if (target !== timelineTooltipTarget) showTimelineTooltip(target);
+    }
+  });
+  root.addEventListener('pointerout', event => {
+    if (timelineTooltipTarget && !timelineTooltipTarget.contains(event.relatedTarget) && !tooltip.contains(event.relatedTarget) && !timelineTooltipTarget.classList.contains('is-tooltip-open')) {
+      clearTimeout(timelineTooltipHideTimer);
+      timelineTooltipHideTimer = setTimeout(hideTimelineTooltip, 120);
+    }
+  });
+  root.addEventListener('focusin', event => {
+    const target = event.target.closest('[data-tooltip]');
+    if (target) showTimelineTooltip(target);
+  });
+  root.addEventListener('focusout', event => {
+    if (!tooltip.contains(event.relatedTarget)) hideTimelineTooltip();
+  });
+  tooltip.addEventListener('pointerenter', () => clearTimeout(timelineTooltipHideTimer));
+  tooltip.addEventListener('pointerleave', hideTimelineTooltip);
+  document.addEventListener('scroll', event => {
+    if (event.target !== tooltip && timelineTooltipTarget) showTimelineTooltip(timelineTooltipTarget);
+  }, { capture: true, passive: true });
+  window.addEventListener('resize', hideTimelineTooltip);
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') hideTimelineTooltip(); });
+  document.addEventListener('click', event => {
+    if (timelineTooltipTarget && !timelineTooltipTarget.contains(event.target) && !tooltip.contains(event.target)) hideTimelineTooltip();
+  });
   document.getElementById('timeline-filter-toggle')?.addEventListener('click', toggleTimelineFilters);
   document.querySelectorAll('[data-timeline-window]').forEach(button => button.addEventListener('click', () => setTimelineWindow(button.dataset.timelineWindow)));
   document.getElementById('timeline-workyear-prev')?.addEventListener('click', () => shiftTimelineWorkYear(-1));
@@ -531,7 +625,8 @@ function initTimeline() {
   document.getElementById('timeline-person-filter')?.addEventListener('change', event => { timelineViewState.person = event.target.value; renderTimeline(); });
   document.getElementById('timeline-category-filter')?.addEventListener('change', event => { timelineViewState.category = event.target.value; renderTimeline(); });
   document.getElementById('timeline-status-filter')?.addEventListener('change', event => { timelineViewState.status = event.target.value; renderTimeline(); });
-  document.getElementById('timeline-sort')?.addEventListener('change', event => { timelineViewState.sort = event.target.value; renderTimeline(); });
+  document.getElementById('timeline-group')?.addEventListener('change', event => { timelineViewState.group = event.target.value; renderTimeline(); });
+  document.getElementById('timeline-sort')?.addEventListener('change', event => { timelineViewState.order = event.target.value; renderTimeline(); });
   document.getElementById('timeline-show-subtasks')?.addEventListener('change', event => { timelineViewState.showSubtasks = event.target.checked; renderTimeline(); });
   document.getElementById('timeline-root')?.addEventListener('click', event => {
     const subtaskMarker = event.target.closest('.timeline-subtask-marker');
@@ -539,11 +634,14 @@ function initTimeline() {
       event.preventDefault();
       event.stopPropagation();
       const wasOpen = subtaskMarker.classList.contains('is-tooltip-open');
-      document.querySelectorAll('.timeline-subtask-marker.is-tooltip-open').forEach(marker => marker.classList.remove('is-tooltip-open'));
-      if (!wasOpen) subtaskMarker.classList.add('is-tooltip-open');
+      hideTimelineTooltip();
+      if (!wasOpen) {
+        showTimelineTooltip(subtaskMarker);
+        subtaskMarker.classList.add('is-tooltip-open');
+      }
       return;
     }
-    document.querySelectorAll('.timeline-subtask-marker.is-tooltip-open').forEach(marker => marker.classList.remove('is-tooltip-open'));
+    hideTimelineTooltip();
     const target = event.target.closest('[data-timeline-task-id]');
     if (target) openTaskModal(target.dataset.timelineTaskId);
   });

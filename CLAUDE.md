@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.19.1`
+Gjeldende appversjon: `v1.19.2`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -330,7 +330,7 @@ Forekomster identifiseres utelukkende ved at `recurrenceTemplateId` er satt. De 
 Generatorens første utvalg hopper over forekomster. `buildRecurringTaskPlan()`, som mottar den ferske malen lest inne i Firestore-transaksjonen, avviser også alle dokumenter med `recurrenceTemplateId`. Denne kontrollen er autoritativ i klientgeneratoren og stopper også en eldre feilforekomst som både har `recurrence` og `recurrenceTemplateId`, uten å endre eksisterende data eller allerede opprettede duplikater.
 
 ## Tidslinje
-Sorter etter Frist gir flat stigende sortering på dueDate, deretter tidslinjens startdato (frist for markører), deretter tittel. Startdato er fortsatt standard; sorteringsvalget lagres ikke. Både start og due returnerer null fra timelineGroupedEntries(), og eksisterende kategorier/ansvarlige og gruppenes interne startdatosortering er uendret. Skjult filterområde viser Sortert: Frist via eksisterende oppsummering. Sortering endrer ikke overlappsregelen: forfalte oppgaver vises bare når fristen ligger innenfor vinduet, for eksempel gjeldende Arbeidsår; rullerende vinduer starter i dag.
+`timelineViewState.group` (none/category/assignee) og `order` (start/due) styres av separate velgere Grupper etter og Sorter etter. Standard er Ingen + Startdato; ingen av valgene lagres. timelineGroupedEntries() returnerer null bare ved group none. Begge datoordener brukes både flatt og innenfor grupper: valgt dato, deretter den andre datoen, så norsk tittelsortering. Fristmarkører bruker frist som effektiv startdato. Gruppetilhørighet og rekkefølge mellom kategorier/ansvarlige er uendret og påvirkes ikke av order. Skjult filterområde viser både Gruppert: Kategori og Sortert: Frist når valgene avviker fra standard. Sortering endrer ikke overlappsregelen: forfalte oppgaver vises bare når fristen ligger innenfor vinduet, for eksempel gjeldende Arbeidsår; rullerende vinduer starter i dag.
 
 Tidslinjen viser åpne, ikke-slettede oppgaver med ferdigdato. ToDo-er og fullførte oppgaver vises ikke. Oppgaver med både start- og ferdigdato vises som søyler, mens oppgaver uten startdato vises som fristmarkører. En oppgave med startdato etter ferdigdato vises også som en fristmarkør med signalet `Ugyldig periode`; datamodellen og dashboardets datakvalitetsberegning endres ikke av dette.
 
@@ -344,7 +344,9 @@ Standardrekkefølgen er effektiv startdato som i v1.14.0. Brukeren kan også gru
 
 Deloppgavemarkører med høyst 20 pikslers avstand mellom nabosentrene samles i alle tidsvinduer. Samlemarkøren viser antallet og tooltipen lister hver deloppgave med tittel, dato, status og ansvarlig. Klyngingen endrer aldri radantallet eller oppgavens kategorifarge.
 
-Tidslinjen bruker CSS Grid uten eksternt diagram- eller Gantt-bibliotek. Tittelkolonnen er klebrig og tidsaksen kan rulles horisontalt, også på mobil. Rullingen bruker CSS `overscroll-behavior` og ingen JavaScript-håndtering av rullehendelser. Dagens dato vises når den ligger i vinduet, elementer som fortsetter utenfor vinduet markeres visuelt, og hele raden kan åpne oppgavemodalen med mus eller tastatur.
+Tidslinjen bruker CSS Grid uten eksternt diagram- eller Gantt-bibliotek. Tittelkolonnen er klebrig og tidsaksen kan rulles horisontalt, også på mobil. Rullingen bruker CSS `overscroll-behavior` uten JavaScript-avskjæring av wheel-/touchhendelser. Dagens dato vises når den ligger i vinduet, elementer som fortsetter utenfor vinduet markeres visuelt, og hele raden kan åpne oppgavemodalen med mus eller tastatur.
+
+Hover-informasjon for søyler og deloppgavemarkører bruker én body-plassert, fixed `#timeline-tooltip` med role tooltip og aria-describedby på aktivt element. showTimelineTooltip() bruker getBoundingClientRect() for å velge over/under innenfor synlig tidslinje under månedsheaderen, og begrenser bredden mot skjerm-/rullbeholderkanter. Teksten settes bare med textContent. Hvis teksten ikke får plass på noen side, brukes siden med mest plass og intern rulling. En kort skjuleforsinkelse lar pekeren krysse mellomrommet inn i boksen. Passiv scroll-observasjon oppdaterer plasseringen uten å overstyre rullingen. Rendering, Escape, resize og klikk utenfor rydder boksen; mobiltrykk på markører toggler informasjon og åpner aldri oppgaven.
 
 Filterområdet er utvidet som standard og kan skjules med `Skjul filtre`. Tilstanden lagres i `localStorage` under `timelineFiltersCollapsed`. Når området er skjult, vises en kompakt oppsummering av aktive person-, kategori- og statusfiltre, avvikende sortering og deloppgavefrister. Periode og antall oppgaver er alltid synlig.
 

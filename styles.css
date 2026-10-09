@@ -3241,14 +3241,10 @@ body.todo-is-dragging {
   outline: 3px solid var(--black);
   outline-offset: 2px;
 }
-.timeline-item::after,
-.timeline-subtask-marker::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  width: max-content;
-  max-width: 280px;
+.timeline-tooltip {
+  position: fixed;
+  overflow-y: auto;
+  overscroll-behavior: auto;
   padding: 7px 9px;
   border-radius: 4px;
   background: var(--black);
@@ -3257,19 +3253,9 @@ body.todo-is-dragging {
   font-weight: 600;
   line-height: 1.35;
   text-align: left;
-  white-space: normal;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(-50%);
-  transition: opacity .12s;
-  z-index: 20;
-}
-.timeline-item:hover::after,
-.timeline-item:focus-visible::after,
-.timeline-subtask-marker:hover::after,
-.timeline-subtask-marker:focus::after,
-.timeline-subtask-marker.is-tooltip-open::after {
-  opacity: 1;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  z-index: 200;
 }
 .timeline-bar {
   top: 23px;
@@ -3363,11 +3349,6 @@ body.todo-is-dragging {
 .timeline-subtask-marker:focus-visible {
   outline: 2px solid var(--black);
   outline-offset: 0;
-}
-.timeline-subtask-marker::after {
-  top: calc(100% + 4px);
-  bottom: auto;
-  white-space: pre-line;
 }
 .timeline-item.is-overdue {
   outline: 2px solid #DC2626;

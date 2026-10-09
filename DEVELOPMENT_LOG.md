@@ -1,5 +1,40 @@
 # Development Log
 
+## v1.19.2 - 2026-10-09
+
+### Gruppering, sortering og synlige hover-bokser
+- timelineViewState.sort er delt i group (none/category/assignee) og order (start/due). Separate velgere med standard Ingen + Startdato; ingen lagring.
+- timelineGroupedEntries grupperer bare når group ikke er none. timelineSortEntries bruker order i både flat visning og inne i gruppene. Gruppetilhørighet og grupperekkefølge er uendret. Oppsummeringen viser avvikende gruppering og sortering hver for seg.
+- Én fixed tooltip under document.body erstatter pseudo-elementene. Den ligger utenfor rullbeholderens klipping/stacking og måles med getBoundingClientRect(). Foretrekker over, flytter under ved plassmangel over månedsheaderen, og begrenses mot kanter.
+- Hvis teksten er for høy for begge sider, velges mest tilgjengelig plass med intern rulling. Kort skjuleforsinkelse lar pekeren gå inn i boksen. Passiv scroll-lytter oppdaterer plassering; ingen wheel-/touchavskjæring.
+- Tekst settes med textContent, ikke HTML. aria-describedby/role tooltip, hover, fokus og mobiltrykk bruker samme boks. Markørtrykk toggler bare informasjon; søyleklikk/Enter åpner oppgaven som før.
+- Endrede filer: js/timeline.js, index.html, styles.css, app.js, firestore.js, service-worker.js, CLAUDE.md, DEVELOPMENT_LOG.md. App/firestore/service-worker har kun versjon/build-endring til 1.19.2 / 11902.
+- Tidsvinduer, filterutvalg, markørberegning, kategorifarger, overlappsregel, dashboard, regler, testfiler og datamodell er uendret.
+
+### Tester
+Automatiserte lokale Playwright-tester i Chrome med syntetiske oppgaver; ingen manuell produksjonstest.
+
+| Krav | Resultat |
+|---|---|
+| 1: Ingen + Startdato | Bestått: identisk radrekkefølge som v1.19.1. |
+| 2: Ingen + Frist | Bestått: identisk fristrekkefølge som v1.19.1. |
+| 3: Kategori + Frist | Bestått: samme grupperekkefølge, stigende frister i gruppene. |
+| 4: Kategori + Startdato | Bestått: samme grupperekkefølge og interne startrekkefølge. |
+| 5: Ansvarlig + Frist | Bestått; ansvarlig + startdato kontrollert også. |
+| 6: Kombinerte filtre | Bestått: person, kategori, status, gruppering og frist samtidig. |
+| 7: Oppsummering | Bestått: Gruppert: Kategori · Sortert: Frist ved skjulte filtre. |
+| 8: Øverste søyle | Bestått: tooltip under søylen, under sticky header og innenfor rullbeholderen. |
+| 9: Nederste søyle | Bestått: tooltip over og innenfor synlig område. |
+| 10: Helt til høyre | Bestått med kort søyle ved vinduets høyre ende; tooltip klemmes innenfor kanten. |
+| 11: Deloppgavemarkør | Bestått øverst på desktop og ved mobiltrykk på 390 x 844 px; trykk åpner ikke oppgaven, nytt trykk lukker tooltip. |
+| 12: Søyleklikk | Bestått: klikk og tastatur-Enter kaller oppgaveåpningen. |
+
+- Alle seks group/order-kombinasjoner kontrollert, samt ekte klikk i begge velgere. Reload gjenoppretter none/start.
+- HTML-lignende tekst vises som tekst uten å lage DOM-elementer. Ekstra lang tooltip med 100 linjer holder seg innenfor området og kan rulles med musen uten å forsvinne.
+- Desktop-/mobilskjermbilder kontrollert for øverste/nederste rad og høyrekant. Ingen JavaScript-feil i nettlesertesten.
+- node --check består for alle fem JavaScript-filer. Uendrede emulatortester: 24/24 bestått.
+- Ikke deployet.
+
 ## v1.19.1 - 2026-10-09
 
 ### Fristsortering i tidslinjen
