@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.18.1';
-const CLIENT_BUILD = 11801;
+const CLIENT_APP_VERSION = '1.19.0';
+const CLIENT_BUILD = 11900;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -342,7 +342,27 @@ function assertOrdinaryTaskStatus(task, status) {
   if (task.status === 'til_review' && status !== 'til_review') throw new Error('REVIEW_REQUIRED');
 }
 
-async function updateTask(taskId, data, expectedReview = null) {
+function taskCompletionChanges(task, status, confirmedOpenIds = null) {
+  if (status !== 'fullfort') return {};
+  const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+  const open = subtasks.filter(item => item.completed !== true);
+  if (confirmedOpenIds !== null) {
+    const actual = new Set(open.map(item => item.id));
+    const expected = new Set(confirmedOpenIds);
+    if (actual.size !== expected.size || open.length !== actual.size ||
+        [...actual].some(id => !id || !expected.has(id))) throw new Error('SUBTASKS_CHANGED');
+    if (!canEdit()) throw new Error('SUBTASKS_FORBIDDEN');
+    return { subtasks: subtasks.map(item => expected.has(item.id) ? { ...item, completed: true } : item) };
+  }
+  if (open.length) {
+    const error = new Error('OPEN_SUBTASKS');
+    error.openSubtaskIds = open.map(item => item.id);
+    throw error;
+  }
+  return {};
+}
+
+async function updateTask(taskId, data, expectedReview = null, confirmedOpenIds = null) {
   if (Object.prototype.hasOwnProperty.call(data, 'status')) {
     const ref = db.collection('tasks').doc(taskId);
     return db.runTransaction(async tx => {
@@ -350,8 +370,10 @@ async function updateTask(taskId, data, expectedReview = null) {
       if (!doc.exists || doc.data().deletedAt) throw new Error('TASK_NOT_FOUND');
       assertTaskReviewState(doc.data(), expectedReview);
       assertOrdinaryTaskStatus(doc.data(), data.status);
+      const completion = taskCompletionChanges(doc.data(), data.status, confirmedOpenIds);
       tx.update(ref, {
         ...data,
+        ...completion,
         ...(canEdit() ? { detailsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() } : {}),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         lastEditedBy: auth.currentUser.uid,
@@ -367,7 +389,7 @@ async function updateTask(taskId, data, expectedReview = null) {
   });
 }
 
-async function updateTaskIfUnchanged(taskId, data, expectedUpdatedAt) {
+async function updateTaskIfUnchanged(taskId, data, expectedUpdatedAt, confirmedOpenIds = null) {
   const ref = db.collection('tasks').doc(taskId);
   await db.runTransaction(async tx => {
     const doc = await tx.get(ref);
@@ -383,8 +405,10 @@ async function updateTaskIfUnchanged(taskId, data, expectedUpdatedAt) {
       throw new Error('TASK_CHANGED');
     }
 
+    const completion = taskCompletionChanges(current, data.status, confirmedOpenIds);
     tx.update(ref, {
       ...data,
+      ...completion,
       detailsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       lastEditedBy: auth.currentUser.uid,
@@ -622,7 +646,7 @@ async function performTaskReview(taskId, action, expected, options = {}) {
       };
     } else {
       changes = {
-        status: action === 'approve' ? 'fullfort' : 'i_gang',
+        status: 'i_gang',
         reviewedBy: uid, reviewedAt: timestamp,
         reviewOutcome: action === 'approve' ? 'approved' : 'returned',
       };

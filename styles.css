@@ -1795,6 +1795,10 @@ body {
 .review-context { color: var(--text-2); font-size: .75rem; padding: 6px 12px 10px; overflow-wrap: anywhere; }
 .review-badge, .status-badge.til_review { color: #075985; background: #e0f2fe; }
 .review-badge { font-size: .75rem; padding: 3px 7px; border-radius: 5px; overflow-wrap: anywhere; }
+.review-approved-badge { color: #166534; background: #dcfce7; }
+.task-review-panel .review-approved-heading { color: #166534; }
+.status-stepper:has(.review-stepper-hint) { flex-wrap: wrap; }
+.review-stepper-hint { flex-basis: 100%; text-align: center; font-size: .8rem; color: var(--text-2); margin-top: 12px; overflow-wrap: anywhere; }
 .review-send-shortcut { border: 1px solid var(--border); border-radius: 5px; background: var(--white); color: var(--text-2); display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; cursor: pointer; }
 .review-send-shortcut:hover, .review-send-shortcut:focus-visible { color: #075985; background: #e0f2fe; }
 .task-review-panel { padding: 12px 0 16px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }

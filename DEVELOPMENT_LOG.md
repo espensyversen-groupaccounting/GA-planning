@@ -1,5 +1,45 @@
 # Development Log
 
+## v1.19.0 - 2026-10-09
+
+### Godkjent review og trygg fullføring
+- Godkjenn setter i_gang + approved, bevarer reviewer/request-historikk og atomisk kommentar. Varslet sier «godkjente review av», ikke at oppgaven er fullført.
+- Felles isApprovedOpenTask() brukes av kort, stepper, panel og tredje dashboardgruppe: Godkjent, klar til å lukkes. I gang er aktivt, review-steget har hake, og navn/dato vises. Vanlig redigering beholder godkjenningen.
+- Ved til_review er kortavhuking skjult også for reviewer, og Fullført-steget deaktivert for alle. Godkjenning skjer bare fra review-panelet.
+- taskCompletionChanges() er eneste fullføringsregel, brukt i ferske transaksjonslesinger i updateTask() og updateTaskIfUnchanged(). Alle UI-veier bruker saveWithTaskCompletion(): kort, stepper og Lagre endringer.
+- OPEN_SUBTASKS gir bekreftelsen Fullfør alle og lukk for Admin/Teamleder. Medlem får forklaring uten bekreftelsesknapp, siden reglene ikke gir subtasks-skriving.
+- Bekreftelsen sender settet med åpne ID-er den viste. Ferskt sett må være identisk, også ved retry. Tilføying, fjerning eller avkryssing gir SUBTASKS_CHANGED og ingen skriving. Like sett fullføres sammen med status atomisk, uten å sortere arrayet. Detaljkonflikter er fortsatt blokkert.
+- Avbryt/feil oppdaterer faktisk status og deloppgavevisning, men overtar ikke nytt detailsUpdatedAt-token som kunne tillatt gamle detaljverdier å overskrive andre endringer.
+- Endrede filer: app.js, firestore.js, index.html, styles.css, service-worker.js, CLAUDE.md, DEVELOPMENT_LOG.md. Versjon 1.19.0, build 11900, ny service-worker-cache.
+- classifyDashboardItem(), toppkortberegning, taskInvolvement(), Firestore-regler, testfiler, ToDo-er og datamodell er urørt. Ingen produksjonsdata er endret automatisk. Sperren er klientstyrt og dokumentert.
+
+### Tester
+Automatiserte lokale nettlesertester med syntetiske data/mockede skrivinger, pluss ekte SDK-transaksjoner mot lokal Firestore-emulator. Ikke manuelle tester i produksjon.
+
+| Krav | Resultat |
+|---|---|
+| 1: Godkjenning holder oppgaven åpen | Bestått: i_gang + approved, merke/panel og bevarte reviewer-felter; også verifisert i emulator. |
+| 2: Varseltekst | Bestått: godkjente review av, uten ekstra status_changed. |
+| 3: Stepper | Bestått: I gang aktivt, Til review med hake, navn/dato-hint. |
+| 4: Godkjent-gruppen | Bestått: ansvarlig i Mine, utelukker uvedkommende i Mine, alle i Team; antall åpne deloppgaver vises. |
+| 5: Ny review | Bestått: approved nullstilles og status blir til_review; eksisterende review-køregresjoner består. |
+| 6: Fullføring/Avbryt | Bestått: riktig antall og knappetekst; Avbryt bevarer data og faktisk åpen status. |
+| 7: Fullfør alle og lukk | Bestått: atomisk status/avkryssing med opprinnelig arrayrekkefølge og review-historikk, også i emulator. |
+| 8: Stepper og detaljlagring | Bestått: begge bruker samme kontroll; detaljlagring bevarer samtidig tittelendring. |
+| 9: Ingen deloppgaver | Bestått: fullføring uten ekstra dialog. |
+| 10: Ny deloppgave fra annen klient | Bestått: forståelig konfliktmelding i UI; to uavhengige emulatorklienter bekrefter at hele dokumentet er uendret ved avvisning. Fjerning/avkryssing avvises også. |
+| 11: Angre fullført | Bestått for eldre fullført oppgave med åpen deloppgave. |
+| 12: Lukking etter review | Bestått: forsvinner fra godkjent-gruppen og vanlig status_changed til annen oppretter. |
+| 13: Toppkort | Bestått: eksisterende femtallsregresjon; beregningskoden er ikke endret. |
+| 14: Mobil | Bestått ved 390 x 844 px: stepper, godkjent-panel og ekte bekreftelsesdialog/Avbryt; skjermbilder kontrollert. |
+| Tillegg: reviewer uten avhuking | Bestått: ingen kortavhuking og deaktivert Fullført-steg. |
+
+- 42 review-regresjonsassertions og 22 særskilte fullføringsassertions består, i tillegg til reelle UI-klikk.
+- Ekte emulatorintegrasjon bekrefter review-runder, kommentarrollback, detaljkonflikt og atomisk ID-basert fullføring.
+- Uendrede regeltester via npm test: 24/24 bestått. Et direkte testforsøk manglet emulatorens miljøvariabel; standardkommandoen ble deretter kjørt vellykket.
+- node --check består for alle fem JavaScript-filer. Ingen JavaScript-feil i nettlesertesten.
+- Ikke deployet; produksjonstest gjenstår etter publisering.
+
 ## v1.18.1 - 2026-10-09
 
 ### Dokumentlenker direkte i review-panelet

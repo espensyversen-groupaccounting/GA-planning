@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.18.1`
+Gjeldende appversjon: `v1.19.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -173,7 +173,7 @@ Toppkort:
 Kortene er midlertidige dashboardfiltre og navigerer ikke til Oppgaver-fanen. De tre første viser kun sin tidsseksjon. De to siste filtrerer på tvers av tidsseksjonene; treff utenfor tidsklassifiseringen vises da i den midlertidige seksjonen `Andre treff`. Aktivt filter kombineres med `Team`/`Mine`, nullstilles ved nytt klikk eller Escape og lagres ikke i `localStorage`. De nederste seksjonene `Trenger utfylling` og `Teamoversikt` påvirkes ikke av filteret.
 
 Dashboardseksjoner:
-- `Review`: tverrgående seksjon under toppkortene, uavhengig av aktivt dashboardfilter. `Du skal reviewe` er personlig og lik i Team/Mine. `Venter på review` viser i Team alle andre reviewere, og i Mine oppgaver der brukeren er hovedansvarlig eller avsender, men ikke reviewer. Tomme grupper/hel seksjon skjules. Antallet er summen av de to disjunkte gruppene.
+- `Review`: tverrgående seksjon under toppkortene, uavhengig av aktivt dashboardfilter. `Du skal reviewe` er personlig og lik i Team/Mine. `Venter på review` viser i Team alle andre reviewere, og i Mine oppgaver der brukeren er hovedansvarlig eller avsender, men ikke reviewer. `Godkjent, klar til å lukkes` viser godkjente åpne oppgaver: alle i Team, bare hovedansvarlig/avsender i Mine. Kortene viser godkjenner, dato og antall åpne deloppgaver. Tomme grupper/hel seksjon skjules. Antallet inkluderer alle tre gruppene.
 - `Forfalt og i dag`: åpne oppgaver, deloppgaver og ToDo-er med passert frist eller frist i dag.
 - `Neste 7 dager`: åpne oppgaver, deloppgaver og ToDo-er med frist fra i morgen til og med syv dager frem.
 - `I gang`: påbegynte oppgaver som ikke allerede er fanget av de to første tidsvinduene. Seksjonen er åpen som standard og kan kollapses.
@@ -292,11 +292,17 @@ Deloppgaver er fortsatt et array inne i oppgavedokumentet. Firestore-reglene kan
 ## Review-flyt
 Review gjelder bare lagrede oppgaver og er valgfritt. Direkte fullføring uten review er fortsatt mulig. Firetrinnsstepperen viser Ikke startet, I gang, Til review og Fullført; direkte fullføring merker ikke det hoppede review-steget som godkjent.
 
-`reviewPermissions(task)` i `app.js` er felles kilde for stepper, modalpanel og kort: Admin/Teamleder kan sende åpne oppgaver, bare den valgte revieweren kan godkjenne/sende tilbake, og andre redaktører kan trekke tilbake/bytte reviewer. Reviewer velges kun blant aktive Admin/Teamleder-profiler, aldri innlogget bruker. Ulagrede oppgaver må lagres først. Kortets avhuking betyr fortsatt fullføring; ved aktiv review åpner den godkjenningsdialogen for reviewer, og er ikke tilgjengelig for andre.
+`reviewPermissions(task)` i `app.js` er felles kilde for stepper, modalpanel og kort: Admin/Teamleder kan sende åpne oppgaver, bare den valgte revieweren kan godkjenne/sende tilbake, og andre redaktører kan trekke tilbake/bytte reviewer. Reviewer velges kun blant aktive Admin/Teamleder-profiler, aldri innlogget bruker. Ulagrede oppgaver må lagres først. Kortets avhuking betyr fullføring. Ved aktiv review skjules den for alle, Fullført-steget er deaktivert for alle, og godkjenning skjer bare fra review-panelet.
 
 `performTaskReview()` i `firestore.js` håndterer send/bytt, godkjenn, send tilbake og trekk tilbake. Transaksjonen leser fersk oppgave, avviser soft-slettede dokumenter og sammenligner forventet status, reviewer-ID og request-timestamp. Timestampnøkkelen bevarer nanosekundpresisjon. Dermed avvises også en gammel dialog etter at samme reviewer har fått en ny review-runde.
 
 Status, review-felter og eventuell kommentar skrives i samme transaksjon. Tilbakesending krever tekst. Kommentarene bruker `commentCreateData()`, samme format som vanlig `addComment()`, og `userId` er alltid innlogget bruker. Kommentar-ID opprettes utenfor callbacken slik at retry ikke lager ekstra kommentarer. Prefikser er Sendt til review:, Godkjent: og Sendt tilbake:. Feiler kommentaren, rulles også status tilbake.
+
+Godkjenning setter status til `i_gang`, ikke `fullfort`, med `reviewOutcome: 'approved'`. Reviewer-/request-felter beholdes. `isApprovedOpenTask()` er felles kilde for merket Review godkjent, hake på review-steget, hint, kompakt modalpanel og dashboardgruppen. Tittel-, beskrivelses- og deloppgaveendringer opphever ikke godkjenningen; ny review nullstiller den, mens fullføring beholder historikken. Varslet sier «godkjente review av». Senere lukking gir vanlig status_changed til oppretter.
+
+`taskCompletionChanges()` i firestore.js brukes av både `updateTask()` og `updateTaskIfUnchanged()` inne i transaksjonen. Status fullfort avvises med OPEN_SUBTASKS dersom minst én deloppgave har completed !== true. Avhuking, stepper og detaljlagring bruker `saveWithTaskCompletion()`: Admin/Teamleder kan bekrefte Fullfør alle og lukk. Bekreftelsen sender nøyaktig ID-ene fra de åpne deloppgavene dialogen talte. Ferskt sett kontrolleres på hver transaksjonsretry; endret sett avvises med SUBTASKS_CHANGED uten skriving. Ved likt sett krysses akkurat disse av og status lagres atomisk, med fersk lagret rekkefølge bevart. Detaljlagring beholder detailsUpdatedAt-kontrollen. Avbryt/feil gjenoppretter faktisk status og deloppgaver uten å overta et nytt detaljtoken. Eksisterende fullførte oppgaver endres ikke automatisk; Angre fullført fungerer fortsatt.
+
+Dette er også en klientregel, ikke en serversperre i Firestore-reglene. Medlem kan ikke skrive subtasks og får derfor beskjed om å be Admin/Teamleder fullføre dem, uten Fullfør alle og lukk-knapp. Medlem kan fortsatt fullføre oppgaver uten åpne deloppgaver. Direkte databasskriving og eldre klienter kan omgå kontrollen; alle bør oppdatere ved utrulling.
 
 Review-handlinger oppdaterer `detailsUpdatedAt`. Vanlig status-/detaljlagring kontrollerer fersk review-tilstand: direkte overgang inn i review eller ut av review avvises. Tittel/beskrivelse kan fortsatt redigeres med uendret review-status. Gamle detaljmodaler får konfliktfeil fremfor å overskrive beslutningen.
 
