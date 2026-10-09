@@ -607,6 +607,20 @@
               <label class="form-label" for="task-description">Beskrivelse</label>
               <textarea id="task-description" class="form-input form-textarea" placeholder="Utfyllende beskrivelse av oppgaven..." rows="3"></textarea>
             </div>
+            <section id="task-links-section" class="task-links-section" aria-labelledby="task-links-heading">
+              <h4 id="task-links-heading">Lenker</h4>
+              <p id="task-links-hint" class="task-links-hint"></p>
+              <div id="task-links-list" class="task-links-list"></div>
+              <div id="task-links-editor" class="task-links-editor">
+                <label>Adresse
+                  <input id="new-task-link-url" type="text" inputmode="url" class="form-input" maxlength="2048" placeholder="https://docs.google.com/..." />
+                </label>
+                <label>Navn
+                  <input id="new-task-link-title" type="text" class="form-input" maxlength="200" placeholder="Valgfritt navn" />
+                </label>
+                <button id="btn-add-task-link" type="button" class="btn btn-secondary">Legg til</button>
+              </div>
+            </section>
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label" for="task-priority">Prioritet</label>

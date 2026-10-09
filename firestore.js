@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.16.0';
-const CLIENT_BUILD = 11600;
+const CLIENT_APP_VERSION = '1.17.0';
+const CLIENT_BUILD = 11700;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -17,6 +17,48 @@ function writeMeta() {
 
 function sanitizeEmail(email) {
   return email.trim().toLowerCase().replace(/[.]/g, '_dot_').replace('@', '_at_');
+}
+
+function taskLinkUrl(value, addProtocol = false) {
+  let input = typeof value === 'string' ? value.trim() : '';
+  if (!input || input.length > 2048) throw new Error('LINK_URL_INVALID');
+  if (addProtocol && /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}(?::\d+)?(?:[/?#]|$)/i.test(input)) {
+    input = 'https://' + input;
+  }
+  let url;
+  try { url = new URL(input); } catch (_) { throw new Error('LINK_URL_INVALID'); }
+  if (url.protocol !== 'https:' || url.username || url.password || url.href.length > 2048) {
+    throw new Error('LINK_URL_INVALID');
+  }
+  return url.href;
+}
+
+function taskLinkInfo(link) {
+  let url;
+  try { url = new URL(taskLinkUrl(link?.url)); } catch (_) {
+    return { safe: false, label: String(link?.title || link?.url || 'Ugyldig lenke'), type: 'link' };
+  }
+  let type = 'link';
+  let label = url.hostname;
+  const types = url.hostname === 'docs.google.com'
+    ? [['document', 'Google Dokument', 'document'], ['spreadsheets', 'Google Regneark', 'sheet'],
+       ['presentation', 'Google Presentasjon', 'presentation'], ['forms', 'Google Skjema', 'form']]
+    : url.hostname === 'drive.google.com'
+      ? [['drive/folders', 'Drive-mappe', 'folder'], ['file', 'Drive-fil', 'file']] : [];
+  for (const [path, name, icon] of types) {
+    if (url.pathname === '/' + path || url.pathname.startsWith('/' + path + '/')) {
+      label = name;
+      type = icon;
+      break;
+    }
+  }
+  return { safe: true, url: url.href, label: String(link?.title || label), type };
+}
+
+function taskLinkValue(link) {
+  const title = typeof link.title === 'string' ? link.title.trim() : '';
+  if (title.length > 200) throw new Error('LINK_TITLE_TOO_LONG');
+  return { id: link.id, url: taskLinkUrl(link.url, true), title };
 }
 
 // ---- Allowed Users (tilgangskontroll) ----
@@ -324,6 +366,7 @@ async function updateSubtasksSafely(taskId, transform) {
 
     tx.update(ref, {
       subtasks: nextSubtasks,
+      ...(!doc.data().detailsUpdatedAt ? { detailsUpdatedAt: doc.data().updatedAt || null } : {}),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       lastEditedBy: auth.currentUser.uid,
       ...writeMeta()
@@ -331,6 +374,41 @@ async function updateSubtasksSafely(taskId, transform) {
   });
 
   return nextSubtasks;
+}
+
+async function updateTaskLinksSafely(taskId, change) {
+  const ref = db.collection('tasks').doc(taskId);
+  let links = [];
+  await db.runTransaction(async tx => {
+    const doc = await tx.get(ref);
+    if (!doc.exists || doc.data().deletedAt) throw new Error('TASK_NOT_FOUND');
+    const data = doc.data();
+    links = Array.isArray(data.links) ? [...data.links] : [];
+    const index = links.findIndex(link => link.id === change.id);
+    if (change.action === 'add') {
+      const added = taskLinkValue(change);
+      if (!added.id || links.some(link => link.id === added.id)) throw new Error('LINK_DUPLICATE');
+      if (links.some(link => taskLinkInfo(link).url === added.url)) throw new Error('LINK_DUPLICATE');
+      links.push(added);
+    } else {
+      if (index < 0) throw new Error('LINK_NOT_FOUND');
+      if (change.action === 'remove') links.splice(index, 1);
+      else if (change.action === 'rename') {
+        const title = typeof change.title === 'string' ? change.title.trim() : '';
+        if (title.length > 200) throw new Error('LINK_TITLE_TOO_LONG');
+        taskLinkUrl(links[index].url);
+        links[index] = { ...links[index], title };
+      } else throw new Error('LINK_CHANGE_INVALID');
+    }
+    tx.update(ref, {
+      links,
+      ...(!data.detailsUpdatedAt ? { detailsUpdatedAt: data.updatedAt || null } : {}),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastEditedBy: auth.currentUser.uid,
+      ...writeMeta()
+    });
+  });
+  return links;
 }
 
 async function deleteTask(taskId) {

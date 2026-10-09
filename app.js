@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.17.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -23,6 +23,8 @@ const state = {
   activeTaskId: null,
   activeTaskDetailsUpdatedAt: null,
   activeTaskSubtasks: [],
+  activeTaskLinks: [],
+  taskLinkSaving: false,
   activeTaskOriginalRecurrence: null,
   commentUnsub: null,
   editMode: false,
@@ -272,6 +274,7 @@ function recurringTaskInstanceData(template, instanceDate) {
     dueDate: timestamp(instanceDate),
     dependencies: template.dependencies || '',
     subtasks,
+    links: (Array.isArray(template.links) ? template.links : []).map(link => ({ ...link })),
     recurrence: null,
     recurrenceTemplateId: template.id,
     recurrenceInstanceDate: instanceDate,
@@ -929,6 +932,10 @@ function subscribeToRealtime() {
   state.unsubscribers.push(
     subscribeToTasks(tasks => {
       state.tasks = tasks;
+      if (state.activeTaskId && !state.taskLinkSaving) {
+        const active = tasks.find(task => task.id === state.activeTaskId);
+        if (active && !document.getElementById('task-links-list')?.contains(document.activeElement)) renderTaskLinks(active.links);
+      }
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'tasks') renderTasksList();
       if (state.currentView === 'timeline') renderTimeline();
@@ -1564,6 +1571,7 @@ function taskCardHtml(task, compact = false) {
         <div class="task-card-top">
           ${checkBtn}
           <span class="task-card-title">${esc(task.title)}</span>
+          ${taskLinksIndicatorHtml(task)}
           <span class="status-badge ${task.status}">${statusLabel(task.status)}</span>
         </div>
         <div class="task-card-meta">
@@ -1588,6 +1596,7 @@ function taskCardHtml(task, compact = false) {
           <div class="task-title">${esc(task.title)}</div>
           ${task.description ? `<div class="task-desc">${esc(task.description)}</div>` : ''}
         </div>
+        ${taskLinksIndicatorHtml(task)}
       </div>
       <div class="task-row-bottom">
         ${signalHtml}
@@ -1861,6 +1870,8 @@ async function handleMarkAllRead() {
 async function openTaskModal(taskId = null, prefetchedTask = null) {
   state.activeTaskId = taskId;
   state.editMode = !taskId;
+  document.getElementById('new-task-link-url').value = '';
+  document.getElementById('new-task-link-title').value = '';
 
   const modal = document.getElementById('task-modal');
   modal.classList.remove('hidden');
@@ -1880,6 +1891,7 @@ async function openTaskModal(taskId = null, prefetchedTask = null) {
     document.getElementById('modal-title').textContent = task.title;
     state.activeTaskDetailsUpdatedAt = task.detailsUpdatedAt || task.updatedAt || null;
     state.activeTaskSubtasks = task.subtasks || [];
+    renderTaskLinks(task.links);
     state.activeTaskOriginalRecurrence = task.recurrence ? { ...task.recurrence } : null;
     fillTaskForm(task);
     updateStatusStepper(task.status, task);
@@ -1893,6 +1905,7 @@ async function openTaskModal(taskId = null, prefetchedTask = null) {
     document.getElementById('task-id').value = '';
     state.activeTaskDetailsUpdatedAt = null;
     state.activeTaskSubtasks = [];
+    renderTaskLinks([]);
     state.activeTaskOriginalRecurrence = null;
     document.getElementById('subtasks-list').innerHTML = '';
     renderSubtaskTimeline([]);
@@ -1920,6 +1933,7 @@ function closeTaskModal() {
   state.activeTaskId = null;
   state.activeTaskDetailsUpdatedAt = null;
   state.activeTaskSubtasks = [];
+  state.activeTaskLinks = [];
   state.activeTaskOriginalRecurrence = null;
 }
 
@@ -1943,6 +1957,8 @@ async function confirmUnsentComment(action) {
 }
 
 async function requestCloseTaskModal() {
+  if (!await commitTaskLinkNameInput(document.activeElement)) return;
+  if (state.taskLinkSaving) { showToast('Vent til lenken er lagret.', 'error'); return; }
   if (!await confirmUnsentComment('close')) return;
   closeTaskModal();
 }
@@ -2193,6 +2209,8 @@ function setFormReadOnly(readonly) {
 }
 
 async function handleSaveTask() {
+  if (!await commitTaskLinkNameInput(document.activeElement)) return;
+  if (state.taskLinkSaving) { showToast('Vent til lenken er lagret.', 'error'); return; }
   const form = document.getElementById('task-form');
   if (!form.checkValidity()) { form.reportValidity(); return; }
 
@@ -2688,6 +2706,135 @@ function updateStatusStepper(currentStatus, taskOverride = null) {
 }
 
 // ============================================================
+// TASK LINKS
+// ============================================================
+
+function taskLinkIcon(type = 'link') {
+  const paths = {
+    link: '<path d="M10 13a5 5 0 0 0 7 .1l3-3a5 5 0 0 0-7-7l-2 2"/><path d="M14 11a5 5 0 0 0-7-.1l-3 3a5 5 0 0 0 7 7l2-2"/>',
+    document: '<path d="M14 2H6v20h14V8Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',
+    sheet: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 9v12M15 9v12"/>',
+    presentation: '<path d="M2 3h20M3 3v12h18V3M12 15v6M8 21l4-4 4 4"/>',
+    form: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h1M12 8h4M8 12h1M12 12h4M8 16h1M12 16h4"/>',
+    folder: '<path d="M3 7V3h7l2 4h9v14H3Z"/>',
+    file: '<path d="M14 2H6v20h14V8Z"/><path d="M14 2v6h6"/>',
+  };
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[type] || paths.link}</svg>`;
+}
+
+function taskLinksIndicatorHtml(task) {
+  const count = Array.isArray(task.links) ? task.links.length : 0;
+  return count ? `<span class="task-links-indicator" title="${count} lenker" aria-label="${count} lenker">${taskLinkIcon()}${count}</span>` : '';
+}
+
+function renderTaskLinks(links) {
+  state.activeTaskLinks = Array.isArray(links) ? links : [];
+  const editable = Boolean(state.activeTaskId) && canEdit();
+  const list = document.getElementById('task-links-list');
+  document.getElementById('task-links-editor').classList.toggle('hidden', !editable);
+  const hint = document.getElementById('task-links-hint');
+  hint.textContent = !state.activeTaskId
+    ? 'Lagre oppgaven først for å legge til lenker.'
+    : state.activeTaskLinks.length ? '' : 'Dokumenter og mapper kan lenkes her.';
+  hint.classList.toggle('hidden', !hint.textContent);
+  list.innerHTML = state.activeTaskLinks.map(link => {
+    const info = taskLinkInfo(link);
+    const label = info.safe
+      ? `<a href="${esc(info.url)}" target="_blank" rel="noopener noreferrer" title="${esc(info.url)}">${taskLinkIcon(info.type)}<span>${esc(info.label)}</span></a>`
+      : `<span class="task-link-unsafe">${taskLinkIcon()}<span>${esc(info.label)}<small>${esc(link.url)} · Ugyldig adresse</small></span></span>`;
+    return `<div class="task-link-row">
+      <div class="task-link-main">${label}
+        ${editable && info.safe ? `<input class="form-input task-link-name" maxlength="200" data-link-id="${esc(link.id)}" value="${esc(link.title || '')}" placeholder="Valgfritt navn" aria-label="Navn på ${esc(info.label)}" />` : ''}
+      </div>
+      ${editable ? `<button type="button" class="icon-btn task-link-remove" data-link-id="${esc(link.id)}" title="Fjern lenke" aria-label="Fjern ${esc(info.label)}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>` : ''}
+    </div>`;
+  }).join('');
+  setTaskLinksBusy(state.taskLinkSaving);
+}
+
+function setTaskLinksBusy(busy) {
+  document.querySelectorAll('#task-links-section input, #task-links-section button')
+    .forEach(control => { control.disabled = busy; });
+  document.getElementById('task-links-section').setAttribute('aria-busy', String(busy));
+}
+
+function taskLinkErrorMessage(error) {
+  return {
+    LINK_URL_INVALID: 'Skriv inn en gyldig https-adresse på maksimalt 2 048 tegn.',
+    LINK_TITLE_TOO_LONG: 'Navnet kan ha maksimalt 200 tegn.',
+    LINK_DUPLICATE: 'Denne adressen finnes allerede på oppgaven.',
+    LINK_NOT_FOUND: 'Lenken finnes ikke lenger. Listen er oppdatert.',
+    TASK_NOT_FOUND: 'Oppgaven finnes ikke lenger.',
+  }[error.message] || 'Kunne ikke lagre lenken. Prøv igjen.';
+}
+
+async function changeTaskLink(change) {
+  const taskId = state.activeTaskId;
+  if (!taskId || !canEdit() || state.taskLinkSaving) return false;
+  state.taskLinkSaving = true;
+  setTaskLinksBusy(true);
+  try {
+    const links = await updateTaskLinksSafely(taskId, change);
+    const cached = state.tasks.find(task => task.id === taskId);
+    if (cached) cached.links = links;
+    if (state.activeTaskId === taskId) renderTaskLinks(links);
+    return true;
+  } catch (error) {
+    console.error('Task link update error:', error);
+    showToast(taskLinkErrorMessage(error), 'error');
+    let task = state.tasks.find(item => item.id === taskId);
+    try { task = await getTask(taskId) || task; } catch (refreshError) {
+      console.error('Task link refresh error:', refreshError);
+    }
+    if (state.activeTaskId === taskId) renderTaskLinks(task?.links);
+    return false;
+  } finally {
+    state.taskLinkSaving = false;
+    if (state.activeTaskId === taskId) setTaskLinksBusy(false);
+    if (state.currentView === 'dashboard') renderDashboard();
+    if (state.currentView === 'tasks') renderTasksList();
+  }
+}
+
+async function handleAddTaskLink() {
+  if (!state.activeTaskId || !canEdit() || state.taskLinkSaving) return;
+  const urlInput = document.getElementById('new-task-link-url');
+  const titleInput = document.getElementById('new-task-link-title');
+  let link;
+  try {
+    link = taskLinkValue({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      url: urlInput.value,
+      title: titleInput.value,
+    });
+  } catch (error) {
+    showToast(taskLinkErrorMessage(error), 'error');
+    return;
+  }
+  const taskId = state.activeTaskId;
+  if (await changeTaskLink({ action: 'add', ...link }) && state.activeTaskId === taskId) {
+    urlInput.value = '';
+    titleInput.value = '';
+  }
+}
+
+async function commitTaskLinkNameInput(input) {
+  if (!input?.matches('.task-link-name')) return true;
+  const link = state.activeTaskLinks.find(item => item.id === input.dataset.linkId);
+  if (!link || input.value.trim() === (link.title || '')) return true;
+  return changeTaskLink({ action: 'rename', id: link.id, title: input.value });
+}
+
+async function handleRemoveTaskLink(id) {
+  if (!canEdit() || state.taskLinkSaving) return;
+  const taskId = state.activeTaskId;
+  const link = state.activeTaskLinks.find(item => item.id === id);
+  if (!link) return;
+  const confirmed = await showConfirm('Fjern lenke', `Vil du fjerne "${taskLinkInfo(link).label}" fra oppgaven? Dokumentet eller mappen slettes ikke.`, { confirmText: 'Fjern lenke' });
+  if (confirmed && state.activeTaskId === taskId) await changeTaskLink({ action: 'remove', id });
+}
+
+// ============================================================
 // COMMENTS
 // ============================================================
 
@@ -3112,7 +3259,7 @@ function buildTasksCsv(collections) {
   const headers = [
     'ID', 'Tittel', 'Beskrivelse', 'Prioritet', 'Status', 'Kategori',
     'Ansvarlig', 'Startdato', 'Frist', 'Deloppgaver', 'Avhengigheter',
-    'Arkivert', 'Opprettet', 'Sist oppdatert'
+    'Arkivert', 'Opprettet', 'Sist oppdatert', 'Lenker'
   ];
   const rows = collections.tasks.map(task => {
     const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
@@ -3131,7 +3278,8 @@ function buildTasksCsv(collections) {
       task.dependencies,
       task.deletedAt ? 'Ja' : '',
       formatDate(task.createdAt),
-      formatDate(task.updatedAt)
+      formatDate(task.updatedAt),
+      (Array.isArray(task.links) ? task.links : []).map(link => String(link.url || '')).join(' | ')
     ];
   });
   return createCsv(headers, rows);
@@ -3436,6 +3584,26 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('task-due-date').addEventListener('change', () => updateRecurrenceForm(false));
 
   // Subtask add
+  document.getElementById('btn-add-task-link').addEventListener('click', handleAddTaskLink);
+  document.getElementById('new-task-link-url').addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); void handleAddTaskLink(); }
+  });
+  document.getElementById('task-links-list').addEventListener('change', event => {
+    if (event.target.matches('.task-link-name')) {
+      void commitTaskLinkNameInput(event.target);
+    }
+  });
+  document.getElementById('task-links-list').addEventListener('click', event => {
+    const button = event.target.closest('.task-link-remove');
+    if (button) void handleRemoveTaskLink(button.dataset.linkId);
+  });
+  document.getElementById('task-links-list').addEventListener('keydown', event => {
+    if (event.key === 'Enter' && event.target.matches('.task-link-name')) {
+      event.preventDefault();
+      void commitTaskLinkNameInput(event.target);
+    }
+  });
+
   document.getElementById('btn-add-subtask').addEventListener('click', handleAddSubtask);
   document.getElementById('new-subtask-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); }

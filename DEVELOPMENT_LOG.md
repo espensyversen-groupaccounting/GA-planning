@@ -1,5 +1,52 @@
 # Development Log
 
+## v1.17.0 - 2026-10-09
+
+### Dokument- og mappelenker
+- La til valgfritt `tasks.links` med ID, HTTPS-adresse og navn. Detaljer-fanen viser lenker ved beskrivelsen, med adresse/navn-felt, Enter for tillegg, umiddelbar navnelagring og bekreftet fjerning. Ulagrede oppgaver viser «Lagre oppgaven først for å legge til lenker.»
+- Rene URL-hjelpere validerer både lagring og visning: bare HTTPS, ingen credentials, maks 2 048/200 tegn, automatisk protokoll bare foran domenenavn. Google-ikoner krever eksakt vertsnavn og riktig sti. Utrygge databaseadresser vises som escaped tekst, aldri som lenker; trygge lenker har ny fane og `noopener noreferrer`.
+- Firestore-transaksjonen endrer etter lenke-ID og sjekker duplikater mot ferske data. Feil viser norsk toast og gjenoppretter faktisk liste. Endret navn lagres også ved Enter/lukking; pågående skriving beskyttes mot samtidig modal-/detaljhandling.
+- Kort får lenkeikon og antall uten ny rad. Nye gjentakende forekomster kopierer lenker; eldre forekomster røres ikke. Oppgave-CSV får «Lenker» helt sist med ` | ` mellom adresser; JSON-genereringen er urørt.
+
+### Eldre oppgaver og konfliktsjekk
+- Fant samme legacy-svakhet i `updateSubtasksSafely()`: skriving flyttet `updatedAt` uten å etablere manglende `detailsUpdatedAt`.
+- Både lenke- og deloppgavetransaksjonen etablerer nå dette feltet fra eksisterende `updatedAt` og bevarer det ellers. Detaljlagring utelater lenker og deloppgaver og beholder kontrollen mot samtidige detaljendringer.
+
+### Verifisering
+- Firestore-emulatortestene består 24/24. `node --check` består på alle fem JavaScript-filer.
+- Lokal headless Chrome med faktisk HTML/CSS/JS og stubbet Firestore består URL-/lengde-/duplikattester, alle seks Google-typer, de to spoof-adressene, tekstescaping og ikke-klikkbar `javascript:` fra lagrede data.
+- Kombinert legacy-test består: legg til lenke, legg til deloppgave, endre tittel og lagre uten falsk konflikt. ID-basert navn/fjerning bevarer andre lenker fra ferske data.
+- Modaltesten består umiddelbar lagring, lukking uten detaljlagring, gjenåpning, tittelendring uten konflikt, navneendring før lukking, bekreftet fjerning, Escape/opprydding og tilbakeføring ved skrivefeil.
+- Desktop- og mobilkontroll ved 390 x 844 px: feltene holder seg innenfor modalen, uten vannrett overflyt. Kompakte og fulle kort med testtittel har samme høyde med og uten indikator.
+- Kopiering til ny forekomst og siste CSV-kolonne er kontrollert. Nettlesertestene bruker ikke produksjonsdata; faktisk Google-dokumentåpning, sanntid mellom produksjonsklienter og produksjonsgenerering må kontrolleres etter publisering.
+
+### Status per testkrav
+Dette er lokale automatiserte nettleser-/funksjonstester, ikke manuelle produksjonstester.
+
+| Krav | Resultat |
+| --- | --- |
+| 1–3 Google-typer og eget navn | Bestått for alle seks typer og eget navn. |
+| 4 Ny fane | Bestått med lokalt avskåret testadresse; faktisk tilgang til Google-dokument er ikke testet. |
+| 5–7 Protokoller og automatisk HTTPS | Bestått; JavaScript, data, HTTP og relative adresser avvises. |
+| 8–9 Utrygg databaseadresse og HTML-navn | Bestått i faktisk DOM: ingen farlig href, ingen HTML-elementer fra navnet. |
+| 10 Duplikater | Bestått mot ferske data i stubbet transaksjon. |
+| 11–12 Lukk uten lagring / endre tittel | Bestått gjennom modalens faktiske funksjoner. |
+| 13 Navn og fjerning | Bestått, inkludert fokusert navnefelt ved lukking, bekreftelse og Escape. |
+| 14 Indikator og korthøyde | Bestått på kompakt og fullt testkort. |
+| 15 Manglende links | Bestått gjennom åpning, rendring og detaljlagring av legacy-oppgave. |
+| 16 Gjentakelse | Kopifunksjonen består; faktisk produksjonsgenerering gjenstår. |
+| 17 JSON og CSV | Bestått gjennom eksisterende normalisering og CSV-bygging. |
+| 18 ToDo-er | Uendret kildekode og eksport; regler består. Ingen full manuell ToDo-regresjon i produksjon. |
+| 19 Mobil | Bestått layoutkontroll og skjermbilde ved 390 x 844 px. |
+| 20 Dashboard, tidslinje, Oppgaver | Klassifisering/tidslinje uendret; kort rendres i begge varianter. Full produksjonsregresjon gjenstår. |
+
+- Tilleggstestene for begge spoof-adresser og lenke → deloppgave → tittel på eldre oppgave består. En etterfølgende foreldet detaljskriving avvises fortsatt med `TASK_CHANGED`.
+
+### Avgrensning og versjon
+- Regler, regeltester, ToDo-modul, tidslinjemodul, dashboardklassifisering, avviksberegning og gjentakelsesdatoer/transaksjoner er uendret. Ingen nye biblioteker eller migrering.
+- Endrede filer: `app.js`, `firestore.js`, `index.html`, `styles.css`, `service-worker.js`, `CLAUDE.md`, `DEVELOPMENT_LOG.md`.
+- Versjon `1.17.0` i app, service worker og Firestore-metadata; klientbuild `11700`. Ikke deployet i denne økten.
+
 ## v1.16.0 - 2026-09-09
 
 ### Kommentarer og Firestore-indeks

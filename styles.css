@@ -1786,6 +1786,34 @@ body {
 .subtask-new-date { min-width: 0; }
 
 /* ---- Comments ---- */
+.task-links-section { margin: 12px 0 18px; min-width: 0; }
+.task-links-section h4 { font-size: .875rem; margin-bottom: 8px; }
+.task-links-hint { color: var(--text-3); font-size: .8rem; margin-bottom: 8px; }
+.task-links-list { display: flex; flex-direction: column; gap: 8px; }
+.task-link-row { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.task-link-main { flex: 1; min-width: 0; }
+.task-link-main a, .task-link-unsafe { display: flex; align-items: flex-start; gap: 8px; font-size: .85rem; overflow-wrap: anywhere; }
+.task-link-main a { color: #145a89; }
+.task-link-main svg { flex-shrink: 0; margin-top: 2px; }
+.task-link-unsafe { color: var(--text-2); }
+.task-link-unsafe small { display: block; font-size: .75rem; }
+.task-link-name { margin-top: 6px; font-size: .8rem; }
+.task-link-remove { flex-shrink: 0; color: var(--text-2); border-radius: 6px; }
+.task-link-remove:hover { color: var(--red); background: var(--light-pink); }
+.task-link-remove:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+.task-links-editor { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto; gap: 8px; align-items: end; margin-top: 10px; }
+.task-links-editor label { min-width: 0; font-size: .8rem; }
+.task-links-editor input { margin-top: 4px; }
+.task-links-indicator { display: inline-flex; gap: 4px; align-items: center; flex-shrink: 0; white-space: nowrap; color: var(--text-2); font-size: .75rem; }
+.task-card-full .task-row-top { position: relative; }
+.task-card-full .task-row-top:has(.task-links-indicator) { padding-right: 48px; }
+.task-card-full .task-row-top > .task-links-indicator { position: absolute; right: 0; top: 2px; }
+@media (max-width: 600px) {
+  .task-links-editor { grid-template-columns: minmax(0, 1fr) auto; }
+  .task-links-editor label:first-child { grid-column: 1 / -1; }
+  .task-link-remove { min-width: 36px; min-height: 36px; }
+}
+
 .comments-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
 .comment-item { display: flex; gap: 10px; }
 .comment-avatar {

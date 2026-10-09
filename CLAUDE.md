@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.16.0`
+Gjeldende appversjon: `v1.17.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -321,6 +321,19 @@ Tidslinjevisningen fyller den tilgjengelige høyden mellom toppheader og mobilme
 
 Gjentakende forekomster vises først når de faktisk er generert innenfor appens 12-månedershorisont. Tidslinjen opplyser om dette, slik at senere arbeidsår ikke feilaktig tolkes som komplette serier.
 
+## Lenker på oppgaver
+Oppgaver kan ha `links: [{ id, url, title }]`. Manglende felt behandles som tom liste; eksisterende beskrivelser migreres ikke. ToDo-er har ikke lenker.
+
+`taskLinkUrl()`, `taskLinkValue()` og `taskLinkInfo()` i `firestore.js` er felles rene hjelpere for lagring og visning. URL tolkes med `new URL()`; bare HTTPS uten brukernavn/passord godtas. Adressen kan være maksimalt 2 048 tegn, navnet 200. Bare inndata som starter med et domenenavn kan få automatisk `https://`; relative adresser avvises. Google-typer gjenkjennes med eksakt vertsnavn og avgrenset sti, aldri delstrengsøk.
+
+Lenker vises i Detaljer nær beskrivelsen. Usikre lagrede adresser vises som escaped tekst uten klikkbar lenke. Trygge adresser åpnes med `target="_blank"` og `rel="noopener noreferrer"`. Oppgavekort viser ikon og antall; selve lenkene åpnes fra modalen.
+
+Admin og Teamleder lagrer tillegg, navneendringer og fjerning umiddelbart med `updateTaskLinksSafely()`: en transaksjon leser ferske data, endrer etter lenke-ID og avviser duplikatadresse. Fjerning bekreftes med `showConfirm()`; dokumentet eller mappen slettes ikke. Endret navn lagres også ved Enter og lukking. Under en lenkeskriving bes brukeren vente før lukking/detaljlagring; feil viser norsk toast og laster faktisk lenkeliste på nytt.
+
+Nye oppgaver må lagres først: «Lagre oppgaven først for å legge til lenker.» Ingen lenker legges i et ulagret utkast. Detaljlagring skriver ikke `links` tilbake. Både lenke- og deloppgavetransaksjoner bevarer `detailsUpdatedAt`; mangler feltet, etableres det fra eksisterende `updatedAt`. Dette hindrer falsk konflikt når en eldre oppgave får lenke/deloppgave før tittelen lagres, uten å svekke kontrollen mot andre detaljendringer.
+
+Nye gjentakende forekomster får en kopi av malens lenker. Allerede genererte forekomster påvirkes ikke; genereringens transaksjoner og datoberegning er uendret.
+
 ## Eksport og sikkerhetskopi
 Admin har et eget kort under Administrasjon for å laste ned en manuell øyeblikkskopi. Eksporten henter ett rått snapshot fra hver av samlingene `tasks`, `todos`, `categories`, `users`, `allowedUsers` og `comments`. Soft-slettede oppgaver og ToDo-er er med; varsler utelates fordi de er avledede og forgjengelige.
 
@@ -330,6 +343,8 @@ Ett knappetrykk klargjør tre filer:
 - `strawberry-plan-todos-YYYY-MM-DD.csv`: lesbart ToDo-uttrekk med norske kolonner.
 
 CSV-filene begynner med UTF-8 BOM, deretter Excels `sep=;`-direktiv på egen linje, og bruker standard CSV-sitering. Dette gir norske tegn og riktige kolonner ved dobbeltklikk i Excel, uavhengig av Windows-brukerens regionale listeskilletegn. Ansvarlige vises med navn når brukerprofilen finnes, og arkiverte rader merkes eksplisitt.
+
+Oppgave-CSV har kolonnen «Lenker» helt sist, med adressene skilt av ` | `. JSON får `links` gjennom eksisterende råsnapshot-eksport; JSON-genereringen og ToDo-CSV er uendret.
 
 Eksportkortet og handleren er avgrenset til Admin i klienten. Dagens Firestore-regler gir imidlertid alle allowlistede roller lesetilgang til de eksporterte samlingene, så Admin-avgrensningen er ikke en separat serverside-sikkerhetsgrense. En håndhevet Admin-only eksport krever senere endring av regler eller backendarkitektur.
 
