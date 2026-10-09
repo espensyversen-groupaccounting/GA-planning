@@ -1,5 +1,69 @@
 # Development Log
 
+## v1.18.0 - 2026-10-09
+
+### Review på oppgaver
+- Firestegsstepper, reviewer-dialog og panel i Detaljer. Review er valgfritt, og direkte fullføring uten review fungerer fortsatt. Ulagrede oppgaver kan ikke sendes til review. Et hoppet review-steg vises ikke som godkjent.
+- Felles `reviewPermissions()` brukes av stepper, modalpanel og kort. Reviewer-utvalget er aktive Admin/Teamleder-profiler unntatt innlogget bruker. Bare valgt reviewer kan godkjenne/sende tilbake; andre redaktører kan trekke tilbake/bytte.
+- `performTaskReview()` leser fersk oppgave og kontrollerer status, reviewerId og reviewRequestedAt med full timestamp-presisjon. Sletting, bytte av reviewer og gammel review-runde avvises med norsk melding.
+- Oppgavestatus, review-felter og eventuell kommentar lagres atomisk. Kommentarformatet deles med vanlig `addComment()` via `commentCreateData()`, med innlogget userId. Tilbakesending krever tilbakemelding. Kommentar-ID genereres før transaksjonen for trygg retry.
+- Vanlig statuslagring og detaljlagring avviser direkte overganger inn/ut av review. Detaljendringer med uendret review-status er tillatt. Review oppdaterer detailsUpdatedAt; gammel modal kan ikke overskrive beslutningen.
+- Varsler er separate bieffekter, uten dobbeltmottakere eller varsling av egen handling. Godkjenning lager ikke status_changed. Feil gir mild advarsel uten å rapportere review som mislykket.
+- Ny Review-seksjon under toppkortene: Du skal reviewe er lik i Team/Mine; Venter på review følger godkjent eier-/avsenderregel i Mine og viser alle øvrige reviewere i Team. Tomme grupper skjules. Review er uavhengig av toppkortfilteret.
+- `classifyDashboardItem()` er uendret. Review-oppgaver kan fortsatt stå i én fristseksjon og Review samtidig. Uklassifiserte review-oppgaver legges ikke til gjennom Alt fremover/Andre treff; datakvalitet og teamoversikt er fortsatt tverrgående.
+- CSV får Reviewer etter Lenker og statusnavnet Til review. Eksisterende JSON-eksport og gjentakelseskopiering trenger ingen endring: review-feltene inngår ikke i forekomstenes eksplisitte kopiliste.
+
+### Gjennomgang av statusantakelser
+- Endret: statusLabel, taskCardHtml (merke/rettigheter/hurtigreview), updateStatusStepper (fire steg og listeners), updateModalButtons, quickStatusChange, quickSetStatus, handleSaveTask, updateTask/updateTaskIfUnchanged (fersk statuskontroll), Oppgaver-filteret og skjult modalstatus i index.html, samt CSV-overskrift/reviewerfelt.
+- Tidslinjens nye filtervalg ligger i index.html. js/timeline.js bruker allerede generisk statussammenligning og etiketten fra valgt option, så filen trenger ingen endring.
+- Bevisst uendret: isDoneItem, taskUrgency sin i_gang-vekt, classifyDashboardItem sin i_gang-gren, taskInvolvement/scopedTasks, dataQualityIssues, tidslinjens fullfort-ekskludering og deloppgavestatus, alle ToDo-statuser/CSV og konverteringens fullfort-sjekk.
+- Forekomster starter fortsatt ikke_startet. Kortets done-sjekk og angre-fullføring bruker fortsatt fullfort/i_gang, men handlingen kontrolleres nå gjennom reviewPermissions og fersk transaksjon.
+- Det er søkt etter i_gang/fullfort i hele kildekoden; review er ikke lagt inn som ferdig eller påbegynt i dashboardklassifiseringen.
+
+### Verifisering
+- Uendrede Firestore-regeltester består 24/24. node --check består på alle fem JavaScript-filer.
+- 42 lokale Chrome-sjekker med faktisk HTML/CSS/JS og transaksjonsstub består. Faktiske UI-klikk for send, varselåpning og godkjenning består også. Ingen pageerror i testkjøringen.
+- Ekstra integrasjonstest bruker Firebase compat SDK og to klienter mot lokal demo-emulator med gjeldende regler. Sending og kommentar består; samtidige godkjenn/trekk-tilbake gir én commit; gammel detaljlagring og gammel review-runde avvises.
+- En kommentar med feil userId avvises av de faktiske reglene, og oppgavestatus rulles tilbake i samme transaksjon. Direkte statusomgåelse fra både updateTask og detaljtransaksjonen avvises.
+- Desktop- og 390 x 844 px mobilbilder er kontrollert. Ingen vannrett overflyt; dialogkontroller er innenfor viewport. Skjult reviewerfelt ved godkjenning er kontrollert. Review-dialogen begrenser Tab-fokus.
+
+### Resultat per testkrav
+Dette er lokale automatiserte tester og kodekontroll, ikke manuelle produksjonstester. Reell produksjonsvarsling og manuell tofane-/mobilregresjon bør gjøres etter publisering.
+
+| Krav | Resultat |
+| --- | --- |
+| 1–3 Fire steg, direkte fullføring, Avbryt og reviewer-utvalg | Bestått i lokal nettleser; selv og Medlem utelates. |
+| 4 Send med melding | Bestått i nettleser og faktisk emulator; status, reviewer, kommentar og lokal varselstub kontrollert. |
+| 5 Varsel åpner panel/dokumentasjon | Bestått via eksisterende varselhandler og faktisk modal-DOM. |
+| 6–7 Personlig kø og tomme grupper | Bestått i Team/Mine; tom seksjon/gruppe skjules. |
+| 8 Godkjenn og varsler | Bestått: to ulike mottakere, deduplisering og ingen egenhandling/status_changed. |
+| 9 Send tilbake | Bestått: tom tekst avvises, status og prefikskommentar lagres. |
+| 10 Ingen fullføring for andre | Bestått på kort, stepper og fersk transaksjon. |
+| 11–12 Trekk tilbake/bytt reviewer | Bestått: felter nullstilles, bare ny reviewer varsles; køene beregnes fra reviewerId. |
+| 13 Motstridende handlinger | Bestått med faktisk emulator og to klienter: bare én commit. |
+| 14 Review med frist i morgen | Bestått: Neste 7 dager og Review, ikke I gang. |
+| 15 Review uten tidsvindu | Bestått: ingen plassering i I gang; Review vises. |
+| 16 Fem toppkort uten review | Bestått for kontrollert baseline-datasett, tall 1/1/1/0/1. |
+| 17 Statusfiltre | Bestått på Oppgaver og tidslinjens faktiske filterfunksjon. |
+| 18 Varslingsfeil | Bestått med simulert feil: review beholdes og får mild advarsel. |
+| 19 Ingen arv av review | Bestått gjennom recurringTaskInstanceData. |
+| 20 CSV | Bestått: Til review og Reviewer helt sist. |
+| 21 Eldre oppgave | Bestått gjennom modal, direkte status og sending uten eksisterende review-felter. |
+| 22 Mobil | Bestått ved 390 x 844 px; manuell berøringskontroll i produksjon gjenstår. |
+| 23 ToDo, lenker, deltakere/tidslinje ellers | Modulene og tilhørende hjelpere er uendret; full manuell produksjonsregresjon gjenstår. |
+| 24 Mine-avsender og Team-utvalg | Bestått, også avsender uten annen involvering. |
+| 25 Kommentarfeil | Bestått: faktisk regelavvisning gir ingen statusendring. |
+| 26 Gammel detaljmodal | Bestått i stub og faktisk emulator. |
+| 27 Ny runde med samme reviewer | Bestått i stub og faktisk emulator; gammel request-timestamp avvises. |
+| 28 Medlem | Bestått: ikke i utvalget og ingen review-rettigheter. |
+| 29 Hurtigknapp/Lagre kan ikke omgå | Bestått via faktiske klienthandlere og Firestore-funksjoner. |
+
+### Avgrensning og versjon
+- Regler og regeltestfiler er uendret. ToDo-modul, tidslinjemodul, taskInvolvement, classifyDashboardItem, lenkehjelpere, deltakere, haste-/datakvalitetsberegning og gjentakelsesdatoer/transaksjoner er uendret.
+- Medlem-begrensningen og at review ikke er serversidehåndhevet er dokumentert i CLAUDE.md. Eldre klienter/direkte SDK-skriving fra Admin/Teamleder kan omgå flyten; teamet må oppdatere klienten.
+- Endrede filer: app.js, firestore.js, index.html, styles.css, service-worker.js, CLAUDE.md, DEVELOPMENT_LOG.md.
+- Versjon 1.18.0 i app, service worker og Firestore-metadata; klientbuild 11800. Ingen nye biblioteker eller migrering. Ikke deployet.
+
 ## v1.17.0 - 2026-10-09
 
 ### Dokument- og mappelenker

@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.17.0';
+const APP_VERSION = '1.18.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -491,7 +491,7 @@ function priorityLabel(p) {
 }
 
 function statusLabel(s) {
-  return { ikke_startet:'Ikke startet', i_gang:'I gang', fullfort:'Fullført' }[s] || s;
+  return { ikke_startet:'Ikke startet', i_gang:'I gang', til_review:'Til review', fullfort:'Fullført' }[s] || s;
 }
 
 function roleLabel(r) {
@@ -935,6 +935,7 @@ function subscribeToRealtime() {
       if (state.activeTaskId && !state.taskLinkSaving) {
         const active = tasks.find(task => task.id === state.activeTaskId);
         if (active && !document.getElementById('task-links-list')?.contains(document.activeElement)) renderTaskLinks(active.links);
+        if (active) { renderReviewPanel(active); updateStatusStepper(active.status, active); }
       }
       if (state.currentView === 'dashboard') renderDashboard();
       if (state.currentView === 'tasks') renderTasksList();
@@ -1065,6 +1066,7 @@ function clearDashboardFilter() {
 
 function renderDashboard() {
   updateDashboardScopeButtons();
+  renderDashboardReview();
   const tasks = scopedTasks();
   const todos = scopedTodos();
   const open = tasks.filter(t => !isDoneItem(t));
@@ -1078,7 +1080,7 @@ function renderDashboard() {
     later: classifiedEntries.filter(entry => entry.section === 'later'),
   };
   const extendedLaterEntries = state.dashboardLaterExpanded
-    ? entries.map(extendedLaterEntry).filter(Boolean)
+    ? entries.map(extendedLaterEntry).filter(entry => entry && entry.item.status !== 'til_review')
     : [];
   const crossSectionCounts = {
     unassigned: entries.filter(entry => !entry.item.assignedTo).length,
@@ -1102,7 +1104,7 @@ function renderDashboard() {
   filteredSections.later = [...filteredSections.later, ...visibleExtendedLaterEntries];
   const extendedLaterKeys = new Set(visibleExtendedLaterEntries.map(entry => `${entry.type}:${entry.item.id}`));
   const otherResults = isCrossSectionFilter
-    ? filteredEntries.filter(entry => !entry.section && !extendedLaterKeys.has(`${entry.type}:${entry.item.id}`))
+    ? filteredEntries.filter(entry => !entry.section && entry.item.status !== 'til_review' && !extendedLaterKeys.has(`${entry.type}:${entry.item.id}`))
     : [];
   const activeFilterCount = filter ? filteredEntries.length : classifiedEntries.length;
 
@@ -1526,7 +1528,7 @@ function taskCardHtml(task, compact = false) {
   const dateClass = dueDateClass(task.dueDate);
   const assignee = state.users.find(u => u.id === task.assignedTo);
   const isDone = task.status === 'fullfort';
-  const canQuickChange = canEdit() || canUpdateTaskStatus(task);
+  const canQuickChange = reviewPermissions(task).ordinaryStatus || reviewPermissions(task).decide;
   const checkBtn = canQuickChange ? `
     <button class="task-check-btn${isDone ? ' checked' : ''}"
             onclick="quickStatusChange('${task.id}','${isDone ? 'i_gang' : 'fullfort'}',event)"
@@ -1576,6 +1578,8 @@ function taskCardHtml(task, compact = false) {
         </div>
         <div class="task-card-meta">
           ${signalHtml}
+          ${reviewBadgeHtml(task)}
+          ${reviewSendButtonHtml(task)}
           ${recurrenceHtml}
           ${categoryHtml}
           ${assigneeHtml}
@@ -1600,6 +1604,8 @@ function taskCardHtml(task, compact = false) {
       </div>
       <div class="task-row-bottom">
         ${signalHtml}
+        ${reviewBadgeHtml(task)}
+        ${reviewSendButtonHtml(task)}
         ${recurrenceHtml}
         ${categoryHtml}
         <span class="status-badge ${task.status}">${statusLabel(task.status)}</span>
@@ -1844,8 +1850,8 @@ function renderNotifications() {
     return;
   }
   el.innerHTML = state.notifications.map(n => `
-    <div class="notif-item ${n.read ? 'read' : 'unread'}" onclick="handleNotifClick('${n.id}','${n.taskId || ''}')">
-      <div class="notif-dot"></div>
+    <div class="notif-item ${n.read ? 'read' : 'unread'} ${n.type?.startsWith('review_') ? 'notif-review' : ''}" onclick="handleNotifClick('${n.id}','${n.taskId || ''}')">
+      <div class="notif-dot">${n.type?.startsWith('review_') ? '✓' : ''}</div>
       <div class="notif-content">
         <div class="notif-message">${esc(n.message)}</div>
         <div class="notif-time">${timeAgo(n.createdAt)}</div>
@@ -1866,6 +1872,197 @@ async function handleMarkAllRead() {
 // ============================================================
 // TASK MODAL
 // ============================================================
+
+function reviewPermissions(task) {
+  const editing = Boolean(canEdit());
+  const pending = task?.status === 'til_review';
+  const reviewer = pending && task.reviewerId === state.user?.uid;
+  return {
+    send: editing && Boolean(task?.id) && !isDoneItem(task),
+    decide: editing && reviewer,
+    manage: editing && pending && !reviewer,
+    ordinaryStatus: !pending && (editing || Boolean(task && canUpdateTaskStatus(task))),
+  };
+}
+
+function reviewActorName(uid) {
+  const user = state.users.find(item => item.id === uid);
+  return user?.displayName || user?.email || (uid === state.user?.uid ? state.user.displayName || state.user.email : 'Ukjent bruker');
+}
+
+function reviewErrorMessage(error) {
+  return {
+    REVIEW_CHANGED: 'Review er endret siden du åpnet dialogen. Åpne oppgaven på nytt.',
+    REVIEW_REQUIRED: 'Oppgaven venter på review. Bruk Godkjenn, Send tilbake eller Trekk tilbake review.',
+    REVIEW_FORBIDDEN: 'Du kan ikke utføre denne review-handlingen.',
+    REVIEW_REVIEWER_INVALID: 'Velg en annen aktiv Admin eller Teamleder som reviewer.',
+    REVIEW_FEEDBACK_REQUIRED: 'Skriv en tilbakemelding før du sender oppgaven tilbake.',
+    TASK_NOT_FOUND: 'Oppgaven er slettet eller finnes ikke lenger.',
+    TASK_CHANGED: 'Oppgaven er endret. Åpne den på nytt før du lagrer.',
+  }[error.message] || 'Kunne ikke lagre review. Prøv igjen.';
+}
+
+function reviewBadgeHtml(task) {
+  return task.status === 'til_review'
+    ? `<span class="review-badge">Til review hos ${esc(task.reviewerName || 'ukjent reviewer')}</span>` : '';
+}
+
+function reviewSendButtonHtml(task) {
+  return reviewPermissions(task).send && task.status !== 'til_review'
+    ? `<button type="button" class="review-send-shortcut" data-review-action="send" data-review-task="${esc(task.id)}" title="Send til review" aria-label="Send til review"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 11h6M9 15h3M9 3H5v18h14V3h-4M9 2h6v4H9Z"/></svg></button>` : '';
+}
+
+function renderDashboardReview() {
+  const pending = state.tasks.filter(task => !task.deletedAt && task.status === 'til_review');
+  const uid = state.user?.uid;
+  const mine = pending.filter(task => task.reviewerId === uid);
+  const waiting = pending.filter(task => task.reviewerId !== uid && (
+    state.dashboardScope === 'team' || task.assignedTo === uid || task.reviewRequestedBy === uid
+  ));
+  for (const [group, tasks] of [['mine', mine], ['waiting', waiting]]) {
+    document.getElementById(`review-${group}-group`).hidden = !tasks.length;
+    document.getElementById(`review-${group}-list`).innerHTML = [...tasks].sort(compareTasksByUrgency).map(task => `
+      <div class="review-dashboard-item">
+        ${taskCardHtml(task, true)}
+        <p class="review-context">Sendt av ${esc(reviewActorName(task.reviewRequestedBy))} · ${esc(formatDate(task.reviewRequestedAt))}</p>
+      </div>`).join('');
+  }
+  document.getElementById('dashboard-review-count').textContent = mine.length + waiting.length;
+  document.getElementById('dashboard-review-section').hidden = !(mine.length + waiting.length);
+}
+
+function renderReviewPanel(task) {
+  const panel = document.getElementById('task-review-panel');
+  panel.hidden = task?.status !== 'til_review';
+  if (panel.hidden) { panel.innerHTML = ''; return; }
+  const permissions = reviewPermissions(task);
+  panel.innerHTML = `
+    <h3>Til review hos ${esc(task.reviewerName || 'ukjent reviewer')}</h3>
+    <p>Sendt av ${esc(reviewActorName(task.reviewRequestedBy))} · ${esc(formatDate(task.reviewRequestedAt))}</p>
+    ${Array.isArray(task.links) && task.links.length ? '<button type="button" class="review-links-shortcut" data-review-action="links">Åpne dokumentasjon</button>' : ''}
+    <div class="review-panel-actions">
+    ${permissions.decide ? '<button type="button" class="btn btn-primary" data-review-action="approve">Godkjenn</button><button type="button" class="btn btn-secondary" data-review-action="return">Send tilbake</button>' : ''}
+    ${permissions.manage ? '<button type="button" class="btn btn-secondary" data-review-action="withdraw">Trekk tilbake review</button><button type="button" class="btn btn-secondary" data-review-action="send">Bytt reviewer</button>' : ''}
+    </div>`;
+}
+
+let reviewDialogDraft = null;
+let reviewDialogBusy = false;
+let reviewDialogFocus = null;
+
+function openReviewDialog(taskId, action) {
+  const task = state.tasks.find(item => item.id === taskId);
+  const permissions = reviewPermissions(task);
+  if ((action === 'send' && !permissions.send) || (action !== 'send' && !permissions.decide)) return;
+  reviewDialogDraft = { taskId, action, expected: taskReviewState(task) };
+  reviewDialogFocus = document.activeElement;
+  const sending = action === 'send';
+  const title = sending ? task.status === 'til_review' ? 'Bytt reviewer' : 'Send til review' : action === 'approve' ? 'Godkjenn oppgave' : 'Send tilbake';
+  document.getElementById('review-dialog-title').textContent = title;
+  document.getElementById('review-dialog-submit').textContent = sending ? 'Send til review' : action === 'approve' ? 'Godkjenn' : 'Send tilbake';
+  document.getElementById('reviewer-field').hidden = !sending;
+  const select = document.getElementById('reviewer-select');
+  select.innerHTML = '<option value="">Velg reviewer</option>' + state.users
+    .filter(user => user.id !== state.user?.uid && ['admin', 'teamleder'].includes(user.role))
+    .map(user => `<option value="${esc(user.id)}">${esc(user.displayName || user.email)}</option>`).join('');
+  select.required = sending;
+  document.getElementById('review-message').value = '';
+  document.getElementById('review-message').required = action === 'return';
+  document.getElementById('review-message-label').textContent = action === 'return' ? 'Tilbakemelding (påkrevd)' : 'Melding (valgfritt)';
+  document.getElementById('review-dialog-error').hidden = true;
+  document.getElementById('review-dialog').classList.remove('hidden');
+  (sending ? select : document.getElementById('review-message')).focus();
+}
+
+function closeReviewDialog() {
+  if (reviewDialogBusy) return;
+  document.getElementById('review-dialog').classList.add('hidden');
+  reviewDialogDraft = null;
+  reviewDialogFocus?.focus();
+  reviewDialogFocus = null;
+}
+
+async function notifyReviewResult(taskId, action, result) {
+  const task = result.before;
+  const actor = reviewActorName(state.user.uid);
+  const type = { send: 'review_requested', approve: 'review_approved', return: 'review_returned' }[action];
+  if (!type) return;
+  const recipients = action === 'send' ? [result.changes.reviewerId] : [task.assignedTo, task.reviewRequestedBy];
+  const verb = { send: 'ba deg reviewe', approve: 'godkjente', return: 'sendte tilbake' }[action];
+  const failures = await Promise.all([...new Set(recipients.filter(uid => uid && uid !== state.user.uid))].map(async uid => {
+    try { await createNotification(uid, { type, taskId, taskTitle: task.title, message: `${actor} ${verb} "${task.title}"` }); return false; }
+    catch (error) { console.error('Review notification failed:', error); return true; }
+  }));
+  if (failures.some(Boolean)) showToast('Review er lagret, men et varsel kunne ikke sendes.', 'info');
+}
+
+async function executeTaskReview(taskId, action, expected, options = {}) {
+  const result = await performTaskReview(taskId, action, expected, options);
+  let task = { ...result.before, ...result.changes, id: taskId };
+  try { task = await getTask(taskId) || task; } catch (error) { console.error('Review refresh failed:', error); }
+  const index = state.tasks.findIndex(item => item.id === taskId);
+  if (index >= 0) state.tasks[index] = task;
+  if (state.activeTaskId === taskId) {
+    const before = result.before.detailsUpdatedAt || result.before.updatedAt;
+    if ((state.activeTaskDetailsUpdatedAt?.toMillis?.() ?? null) === (before?.toMillis?.() ?? null)) {
+      state.activeTaskDetailsUpdatedAt = task.detailsUpdatedAt || task.updatedAt || null;
+    }
+    document.getElementById('task-status').value = task.status;
+    updateStatusStepper(task.status, task);
+    renderReviewPanel(task);
+    updateModalButtons(task);
+  }
+  if (state.currentView === 'dashboard') renderDashboard();
+  if (state.currentView === 'tasks') renderTasksList();
+  if (state.currentView === 'timeline') renderTimeline();
+  showToast({ send: 'Oppgaven er sendt til review.', approve: 'Oppgaven er godkjent.', return: 'Oppgaven er sendt tilbake.', withdraw: 'Review er trukket tilbake.' }[action]);
+  await notifyReviewResult(taskId, action, result);
+}
+
+async function submitReviewDialog(event) {
+  event.preventDefault();
+  if (!reviewDialogDraft || reviewDialogBusy) return;
+  const draft = { ...reviewDialogDraft };
+  const options = { reviewerId: document.getElementById('reviewer-select').value, message: document.getElementById('review-message').value.trim() };
+  if (draft.action === 'return' && !options.message) {
+    const error = document.getElementById('review-dialog-error');
+    error.hidden = false; error.textContent = 'Skriv en tilbakemelding før du sender oppgaven tilbake.'; return;
+  }
+  reviewDialogBusy = true;
+  document.querySelectorAll('#review-dialog button, #review-dialog input, #review-dialog select, #review-dialog textarea').forEach(el => { el.disabled = true; });
+  try {
+    await executeTaskReview(draft.taskId, draft.action, draft.expected, options);
+    reviewDialogBusy = false;
+    closeReviewDialog();
+  } catch (error) {
+    console.error('Review failed:', error);
+    const message = reviewErrorMessage(error);
+    showToast(message, 'error');
+    const el = document.getElementById('review-dialog-error'); el.hidden = false; el.textContent = message;
+  } finally {
+    reviewDialogBusy = false;
+    document.querySelectorAll('#review-dialog button, #review-dialog input, #review-dialog select, #review-dialog textarea').forEach(el => { el.disabled = false; });
+  }
+}
+
+async function handleReviewAction(button) {
+  const action = button.dataset.reviewAction;
+  if (action === 'links') {
+    document.getElementById('task-links-section').scrollIntoView({ block: 'center', behavior: 'smooth' });
+    document.querySelector('#task-links-list a')?.focus(); return;
+  }
+  const id = button.dataset.reviewTask || state.activeTaskId;
+  const task = state.tasks.find(item => item.id === id);
+  if (!task || button.disabled) return;
+  if (action !== 'withdraw') { openReviewDialog(id, action); return; }
+  if (!reviewPermissions(task).manage) return;
+  const expected = taskReviewState(task);
+  if (!await showConfirm('Trekk tilbake review', 'Vil du trekke tilbake review og sette oppgaven tilbake til I gang?', { confirmText: 'Trekk tilbake', confirmStyle: 'primary' })) return;
+  button.disabled = true;
+  try { await executeTaskReview(id, 'withdraw', expected); }
+  catch (error) { showToast(reviewErrorMessage(error), 'error'); }
+  finally { button.disabled = false; }
+}
 
 async function openTaskModal(taskId = null, prefetchedTask = null) {
   state.activeTaskId = taskId;
@@ -1892,6 +2089,7 @@ async function openTaskModal(taskId = null, prefetchedTask = null) {
     state.activeTaskDetailsUpdatedAt = task.detailsUpdatedAt || task.updatedAt || null;
     state.activeTaskSubtasks = task.subtasks || [];
     renderTaskLinks(task.links);
+    renderReviewPanel(task);
     state.activeTaskOriginalRecurrence = task.recurrence ? { ...task.recurrence } : null;
     fillTaskForm(task);
     updateStatusStepper(task.status, task);
@@ -1906,6 +2104,7 @@ async function openTaskModal(taskId = null, prefetchedTask = null) {
     state.activeTaskDetailsUpdatedAt = null;
     state.activeTaskSubtasks = [];
     renderTaskLinks([]);
+    renderReviewPanel(null);
     state.activeTaskOriginalRecurrence = null;
     document.getElementById('subtasks-list').innerHTML = '';
     renderSubtaskTimeline([]);
@@ -2166,7 +2365,7 @@ function updateModalButtons(task) {
   const cancelBtn = document.getElementById('btn-cancel-task');
 
   deleteBtn.classList.toggle('hidden', !task || !canEdit());
-  const canChangeStatus = task && (canEdit() || canUpdateTaskStatus(task));
+  const canChangeStatus = task && (reviewPermissions(task).ordinaryStatus || reviewPermissions(task).decide);
   undoBtn.classList.toggle('hidden', !task || task.status !== 'fullfort' || !canChangeStatus);
   saveBtn.textContent  = task ? 'Lagre endringer' : 'Opprett oppgave';
 
@@ -2225,6 +2424,7 @@ async function handleSaveTask() {
   const dueStr    = document.getElementById('task-due-date').value;
   const deps      = document.getElementById('task-dependencies').value.trim();
   const currentTask = state.tasks.find(t => t.id === taskId);
+  if (!taskId && status === 'til_review') { showToast('Lagre oppgaven først for å sende til review.', 'error'); return; }
   let recurrence = currentTask?.recurrence || null;
   if (canEdit()) {
     try {
@@ -2301,7 +2501,7 @@ async function handleSaveTask() {
           showToast('Du kan ikke endre status på denne oppgaven.', 'error');
           return;
         }
-        await updateTask(taskId, { status });
+        await updateTask(taskId, { status }, taskReviewState(oldTask));
       } else {
         await updateTaskIfUnchanged(taskId, data, state.activeTaskDetailsUpdatedAt);
         // Notify if assignee changed
@@ -2344,7 +2544,7 @@ async function handleSaveTask() {
     if (e.message === 'TASK_CHANGED') {
       showToast('Oppgaven ble endret av noen andre. Åpne den på nytt og lagre igjen.', 'error');
     } else {
-      showToast('Feil ved lagring. Prøv igjen.', 'error');
+      showToast(e.message?.startsWith('REVIEW_') ? reviewErrorMessage(e) : 'Feil ved lagring. Prøv igjen.', 'error');
     }
   } finally {
     saveBtn.disabled = false;
@@ -2630,42 +2830,63 @@ async function quickStatusChange(taskId, newStatus, event) {
   if (event) event.stopPropagation();
   const task = state.tasks.find(t => t.id === taskId);
   if (!task) return;
-  if (!canEdit() && !canUpdateTaskStatus(task)) return;
+  const permissions = reviewPermissions(task);
+  if (task.status === 'til_review') {
+    if (newStatus === 'fullfort' && permissions.decide) openReviewDialog(taskId, 'approve');
+    else showToast(reviewErrorMessage(new Error('REVIEW_REQUIRED')), 'error');
+    return;
+  }
+  if (!permissions.ordinaryStatus) return;
   try {
-    await updateTask(taskId, { status: newStatus });
+    await updateTask(taskId, { status: newStatus }, taskReviewState(task));
+    await refreshTaskAfterStatus(task);
     if (newStatus === 'fullfort') {
       showToast('✓ Oppgave fullført!');
       if (task.createdBy && task.createdBy !== state.user.uid) {
-        await createNotification(task.createdBy, {
-          type: 'status_changed', taskId, taskTitle: task.title,
-          message: `"${task.title}" er nå markert som fullført`,
-        });
+        try {
+          await createNotification(task.createdBy, {
+            type: 'status_changed', taskId, taskTitle: task.title,
+            message: `"${task.title}" er nå markert som fullført`,
+          });
+        } catch (error) { console.error('Status notification failed:', error); }
       }
     } else {
       showToast(task.status === 'fullfort' ? 'Fullføring angret' : 'Status oppdatert');
     }
   } catch(e) {
-    showToast('Feil ved oppdatering.', 'error');
+    showToast(reviewErrorMessage(e), 'error');
   }
 }
 
 // Klikk på et steg i status-stepperen inne i modal
 async function quickSetStatus(newStatus) {
-  const sel = document.getElementById('task-status');
-  if (sel) sel.value = newStatus;
-  updateStatusStepper(newStatus);
-  if (!state.activeTaskId) return; // ny oppgave: bare sett form-verdi
+  if (!state.activeTaskId) {
+    if (newStatus === 'til_review') { showToast('Lagre oppgaven først for å sende til review.', 'error'); return; }
+    document.getElementById('task-status').value = newStatus;
+    updateStatusStepper(newStatus); return;
+  }
 
   const task = state.tasks.find(t => t.id === state.activeTaskId);
   if (!task) return;
-  if (!canEdit() && !canUpdateTaskStatus(task)) return;
+  if (newStatus === 'til_review') { openReviewDialog(task.id, 'send'); return; }
+  await quickStatusChange(task.id, newStatus);
+}
+
+async function refreshTaskAfterStatus(previous) {
   try {
-    await updateTask(state.activeTaskId, { status: newStatus });
-    if (newStatus === 'fullfort') showToast('✓ Oppgave fullført!');
-    else showToast(task.status === 'fullfort' ? 'Fullføring angret' : 'Status oppdatert');
-  } catch(e) {
-    showToast('Feil ved statusoppdatering.', 'error');
-  }
+    const task = await getTask(previous.id);
+    if (!task) return;
+    const index = state.tasks.findIndex(item => item.id === task.id);
+    if (index >= 0) state.tasks[index] = task;
+    if (state.activeTaskId === task.id) {
+      const before = previous.detailsUpdatedAt || previous.updatedAt;
+      if ((state.activeTaskDetailsUpdatedAt?.toMillis?.() ?? null) === (before?.toMillis?.() ?? null)) {
+        state.activeTaskDetailsUpdatedAt = task.detailsUpdatedAt || task.updatedAt || null;
+      }
+      document.getElementById('task-status').value = task.status;
+      updateStatusStepper(task.status, task); renderReviewPanel(task); updateModalButtons(task);
+    }
+  } catch (error) { console.error('Status refresh failed:', error); }
 }
 
 async function handleUndoComplete() {
@@ -2680,29 +2901,36 @@ function updateStatusStepper(currentStatus, taskOverride = null) {
   const steps = [
     { key: 'ikke_startet', label: 'Ikke startet' },
     { key: 'i_gang',       label: 'I gang'        },
+    { key: 'til_review',   label: 'Til review'     },
     { key: 'fullfort',     label: 'Fullført'       },
   ];
   const curIdx = steps.findIndex(s => s.key === currentStatus);
   const task = taskOverride || state.tasks.find(item => item.id === state.activeTaskId);
-  const canChange = canEdit() || (Boolean(task) && canUpdateTaskStatus(task));
+  const permissions = reviewPermissions(task);
+  const canChange = permissions.ordinaryStatus || permissions.decide || permissions.manage;
   stepper.classList.toggle('hidden', !canChange);
   if (!canChange) {
     stepper.innerHTML = '';
     return;
   }
 
-  stepper.innerHTML = steps.map((s, i) => `
-    <button class="status-step${currentStatus === s.key ? ' active' : ''}${i < curIdx ? ' past' : ''}"
+  stepper.innerHTML = steps.map((s, i) => {
+    const past = i < curIdx && (s.key !== 'til_review' || task?.reviewOutcome === 'approved');
+    const disabled = currentStatus === 'til_review'
+      ? s.key === 'fullfort' ? !permissions.decide : s.key === 'til_review' ? !permissions.manage : true
+      : s.key === 'til_review' && !permissions.send;
+    return `
+    <button class="status-step${currentStatus === s.key ? ' active' : ''}${past ? ' past' : ''}"
             data-status="${s.key}"
-            onclick="quickSetStatus('${s.key}')"
-            ${!canChange ? 'disabled' : ''}>
+            ${s.key === 'til_review' && !task ? 'title="Lagre oppgaven først for å sende til review."' : ''}
+            ${disabled ? 'disabled' : ''}>
       <span class="step-circle">
-        ${i < curIdx ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
+        ${past ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
       </span>
       <span class="step-label">${s.label}</span>
     </button>
     ${i < steps.length - 1 ? `<div class="step-line${i < curIdx ? ' filled' : ''}"></div>` : ''}
-  `).join('');
+  `; }).join('');
 }
 
 // ============================================================
@@ -3259,7 +3487,7 @@ function buildTasksCsv(collections) {
   const headers = [
     'ID', 'Tittel', 'Beskrivelse', 'Prioritet', 'Status', 'Kategori',
     'Ansvarlig', 'Startdato', 'Frist', 'Deloppgaver', 'Avhengigheter',
-    'Arkivert', 'Opprettet', 'Sist oppdatert', 'Lenker'
+    'Arkivert', 'Opprettet', 'Sist oppdatert', 'Lenker', 'Reviewer'
   ];
   const rows = collections.tasks.map(task => {
     const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
@@ -3279,7 +3507,8 @@ function buildTasksCsv(collections) {
       task.deletedAt ? 'Ja' : '',
       formatDate(task.createdAt),
       formatDate(task.updatedAt),
-      (Array.isArray(task.links) ? task.links : []).map(link => String(link.url || '')).join(' | ')
+      (Array.isArray(task.links) ? task.links : []).map(link => String(link.url || '')).join(' | '),
+      task.reviewerName || ''
     ];
   });
   return createCsv(headers, rows);
@@ -3449,6 +3678,28 @@ function updateAdminUpdateUI() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initTimeline();
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-review-action]');
+    if (!button) return;
+    event.preventDefault(); event.stopPropagation();
+    void handleReviewAction(button);
+  }, true);
+  document.getElementById('status-stepper').addEventListener('click', event => {
+    const button = event.target.closest('[data-status]');
+    if (button && !button.disabled) void quickSetStatus(button.dataset.status);
+  });
+  document.getElementById('review-dialog-form').addEventListener('submit', submitReviewDialog);
+  document.getElementById('review-dialog').addEventListener('keydown', event => {
+    if (event.key !== 'Tab') return;
+    const controls = [...document.querySelectorAll('#review-dialog button, #review-dialog select, #review-dialog textarea')]
+      .filter(el => !el.disabled && el.getClientRects().length);
+    const first = controls[0], last = controls[controls.length - 1];
+    if (!first) return;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  });
+  ['review-dialog-close', 'review-dialog-cancel'].forEach(id => document.getElementById(id).addEventListener('click', closeReviewDialog));
+  setupBackdropClose(document.getElementById('review-dialog'), closeReviewDialog);
 
   // Register service worker med oppdateringsdeteksjon
   if ('serviceWorker' in navigator) {
@@ -3638,6 +3889,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!document.getElementById('confirm-dialog').classList.contains('hidden')) return;
+    if (!document.getElementById('review-dialog').classList.contains('hidden')) { closeReviewDialog(); return; }
     if (isTodoPanelOverlayOpen()) {
       closeTodoPanel();
       return;

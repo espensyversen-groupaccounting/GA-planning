@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.17.0`
+Gjeldende appversjon: `v1.18.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -103,7 +103,8 @@ Opprettes eller oppdateres automatisk ved første innlogging etter at brukeren f
 - `priority`: `høy` | `medium` | `lav`
 - `categoryId`: string eller null
 - `categoryName`, `categoryColor`: snapshot-felter for stabil visning
-- `status`: `ikke_startet` | `i_gang` | `fullfort`
+- `status`: `ikke_startet` | `i_gang` | `til_review` | `fullfort`
+- Review (valgfritt): `reviewerId`, `reviewerName`, `reviewRequestedBy`, `reviewRequestedAt`, `reviewedBy`, `reviewedAt`, `reviewOutcome` (`approved`/`returned`/null). Manglende felter betyr ingen review.
 - `assignedTo`, `assignedToName`
 - `collaborators`: valgfritt array av uid-strenger; manglende felt behandles som tomt
 - `collaboratorNames`: snapshot-navn i samme rekkefølge som `collaborators`
@@ -151,7 +152,7 @@ Kategorier kan skjules eller slettes. Oppgaver lagrer også kategoriens navn/far
 Kommentarer abonneres per oppgave og sorteres stigende på `createdAt`. Listener-feil vises vedvarende i Kommentarer-fanen og logges i konsollen. `Send kommentar` er en egen korallfarget handling; `Lagre` lagrer bare oppgaven. Ved usendt kommentartekst må brukeren bekrefte før oppgaven lukkes eller lagres uten kommentaren.
 
 ### `users/{userId}/notifications/{notifId}`
-- `type`: `task_assigned` | `comment_added` | `status_changed`
+- `type`: `task_assigned` | `comment_added` | `status_changed` | `review_requested` | `review_approved` | `review_returned`
 - `taskId`, `taskTitle`, `message`
 - `read`, `createdAt`
 
@@ -172,6 +173,7 @@ Toppkort:
 Kortene er midlertidige dashboardfiltre og navigerer ikke til Oppgaver-fanen. De tre første viser kun sin tidsseksjon. De to siste filtrerer på tvers av tidsseksjonene; treff utenfor tidsklassifiseringen vises da i den midlertidige seksjonen `Andre treff`. Aktivt filter kombineres med `Team`/`Mine`, nullstilles ved nytt klikk eller Escape og lagres ikke i `localStorage`. De nederste seksjonene `Trenger utfylling` og `Teamoversikt` påvirkes ikke av filteret.
 
 Dashboardseksjoner:
+- `Review`: tverrgående seksjon under toppkortene, uavhengig av aktivt dashboardfilter. `Du skal reviewe` er personlig og lik i Team/Mine. `Venter på review` viser i Team alle andre reviewere, og i Mine oppgaver der brukeren er hovedansvarlig eller avsender, men ikke reviewer. Tomme grupper/hel seksjon skjules. Antallet er summen av de to disjunkte gruppene.
 - `Forfalt og i dag`: åpne oppgaver, deloppgaver og ToDo-er med passert frist eller frist i dag.
 - `Neste 7 dager`: åpne oppgaver, deloppgaver og ToDo-er med frist fra i morgen til og med syv dager frem.
 - `I gang`: påbegynte oppgaver som ikke allerede er fanget av de to første tidsvinduene. Seksjonen er åpen som standard og kan kollapses.
@@ -287,7 +289,28 @@ Lagrede deltakere og deloppgaveansvarlige som ikke lenger finnes i `state.users`
 
 Deloppgaver er fortsatt et array inne i oppgavedokumentet. Firestore-reglene kan derfor ikke gi et Medlem skrivetilgang bare til sitt eget arrayelement. Deloppgaveansvar i v1.11.0 er et koordineringsverktøy: personen ser oppgaven i `Mine`, men kan ikke krysse av eller redigere deloppgaven. Det krever egne deloppgavedokumenter i en senere arkitektur.
 
+## Review-flyt
+Review gjelder bare lagrede oppgaver og er valgfritt. Direkte fullføring uten review er fortsatt mulig. Firetrinnsstepperen viser Ikke startet, I gang, Til review og Fullført; direkte fullføring merker ikke det hoppede review-steget som godkjent.
+
+`reviewPermissions(task)` i `app.js` er felles kilde for stepper, modalpanel og kort: Admin/Teamleder kan sende åpne oppgaver, bare den valgte revieweren kan godkjenne/sende tilbake, og andre redaktører kan trekke tilbake/bytte reviewer. Reviewer velges kun blant aktive Admin/Teamleder-profiler, aldri innlogget bruker. Ulagrede oppgaver må lagres først. Kortets avhuking betyr fortsatt fullføring; ved aktiv review åpner den godkjenningsdialogen for reviewer, og er ikke tilgjengelig for andre.
+
+`performTaskReview()` i `firestore.js` håndterer send/bytt, godkjenn, send tilbake og trekk tilbake. Transaksjonen leser fersk oppgave, avviser soft-slettede dokumenter og sammenligner forventet status, reviewer-ID og request-timestamp. Timestampnøkkelen bevarer nanosekundpresisjon. Dermed avvises også en gammel dialog etter at samme reviewer har fått en ny review-runde.
+
+Status, review-felter og eventuell kommentar skrives i samme transaksjon. Tilbakesending krever tekst. Kommentarene bruker `commentCreateData()`, samme format som vanlig `addComment()`, og `userId` er alltid innlogget bruker. Kommentar-ID opprettes utenfor callbacken slik at retry ikke lager ekstra kommentarer. Prefikser er Sendt til review:, Godkjent: og Sendt tilbake:. Feiler kommentaren, rulles også status tilbake.
+
+Review-handlinger oppdaterer `detailsUpdatedAt`. Vanlig status-/detaljlagring kontrollerer fersk review-tilstand: direkte overgang inn i review eller ut av review avvises. Tittel/beskrivelse kan fortsatt redigeres med uendret review-status. Gamle detaljmodaler får konfliktfeil fremfor å overskrive beslutningen.
+
+Review-varsler er separate bieffekter med dedupliserte mottakere og ingen varsling av egen handling. Godkjenning/tilbakesending varsler hovedansvarlig og avsender, sending/bytte varsler bare ny reviewer. Ingen ekstra status_changed sendes ved godkjenning. Varslingsfeil logges og gir mild advarsel; lagret review rapporteres fortsatt som vellykket.
+
+Review-panel i Detaljer viser reviewer, avsender, dato og snarvei til eksisterende lenkeseksjon. Reviewdialogen bruker listeners/data-attributter, har fokusavgrensning, og Escape lukker bare øverste dialog. Eksisterende showConfirm-opprydding er bevart.
+
+`classifyDashboardItem()` er uendret: til_review teller ikke som i_gang eller fullført. Oppgaver med frist i et vanlig tidsvindu ligger fortsatt i nøyaktig én fristseksjon, i tillegg til Review. Review-oppgaver uten tidsseksjon legges ikke til via Alt fremover eller Andre treff; de samles i Review. Eksisterende datakvalitets-/teamseksjoner er fortsatt tverrgående. `taskInvolvement()` og Mine-utvalget er uendret; reviewer blir ikke automatisk involvert.
+
+**Kjent begrensning:** Review er en klientstyrt arbeidsflyt, ikke en godkjenningssperre håndhevet av Firestore-reglene. Admin/Teamleder kan teknisk omgå flyten med direkte skriving eller en eldre klient. Medlem kan ikke skrive review-feltene og får derfor ingen review-handlinger eller plass i reviewer-utvalget. Regelendring må vurderes før første Medlem skal delta i review. Hele teamet bør oppdatere appen ved utrulling.
+
 ## Gjentakende oppgaver
+Review-feltene kopieres ikke til nye forekomster: `reviewerId`, `reviewerName`, `reviewRequestedBy`, `reviewRequestedAt`, `reviewedBy`, `reviewedAt` og `reviewOutcome` er utelatt fra eksisterende eksplisitte kopiliste. En forekomst starter uten reviewer. Generatorens transaksjoner og datoberegning er uendret.
+
 Admin og Teamleder kan gjøre en oppgave ukentlig, månedlig eller årlig gjentakende fra Detaljer-fanen. Gjentakelse krever ferdigdato. Når serien opprettes, lagres ferdigdatoen som `recurrence.anchorDate`; malen er den første forekomsten, og genererte forekomster kommer etter denne datoen. Endres malens ferdigdato senere, beholdes ankeret slik at hele serien ikke forskyves utilsiktet.
 
 Klienten genererer forekomster gjennom 12 kalendermåneder fra dagens dato, med horisontens sluttdato inkludert. Ved månedlig dag 29, 30 eller 31 brukes månedens siste dag når den valgte datoen ikke finnes. Årlig gjentakelse bruker måned og dag fra ankerdatoen; 29. februar blir 28. februar i år som ikke er skuddår. Startdato og deloppgavefrister forskyves med samme avstand til ferdigdatoen som på malen. Nye forekomster starter som `ikke_startet`, og deloppgaver starter som ikke fullført.
@@ -344,7 +367,7 @@ Ett knappetrykk klargjør tre filer:
 
 CSV-filene begynner med UTF-8 BOM, deretter Excels `sep=;`-direktiv på egen linje, og bruker standard CSV-sitering. Dette gir norske tegn og riktige kolonner ved dobbeltklikk i Excel, uavhengig av Windows-brukerens regionale listeskilletegn. Ansvarlige vises med navn når brukerprofilen finnes, og arkiverte rader merkes eksplisitt.
 
-Oppgave-CSV har kolonnen «Lenker» helt sist, med adressene skilt av ` | `. JSON får `links` gjennom eksisterende råsnapshot-eksport; JSON-genereringen og ToDo-CSV er uendret.
+Oppgave-CSV har «Lenker» med adressene skilt av ` | `, og «Reviewer» helt sist etter denne. Statuskolonnen bruker «Til review» for den nye statusen. JSON får lenke- og review-felter gjennom eksisterende råsnapshot-eksport; JSON-genereringen og ToDo-CSV er uendret.
 
 Eksportkortet og handleren er avgrenset til Admin i klienten. Dagens Firestore-regler gir imidlertid alle allowlistede roller lesetilgang til de eksporterte samlingene, så Admin-avgrensningen er ikke en separat serverside-sikkerhetsgrense. En håndhevet Admin-only eksport krever senere endring av regler eller backendarkitektur.
 
@@ -357,7 +380,7 @@ Bekreftelsesdialoger har én aktiv instans og én felles oppryddingsvei for OK, 
 
 Deloppgaveendringer har felles feiltilbakemelding og laster oppgaven på nytt ved feil. Brukere uten redigeringsrett får ikke aktive deloppgavekontroller.
 
-Full redigering av en eksisterende oppgave bruker transaksjon med `updatedAt`-sjekk. Hvis en bruker har hatt en gammel modal åpen og en annen allerede har lagret endringer, stoppes overskrivingen og brukeren må åpne oppgaven på nytt.
+Full redigering av en eksisterende oppgave bruker transaksjon med `detailsUpdatedAt`-sjekk (fallback til `updatedAt` på eldre oppgaver). Hvis en bruker har hatt en gammel modal åpen og en annen allerede har lagret detalj- eller review-endringer, stoppes overskrivingen og brukeren må åpne oppgaven på nytt.
 
 Alle skriver legger på `clientAppVersion`, `clientBuild`, `clientWriteId` og `writeSchemaVersion` for sporbarhet. Rules krever ikke app-versjon per nå, fordi for streng versjonsgating tidligere gjorde det lett å blokkere legitime brukere ved utrulling.
 

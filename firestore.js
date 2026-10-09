@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.17.0';
-const CLIENT_BUILD = 11700;
+const CLIENT_APP_VERSION = '1.18.0';
+const CLIENT_BUILD = 11800;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -238,6 +238,7 @@ async function getTask(taskId) {
 }
 
 function taskCreateData(data) {
+  if (data.status === 'til_review') throw new Error('REVIEW_REQUIRED');
   return {
     ...data,
     subtasks: data.subtasks || [],
@@ -319,7 +320,45 @@ async function generateRecurringTaskInstances(templateId, horizonDate, buildPlan
   return created;
 }
 
-async function updateTask(taskId, data) {
+function taskReviewState(task) {
+  return {
+    status: task?.status || 'ikke_startet',
+    reviewerId: task?.reviewerId || null,
+    reviewRequestedAt: task?.reviewRequestedAt?.seconds !== undefined
+      ? `${task.reviewRequestedAt.seconds}:${task.reviewRequestedAt.nanoseconds}`
+      : task?.reviewRequestedAt?.toMillis?.() ?? null,
+  };
+}
+
+function assertTaskReviewState(task, expected) {
+  const actual = taskReviewState(task);
+  if (expected && Object.keys(actual).some(key => actual[key] !== expected[key])) {
+    throw new Error('REVIEW_CHANGED');
+  }
+}
+
+function assertOrdinaryTaskStatus(task, status) {
+  if (status === 'til_review' && task.status !== 'til_review') throw new Error('REVIEW_REQUIRED');
+  if (task.status === 'til_review' && status !== 'til_review') throw new Error('REVIEW_REQUIRED');
+}
+
+async function updateTask(taskId, data, expectedReview = null) {
+  if (Object.prototype.hasOwnProperty.call(data, 'status')) {
+    const ref = db.collection('tasks').doc(taskId);
+    return db.runTransaction(async tx => {
+      const doc = await tx.get(ref);
+      if (!doc.exists || doc.data().deletedAt) throw new Error('TASK_NOT_FOUND');
+      assertTaskReviewState(doc.data(), expectedReview);
+      assertOrdinaryTaskStatus(doc.data(), data.status);
+      tx.update(ref, {
+        ...data,
+        ...(canEdit() ? { detailsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() } : {}),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastEditedBy: auth.currentUser.uid,
+        ...writeMeta(),
+      });
+    });
+  }
   await db.collection('tasks').doc(taskId).update({
     ...data,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -332,9 +371,10 @@ async function updateTaskIfUnchanged(taskId, data, expectedUpdatedAt) {
   const ref = db.collection('tasks').doc(taskId);
   await db.runTransaction(async tx => {
     const doc = await tx.get(ref);
-    if (!doc.exists) throw new Error('TASK_NOT_FOUND');
+    if (!doc.exists || doc.data().deletedAt) throw new Error('TASK_NOT_FOUND');
 
     const current = doc.data();
+    if (Object.prototype.hasOwnProperty.call(data, 'status')) assertOrdinaryTaskStatus(current, data.status);
     const currentUpdatedAt = current.detailsUpdatedAt || current.updatedAt;
     const expectedMs = expectedUpdatedAt?.toMillis ? expectedUpdatedAt.toMillis() : null;
     const currentMs = currentUpdatedAt?.toMillis ? currentUpdatedAt.toMillis() : null;
@@ -522,16 +562,77 @@ function subscribeToComments(taskId, callback, onError) {
     }, onError);
 }
 
-async function addComment(taskId, text) {
+function commentCreateData(taskId, text) {
   const u = auth.currentUser;
-  await db.collection('comments').add({
+  return {
     taskId,
     userId: u.uid,
-    userDisplayName: u.displayName,
-    userPhotoURL: u.photoURL,
+    userDisplayName: u.displayName || u.email || u.uid,
+    userPhotoURL: u.photoURL || null,
     text,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     ...writeMeta()
+  };
+}
+
+async function addComment(taskId, text) {
+  await db.collection('comments').add(commentCreateData(taskId, text));
+}
+
+async function performTaskReview(taskId, action, expected, options = {}) {
+  const uid = auth.currentUser.uid;
+  const text = String(options.message || '').trim();
+  if (!canEdit()) throw new Error('REVIEW_FORBIDDEN');
+  if (action === 'return' && !text) throw new Error('REVIEW_FEEDBACK_REQUIRED');
+  if (!['send', 'approve', 'return', 'withdraw'].includes(action)) throw new Error('REVIEW_FORBIDDEN');
+  if (action === 'send' && (!options.reviewerId || options.reviewerId === uid)) throw new Error('REVIEW_REVIEWER_INVALID');
+  const prefix = { send: 'Sendt til review:', approve: 'Godkjent:', return: 'Sendt tilbake:' }[action];
+  // Allocate outside the callback so retries cannot create extra comments.
+  const commentRef = text && prefix ? db.collection('comments').doc() : null;
+  const ref = db.collection('tasks').doc(taskId);
+  return db.runTransaction(async tx => {
+    const doc = await tx.get(ref);
+    if (!doc.exists || doc.data().deletedAt) throw new Error('TASK_NOT_FOUND');
+    const current = doc.data();
+    assertTaskReviewState(current, expected);
+    let reviewer = null;
+    if (action === 'send') {
+      if (current.status === 'fullfort') throw new Error('REVIEW_CHANGED');
+      const userDoc = await tx.get(db.collection('users').doc(options.reviewerId));
+      if (!userDoc.exists || !['admin', 'teamleder'].includes(userDoc.data().role)) throw new Error('REVIEW_REVIEWER_INVALID');
+      reviewer = userDoc.data();
+    } else {
+      if (current.status !== 'til_review') throw new Error('REVIEW_CHANGED');
+      if (action !== 'withdraw' && current.reviewerId !== uid) throw new Error('REVIEW_FORBIDDEN');
+    }
+    const timestamp = firebase.firestore.FieldValue.serverTimestamp();
+    let changes;
+    if (action === 'send') {
+      changes = {
+        status: 'til_review', reviewerId: options.reviewerId,
+        reviewerName: reviewer.displayName || reviewer.email || options.reviewerId,
+        reviewRequestedBy: uid, reviewRequestedAt: timestamp,
+        reviewedBy: null, reviewedAt: null, reviewOutcome: null,
+      };
+    } else if (action === 'withdraw') {
+      changes = {
+        status: 'i_gang', reviewerId: null, reviewerName: null,
+        reviewRequestedBy: null, reviewRequestedAt: null,
+        reviewedBy: null, reviewedAt: null, reviewOutcome: null,
+      };
+    } else {
+      changes = {
+        status: action === 'approve' ? 'fullfort' : 'i_gang',
+        reviewedBy: uid, reviewedAt: timestamp,
+        reviewOutcome: action === 'approve' ? 'approved' : 'returned',
+      };
+    }
+    tx.update(ref, {
+      ...changes, detailsUpdatedAt: timestamp, updatedAt: timestamp,
+      lastEditedBy: uid, ...writeMeta(),
+    });
+    if (commentRef) tx.set(commentRef, commentCreateData(taskId, `${prefix} ${text}`));
+    return { before: current, changes };
   });
 }
 

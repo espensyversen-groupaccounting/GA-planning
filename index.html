@@ -151,6 +151,11 @@
             </div>
           </div>
           <div class="stats-grid" id="stats-grid"></div>
+          <section id="dashboard-review-section" class="dashboard-section review-dashboard" hidden>
+            <h2 class="section-title">Review <span id="dashboard-review-count" class="dashboard-section-count">0</span></h2>
+            <div id="review-mine-group" class="review-group" hidden><h3>Du skal reviewe</h3><div id="review-mine-list" class="task-list-compact"></div></div>
+            <div id="review-waiting-group" class="review-group" hidden><h3>Venter på review</h3><div id="review-waiting-list" class="task-list-compact"></div></div>
+          </section>
           <div id="dashboard-filter-bar" class="dashboard-filter-bar" hidden>
             <span id="dashboard-filter-summary"></span>
             <button class="dashboard-filter-reset" type="button" onclick="clearDashboardFilter()">Nullstill filter</button>
@@ -240,6 +245,7 @@
                 <option value="">Alle statuser</option>
                 <option value="ikke_startet">Ikke startet</option>
                 <option value="i_gang">I gang</option>
+                <option value="til_review">Til review</option>
                 <option value="fullfort">Fullført</option>
               </select>
               <select id="filter-priority" class="filter-select">
@@ -296,7 +302,7 @@
               <div class="timeline-filter-row">
                 <label><span>Person</span><select id="timeline-person-filter" class="filter-select"><option value="">Hele teamet</option></select></label>
                 <label><span>Kategori</span><select id="timeline-category-filter" class="filter-select"><option value="">Alle kategorier</option></select></label>
-                <label><span>Status</span><select id="timeline-status-filter" class="filter-select"><option value="">Alle statuser</option><option value="ikke_startet">Ikke startet</option><option value="i_gang">I gang</option></select></label>
+                <label><span>Status</span><select id="timeline-status-filter" class="filter-select"><option value="">Alle statuser</option><option value="ikke_startet">Ikke startet</option><option value="i_gang">I gang</option><option value="til_review">Til review</option></select></label>
                 <label><span>Sorter etter</span><select id="timeline-sort" class="filter-select"><option value="start">Startdato</option><option value="category">Kategori</option><option value="assignee">Ansvarlig</option></select></label>
                 <label class="timeline-subtask-toggle"><input id="timeline-show-subtasks" type="checkbox" /><span class="timeline-toggle-control" aria-hidden="true"></span><span class="timeline-toggle-text">Vis deloppgavefrister</span></label>
               </div>
@@ -588,6 +594,7 @@
 
         <!-- Tab: Detaljer -->
         <div id="tab-details" class="tab-pane active">
+          <section id="task-review-panel" class="task-review-panel" hidden aria-label="Review"></section>
           <!-- Visuell status-stepper (erstatter dropdown) -->
           <div id="status-stepper" class="status-stepper"></div>
           <div id="subtask-timeline" class="subtask-timeline hidden"></div>
@@ -595,6 +602,7 @@
           <select id="task-status" class="hidden" aria-hidden="true">
             <option value="ikke_startet" selected>Ikke startet</option>
             <option value="i_gang">I gang</option>
+            <option value="til_review">Til review</option>
             <option value="fullfort">Fullført</option>
           </select>
           <form id="task-form" autocomplete="off">
@@ -770,6 +778,16 @@
       </div>
 
     </div>
+  </div>
+
+  <div id="review-dialog" class="modal-overlay review-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="review-dialog-title">
+    <form id="review-dialog-form" class="review-dialog-container">
+      <div class="review-dialog-header"><h3 id="review-dialog-title">Send til review</h3><button id="review-dialog-close" type="button" class="icon-btn modal-close-btn" aria-label="Lukk"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+      <label id="reviewer-field" class="form-group"><span class="form-label">Reviewer</span><select id="reviewer-select" class="form-input"></select></label>
+      <label class="form-group"><span id="review-message-label" class="form-label">Melding (valgfritt)</span><textarea id="review-message" class="form-input form-textarea" rows="3"></textarea></label>
+      <p id="review-dialog-error" class="review-dialog-error" role="alert" hidden></p>
+      <div class="confirm-buttons"><button id="review-dialog-cancel" type="button" class="btn btn-secondary">Avbryt</button><button id="review-dialog-submit" type="submit" class="btn btn-primary">Send til review</button></div>
+    </form>
   </div>
 
   <!-- ===== BEKREFTELSESDIALOG ===== -->
