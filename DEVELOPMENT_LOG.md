@@ -1,5 +1,51 @@
 # Development Log
 
+## v1.20.0 - 2026-10-09
+
+### Arbeidsliste med rangering per person
+- Ny js/worklist.js, lastet etter timeline.js og før app.js, inkludert i service-worker APP_FILES. Plassert under Review, over fristseksjonene. Personvelger uavhengig av Team/Mine/toppfiltre; standard innlogget bruker uten lagring av person. Kollaps lagres separat, åpen som standard.
+- Felles worklistEntries velger involverte åpne oppgaver (ikke til_review) og egne åpne ToDo-er. Per-person workRank på begge dokumenttyper; nummererte rangerte og urangerte sortert med eksisterende hastegrad. Stabil fallback ved like verdier. Type:id hindrer kollisjon mellom tasks og todos.
+- Egen Pointer Events-implementasjon etter ToDo-mønsteret; ToDo-koden røres ikke. Intern maks høyde omtrent seks kort, overscroll-behavior-y auto, automatisk intern rulling, touch-hold, riktig plassholderhøyde, tastatur/piltaster/Home/End/Escape og aria-live. Sanntidsrendering utsettes under interaksjonen.
+- Diskret Fjern fra rangering-knapp fjerner bare den valgte personens nøkkel. Valgt for å unngå tvetydig slipp ved skillelinjen.
+- updateWorkRank skriver ett dokument via FieldPath og writeMeta. Ingen updatedAt/detailsUpdatedAt/lastEditedBy-endring. Tight gaps normaliseres i én blandet batch, maksimalt 500 dokumenter; over grensen avvises før noen skriving. Feil gir tilbakestilling og ny lesing av faktiske data.
+- ToDo-konvertering kopierer fersk workRank i eksisterende transaksjon. Gjentakelsesgeneratorens eksplisitte kopiliste utelater allerede feltet og er uendret. Fullføring/review/gjenåpning bevarer rangeringen. JSON-eksport inkluderer feltet automatisk.
+- Medlem har lesetilgang uten rangeringskontroller. Regler, testfiler, js/todos.js, js/timeline.js, todos.sortOrder, taskInvolvement, classifyDashboardItem, review-logikk og toppkortberegning er uendret.
+- Endrede filer: app.js, firestore.js, index.html, styles.css, service-worker.js, CLAUDE.md, DEVELOPMENT_LOG.md. Ny fil: js/worklist.js. Versjon 1.20.0 / build 12000.
+
+### Tester
+Lokale automatiserte Chrome/Playwright-tester med syntetiske data, ekte Chrome-touchinput og separat lokal Firestore-emulatorintegrasjon. Ingen manuell produksjonstest eller fysisk mobiltest; disse må gjentas ved utrulling.
+
+| Krav | Resultat |
+|---|---|
+| 1 | Bestått: egne åpne oppgaver og ToDo-er, også deltaker/deloppgave. |
+| 2 | Bestått: personvelger bytter liste; faktisk sidelasting nullstiller til innlogget bruker. |
+| 3 | Bestått: review/fullført/slettet utelates. |
+| 4 | Bestått: deltaker- og deloppgaveforklaring. |
+| 5 | Kontrollert: urangerte bruker eksisterende compareTasksByUrgency med stabil fallback; egen del uten nummer. |
+| 6 | Bestått: urangert oppgave inn i rangert del får numerisk rangering. |
+| 7 | Bestått: nederste flyttet øverst, ett dokument skrevet; rangering vises etter ny lasting. |
+| 8 | Bestått i nettleser og ekte SDK: FieldValue.delete fjerner bare P. |
+| 9 | Bestått: samme oppgave har uavhengige rank-verdier for to personer. |
+| 10 | Bestått i lagringslaget: annen persons rangering oppdateres og øvrige nøkler bevares; personvelger kontrollert. Produksjonstest på Christines konto gjenstår. |
+| 11 | Bestått: review skjuler oppgaven, i_gang tar den tilbake med samme rank. |
+| 12 | Bestått: fullføring skjuler, gjenåpning beholder nummer/rank. |
+| 13 | Bestått i nettleser og ekte transaksjon: konvertering bevarer alle personers ferske rank. |
+| 14 | Bestått: recurringTaskInstanceData utelater workRank. |
+| 15 | Bestått med ekte SDK/emulator: både eldre og moderne dokument kan detaljlagres med gammel forventet token etter rangeringsskriving. |
+| 16 | Bestått: Enter/Home/Enter lagrer; Escape avbryter. |
+| 17 | Bestått: touch-hold og vanlig touch-rulling; ikke utilsiktet flytting. Ingen horisontal overflow ved 390 px. |
+| 18 | ToDo-modulen uendret; sortOrder bevart ved rangering/normalisering. |
+| 19 | Dashboardklassifisering/toppkort/Review/datakvalitet er kildekodemessig uendret; arbeidslisten påvirkes ikke av scope/filter. |
+| 20 | Bestått: fersk inkognitokontekst, SW 1.20.0 aktiverer og cacher js/worklist.js med HTTP 200. |
+| 21 | Bestått: normalizeExportValue + JSON bevarer workRank. |
+| Tillegg: 15 elementer | Bestått: nederste til toppen med mus og Chrome-touchinput i én dragging; intern autoscroll og korrekt plassholderhøyde. |
+
+- Ekstra: simulert lagringsfeil gir faktisk rangering tilbake; 501 normaliseringsdokumenter avvises uten skriving; blandet normaliseringsbatch består; rendering fryses ved sanntidsoppdatering; slipp utenfor avbryter.
+- node --check: alle seks JavaScript-filer består.
+- Uendrede Firestore-regeltester: 24/24 består.
+- Tidslinjens v1.19.2-regresjonstest består: gruppering/sortering, filtre, tooltip, mobilmarkør og åpning med klikk/tastatur.
+- Desktop- og mobilskjermbilder kontrollert. Midlertidig testserver og emulator stoppet. Ikke deployet.
+
 ## v1.19.2 - 2026-10-09
 
 ### Gruppering, sortering og synlige hover-bokser

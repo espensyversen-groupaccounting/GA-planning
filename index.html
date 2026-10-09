@@ -157,6 +157,23 @@
             <div id="review-waiting-group" class="review-group" hidden><h3>Venter på review</h3><div id="review-waiting-list" class="task-list-compact"></div></div>
             <div id="review-approved-group" class="review-group" hidden><h3>Godkjent, klar til å lukkes</h3><div id="review-approved-list" class="task-list-compact"></div></div>
           </section>
+          <section id="worklist-section" class="dashboard-section">
+            <div class="section-header-row worklist-header">
+              <button id="worklist-toggle" type="button" class="worklist-toggle" aria-expanded="true" aria-controls="worklist-scroll">
+                <span class="section-title">Arbeidsliste <span id="worklist-count" class="dashboard-section-count">0</span></span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <select id="worklist-person" aria-label="Person i arbeidslisten"></select>
+            </div>
+            <div id="worklist-scroll" class="worklist-scroll">
+              <div id="worklist-ranked" class="worklist-ranked" role="list" aria-label="Rangert arbeidsliste"></div>
+              <div id="worklist-unranked-group">
+                <h3 class="worklist-divider">Ikke prioritert ennå</h3>
+                <div id="worklist-unranked" role="list"></div>
+              </div>
+            </div>
+            <div id="worklist-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+          </section>
           <div id="dashboard-filter-bar" class="dashboard-filter-bar" hidden>
             <span id="dashboard-filter-summary"></span>
             <button class="dashboard-filter-reset" type="button" onclick="clearDashboardFilter()">Nullstill filter</button>
@@ -872,6 +889,7 @@
   <script src="firestore.js"></script>
   <script src="js/todos.js"></script>
   <script src="js/timeline.js"></script>
+  <script src="js/worklist.js"></script>
   <script src="app.js"></script>
 
 </body>

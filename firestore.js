@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.19.2';
-const CLIENT_BUILD = 11902;
+const CLIENT_APP_VERSION = '1.20.0';
+const CLIENT_BUILD = 12000;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -568,11 +568,54 @@ async function convertTodoToTask(todoId, taskData) {
       throw new Error('TODO_NOT_OPEN');
     }
 
-    tx.set(taskRef, newTaskData);
+    const workRank = todoDoc.data().workRank;
+    tx.set(taskRef, { ...newTaskData, ...(workRank && typeof workRank === 'object' ? { workRank } : {}) });
     tx.update(todoRef, archiveData);
   });
 
   return taskRef.id;
+}
+
+// Ranking is not a content edit: preserve both timestamps and lastEditedBy.
+function workRankWriteArgs(personId, rank) {
+  if (!canEdit() || !personId || (rank !== null && !Number.isFinite(rank))) {
+    throw new Error('Rangeringen kan ikke lagres.');
+  }
+  const args = [
+    new firebase.firestore.FieldPath('workRank', personId),
+    rank === null ? firebase.firestore.FieldValue.delete() : rank
+  ];
+  Object.entries(writeMeta()).forEach(([key, value]) => args.push(key, value));
+  return args;
+}
+
+function workRankRef(entry) {
+  if (!['tasks', 'todos'].includes(entry.type) || !entry.id) {
+    throw new Error('Ugyldig element i arbeidslisten.');
+  }
+  return db.collection(entry.type).doc(entry.id);
+}
+
+async function updateWorkRank(entry, personId, rank) {
+  await workRankRef(entry).update(...workRankWriteArgs(personId, rank));
+}
+
+async function normalizeWorkRanks(entries, personId) {
+  if (entries.length > 500) {
+    throw new Error('Arbeidslisten har mer enn 500 elementer. Flyttingen kan ikke lagres uten å dele opp rangeringen.');
+  }
+  const batch = db.batch();
+  entries.forEach((entry, index) => {
+    batch.update(workRankRef(entry), ...workRankWriteArgs(personId, (index + 1) * 1000));
+  });
+  await batch.commit();
+}
+
+async function readWorklistItems(entries) {
+  return Promise.all(entries.map(async entry => {
+    const doc = await workRankRef(entry).get();
+    return { ...entry, data: doc.exists ? doc.data() : null };
+  }));
 }
 
 // ---- Comments ----

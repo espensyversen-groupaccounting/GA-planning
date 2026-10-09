@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.19.2';
+const APP_VERSION = '1.20.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -1067,6 +1067,7 @@ function clearDashboardFilter() {
 function renderDashboard() {
   updateDashboardScopeButtons();
   renderDashboardReview();
+  renderWorklist();
   const tasks = scopedTasks();
   const todos = scopedTodos();
   const open = tasks.filter(t => !isDoneItem(t));
@@ -3742,6 +3743,7 @@ function updateAdminUpdateUI() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initTimeline();
+  initWorklist();
   document.addEventListener('click', event => {
     const button = event.target.closest('[data-review-action]');
     if (!button) return;
