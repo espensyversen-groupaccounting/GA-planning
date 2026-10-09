@@ -1801,7 +1801,10 @@ body {
 .task-review-panel h3 { font-size: .95rem; color: #075985; overflow-wrap: anywhere; }
 .task-review-panel p { color: var(--text-2); font-size: .8rem; margin: 6px 0 10px; }
 .review-panel-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.review-links-shortcut { color: #075985; background: none; border: 0; text-decoration: underline; font: inherit; font-size: .85rem; cursor: pointer; }
+.review-links { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.review-links .task-link-main a { min-height: 32px; align-items: center; }
+.review-links .task-link-main a > span, .review-links .task-link-unsafe > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
+.review-links-shortcut { align-self: flex-start; min-height: 32px; color: #075985; background: none; border: 0; text-decoration: underline; font: inherit; font-size: .85rem; cursor: pointer; }
 .review-dialog { z-index: 340; align-items: center; padding: 16px; }
 .review-dialog-container { width: 100%; max-width: 440px; max-height: 85dvh; overflow-y: auto; background: var(--white); padding: 20px; border-radius: 8px; box-shadow: var(--shadow-md); }
 .review-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
@@ -1814,6 +1817,7 @@ body {
 @media (max-width: 600px) {
   .status-stepper { padding-left: 0; padding-right: 0; }
   .review-panel-actions .btn { min-height: 40px; }
+  .review-links .task-link-main a, .review-links-shortcut { min-height: 44px; }
   .review-context { padding-left: 8px; }
 }
 

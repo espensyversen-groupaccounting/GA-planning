@@ -1,5 +1,31 @@
 # Development Log
 
+## v1.18.1 - 2026-10-09
+
+### Dokumentlenker direkte i review-panelet
+- Den misvisende knappen «Åpne dokumentasjon» er erstattet med opptil tre lenker under avsenderlinjen. Flere lenker gir «+N til» som bruker eksisterende links-handling for å rulle til lenkefeltet. Ingen lenker gir ingen lenkedel.
+- Felles `taskLinkLabelHtml()` brukes av review-panelet og Detaljers lenkefelt. Den gjenbruker uendret `taskLinkInfo()`, `esc()`, ikon, target="_blank" og rel="noopener noreferrer". Ugyldige lagrede adresser er ren tekst.
+- Kompakt liste med kontrollert ombrekking og minst 44 px høye trykkflater på mobil. Detaljfeltets redigering og lagring er uendret.
+- Endrede filer: app.js, styles.css, firestore.js, service-worker.js, CLAUDE.md, DEVELOPMENT_LOG.md. Firestore-endringen er bare versjon/build. Versjon 1.18.1, build 11801 og ny service-worker-cache.
+- Review-transaksjoner, varsler, dashboardlogikk, lenkevalidering/-lagring, regler, testfiler og datamodell er ikke endret.
+
+### Tester
+Lokale Playwright-tester i Chrome med syntetiske data og mockede Firestore-skrivinger; ikke manuelle produksjonstester. Google-URL ble kontrollert ved ekte lenkeklikk mot en lokal nettverksstub, ikke ved tilgang til et faktisk Google-dokument.
+
+| Krav | Resultat |
+|---|---|
+| 1: Google-lenke med ikon/navn åpnes i ny fane | Bestått: riktig URL, target/rel og null window.opener; identisk ankermarkup i begge visninger. |
+| 2: Tre lenker / fem lenker og +2 til | Bestått: riktig antall og faktisk klikk på +2 til utløser rulling til lenkefeltet. |
+| 3: Ingen lenker | Bestått: ingen lenkedel eller tom overskrift. |
+| 4: Ugyldig lagret URL | Bestått: javascript-adresse er ikke klikkbar; HTML i navnet vises som tekst. |
+| 5: Eksisterende lenkefelt | Bestått: alle fem lenker, navnefelt og fjern-knapper beholdes; samme rendringshjelper. Lagringskoden er urørt. |
+| 6: Godkjenn og Send tilbake | Bestått i lokal regresjonstest: godkjenning via UI-klikk, tilbakesending med påkrevd kommentar, og totalt 42 review-assertions. |
+| 7: Mobil | Bestått ved 390 x 844 px: lesbare lenker, minst 44 px trykkflater og ingen horisontal overflow. Desktop- og mobilskjermbilder inspisert. |
+
+- `node --check`: bestått for app.js, firestore.js, service-worker.js, js/todos.js og js/timeline.js.
+- Uendrede Firestore-emulatortester: 24/24 bestått.
+- Ikke deployet. Tilgang til faktiske Google-dokumenter må kontrolleres etter publisering med produksjonskonto.
+
 ## v1.18.0 - 2026-10-09
 
 ### Review på oppgaver

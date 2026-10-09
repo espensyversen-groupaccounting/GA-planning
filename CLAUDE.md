@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.18.0`
+Gjeldende appversjon: `v1.18.1`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -302,7 +302,7 @@ Review-handlinger oppdaterer `detailsUpdatedAt`. Vanlig status-/detaljlagring ko
 
 Review-varsler er separate bieffekter med dedupliserte mottakere og ingen varsling av egen handling. Godkjenning/tilbakesending varsler hovedansvarlig og avsender, sending/bytte varsler bare ny reviewer. Ingen ekstra status_changed sendes ved godkjenning. Varslingsfeil logges og gir mild advarsel; lagret review rapporteres fortsatt som vellykket.
 
-Review-panel i Detaljer viser reviewer, avsender, dato og snarvei til eksisterende lenkeseksjon. Reviewdialogen bruker listeners/data-attributter, har fokusavgrensning, og Escape lukker bare øverste dialog. Eksisterende showConfirm-opprydding er bevart.
+Review-panel i Detaljer viser reviewer, avsender, dato og opptil tre dokumentlenker som åpnes direkte i ny fane. Panelet og lenkefeltet bruker samme `taskLinkLabelHtml()` med `taskLinkInfo()` og HTML-escaping; ugyldige adresser vises kun som tekst. Ved flere enn tre lenker ruller `+N til` til det eksisterende lenkefeltet. Uten lenker vises ingen lenkedel. Reviewdialogen bruker listeners/data-attributter, har fokusavgrensning, og Escape lukker bare øverste dialog. Eksisterende showConfirm-opprydding er bevart.
 
 `classifyDashboardItem()` er uendret: til_review teller ikke som i_gang eller fullført. Oppgaver med frist i et vanlig tidsvindu ligger fortsatt i nøyaktig én fristseksjon, i tillegg til Review. Review-oppgaver uten tidsseksjon legges ikke til via Alt fremover eller Andre treff; de samles i Review. Eksisterende datakvalitets-/teamseksjoner er fortsatt tverrgående. `taskInvolvement()` og Mine-utvalget er uendret; reviewer blir ikke automatisk involvert.
 

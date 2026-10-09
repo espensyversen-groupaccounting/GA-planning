@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.18.0';
+const APP_VERSION = '1.18.1';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -1936,10 +1936,14 @@ function renderReviewPanel(task) {
   panel.hidden = task?.status !== 'til_review';
   if (panel.hidden) { panel.innerHTML = ''; return; }
   const permissions = reviewPermissions(task);
+  const links = Array.isArray(task.links) ? task.links : [];
   panel.innerHTML = `
     <h3>Til review hos ${esc(task.reviewerName || 'ukjent reviewer')}</h3>
     <p>Sendt av ${esc(reviewActorName(task.reviewRequestedBy))} · ${esc(formatDate(task.reviewRequestedAt))}</p>
-    ${Array.isArray(task.links) && task.links.length ? '<button type="button" class="review-links-shortcut" data-review-action="links">Åpne dokumentasjon</button>' : ''}
+    ${links.length ? `<div class="review-links">
+      ${links.slice(0, 3).map(link => `<div class="task-link-main">${taskLinkLabelHtml(link)}</div>`).join('')}
+      ${links.length > 3 ? `<button type="button" class="review-links-shortcut" data-review-action="links">+${links.length - 3} til</button>` : ''}
+    </div>` : ''}
     <div class="review-panel-actions">
     ${permissions.decide ? '<button type="button" class="btn btn-primary" data-review-action="approve">Godkjenn</button><button type="button" class="btn btn-secondary" data-review-action="return">Send tilbake</button>' : ''}
     ${permissions.manage ? '<button type="button" class="btn btn-secondary" data-review-action="withdraw">Trekk tilbake review</button><button type="button" class="btn btn-secondary" data-review-action="send">Bytt reviewer</button>' : ''}
@@ -2955,6 +2959,12 @@ function taskLinksIndicatorHtml(task) {
   return count ? `<span class="task-links-indicator" title="${count} lenker" aria-label="${count} lenker">${taskLinkIcon()}${count}</span>` : '';
 }
 
+function taskLinkLabelHtml(link, info = taskLinkInfo(link)) {
+  return info.safe
+    ? `<a href="${esc(info.url)}" target="_blank" rel="noopener noreferrer" title="${esc(info.url)}">${taskLinkIcon(info.type)}<span>${esc(info.label)}</span></a>`
+    : `<span class="task-link-unsafe">${taskLinkIcon()}<span>${esc(info.label)}<small>${esc(link.url)} · Ugyldig adresse</small></span></span>`;
+}
+
 function renderTaskLinks(links) {
   state.activeTaskLinks = Array.isArray(links) ? links : [];
   const editable = Boolean(state.activeTaskId) && canEdit();
@@ -2967,9 +2977,7 @@ function renderTaskLinks(links) {
   hint.classList.toggle('hidden', !hint.textContent);
   list.innerHTML = state.activeTaskLinks.map(link => {
     const info = taskLinkInfo(link);
-    const label = info.safe
-      ? `<a href="${esc(info.url)}" target="_blank" rel="noopener noreferrer" title="${esc(info.url)}">${taskLinkIcon(info.type)}<span>${esc(info.label)}</span></a>`
-      : `<span class="task-link-unsafe">${taskLinkIcon()}<span>${esc(info.label)}<small>${esc(link.url)} · Ugyldig adresse</small></span></span>`;
+    const label = taskLinkLabelHtml(link, info);
     return `<div class="task-link-row">
       <div class="task-link-main">${label}
         ${editable && info.safe ? `<input class="form-input task-link-name" maxlength="200" data-link-id="${esc(link.id)}" value="${esc(link.title || '')}" placeholder="Valgfritt navn" aria-label="Navn på ${esc(info.label)}" />` : ''}
