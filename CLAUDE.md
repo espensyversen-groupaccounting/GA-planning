@@ -1,7 +1,7 @@
 # Strawberry Planleggingsapp - CLAUDE.md
 
 ## Prosjektstatus
-Gjeldende appversjon: `v1.20.0`
+Gjeldende appversjon: `v1.21.0`
 
 PWA-basert teamplanleggingsapp for Strawberry. Appen erstatter et tidligere Google Sheets-oppsett, men starter med blanke ark uten datamigrering. Formålet er å gi teamet et operativt bilde av hva som må prioriteres i dag, denne uken og fremover, hvem som har ansvar, hvilke oppgaver/ToDo-er som mangler eier, og hva som er fullført.
 
@@ -33,7 +33,7 @@ Planning/
 ├── js/
 │   ├── todos.js        # ToDo-visning, panel og handlinger
 │   ├── timeline.js     # Tidslinje, datovinduer, filtre og rendering
-│   └── worklist.js     # Personlig arbeidsliste, rangering og egen dra-logikk
+│   └── worklist.js     # Rangering inne i dashboardets prioritetsgrupper
 ├── manifest.json       # PWA-manifest
 ├── service-worker.js   # Caching og app-oppdatering
 ├── .nojekyll           # Hindrer GitHub Pages fra å kjøre Jekyll-prosessering
@@ -290,20 +290,24 @@ Lagrede deltakere og deloppgaveansvarlige som ikke lenger finnes i `state.users`
 
 Deloppgaver er fortsatt et array inne i oppgavedokumentet. Firestore-reglene kan derfor ikke gi et Medlem skrivetilgang bare til sitt eget arrayelement. Deloppgaveansvar i v1.11.0 er et koordineringsverktøy: personen ser oppgaven i `Mine`, men kan ikke krysse av eller redigere deloppgaven. Det krever egne deloppgavedokumenter i en senere arkitektur.
 
-## Arbeidsliste per person
-Arbeidslisten ligger under Review og over fristseksjonene. Personvelgeren starter med innlogget bruker, viser aktive profiler og lagres ikke. Listen er uavhengig av Team/Mine og toppkortfiltrene. Bare kollapstilstanden lagres i localStorage (strawberry-worklist-collapsed); åpen som standard. Maks høyde er omtrent seks kort (510 px desktop, 480 px mobil), med intern rulling og overscroll-behavior-y: auto.
+## Rangering inne i dashboardgruppene
+v1.21.0 erstatter arbeidslisten fra v1.20.0. Ingen separat liste, personvelger eller kollapslagring; strawberry-worklist-collapsed leses/skrives ikke lenger. Filnavnet js/worklist.js, script-taggen og APP_FILES-oppføringen beholdes. Eksisterende workRank-data endres ikke automatisk.
 
-`worklistEntries(personId)` i js/worklist.js er felles utvalg for visning og dragging: ikke-slettede, åpne tasks der taskInvolvement(...).involved er sann, bortsett fra til_review; samt åpne, ikke-slettede todos tildelt personen. Oppgaver/ToDo-er har separat identitet type:id. Deltaker- og deloppgaveansvar forklares når personen ikke er hovedansvarlig.
+I Mine sorterer renderDashboardPrioritySection hver prioritetsgruppe i Forfalt og i dag, Neste 7 dager, I gang og Kommer senere med finite workRank[innlogget uid] først. Stigende rang, deretter tittel og type:id ved lik verdi. Urangerte sorteres etter eksisterende compareTasksByUrgency. Team er helt uendret: bare hastegrad. Mine beholder rangsorteringen ved aktive filtre, men redigering av rangering er bare tilgjengelig i Mine uten dashboardfilter og når canEdit() er sann. Medlem ser ikke håndtak eller Nullstill rekkefølge.
 
-Tasks og todos kan ha `workRank: { uid: number }`. Bare finite tall regnes som rangert; manglende nøkkel er urangert. Rangerte elementer vises stigende og nummereres ved visning. Like verdier sorteres stabilt etter tittel og type:id. Urangerte vises under Ikke prioritert ennå med compareTasksByUrgency og samme stabile fallback. Ingen migrering.
+Review, Andre treff, datakvalitetslisten og ToDo-panelet rangeres ikke. classifyDashboardItem, seksjonsinndeling og taskInvolvement er uendret. Et rangert element som bytter seksjon eller prioritet, beholder workRank og sorteres etter den i den nye gruppen.
 
-Dra-logikken er en egen implementasjon i js/worklist.js; js/todos.js er uendret. Pointer Events, 200 ms trykk-og-hold på håndtak, avbrudd ved tidlig bevegelse/pointercancel/slipp utenfor, riktig plassholderhøyde og requestAnimationFrame-basert automatisk rulling i den interne listen. Vanlig berøringsrulling på kortene flytter ikke elementer. Enter/mellomrom starter og lagrer tastaturflytting, piltaster/Home/End flytter, Escape avbryter, aria-live annonserer. Rendering utsettes under dragging/lagring. Fjern fra rangering er en egen diskret minusknapp, ikke en tvetydig slippsone.
+Håndtaket er en egen knapp med seks prikker i separat grid-kolonne til høyre for hele .dashboard-item. Kort, deloppgavelinjer og blokkert-merknad flyttes samlet. Dashboardets ToDo-kort bruker fortsatt sortable:false, uten kobling til panelets sortOrder/dragging. Ingen nye inline-handlere med data.
 
-Firestore-funksjonene updateWorkRank/normalizeWorkRanks bruker `firebase.firestore.FieldPath('workRank', personId)` og writeMeta() ved alle skrivinger. Bare personens nøkkel og klientmetadata endres. updatedAt, detailsUpdatedAt og lastEditedBy røres ikke, også på eldre oppgaver som mangler detailsUpdatedAt. Dette unngår falske konflikter i updateTaskIfUnchanged. Vanlig flytting skriver ett dokument med mellomrom 1000 eller gjennomsnitt av naboene. For liten avstand (< 0.001) normaliserer hele synlige rangerte del inkludert flyttet element i én batch, på tvers av tasks/todos. Over 500 dokumenter avvises før skriving; ingen oppdeling eller delvis lagring. Feil gjenoppretter rangeringen og henter faktiske berørte dokumenter; norsk toast.
+Pointer Events starter straks for mus, etter 200 ms hold på berøring, avbryter ved mer enn 10 px bevegelse før hold, pointercancel, Escape eller blur. touch-action:none gjelder håndtaket. Plassholderen flyttes bare i opprinnelig seksjon/prioritet, klampet til første/siste plass. Slipp hvor som helst lagrer den viste plasseringen. Automatisk rulling bruker dashboardets rullecontainer eller document.scrollingElement ved vanlig siderulling. Enter/mellomrom starter/lagrer, piltaster/Home/End flytter, Escape avbryter, og aria-live sier Plass N av M. Kortklikk undertrykkes i 250 ms etter dragging.
 
-ToDo-konvertering kopierer workRank fra ferskt ToDo-dokument i samme eksisterende transaksjon. Gjentakende forekomster arver ikke workRank: feltet er utelatt fra recurringTaskInstanceData sin eksplisitte kopiliste, uten endringer i generatoren. Fullføring, review og gjenåpning endrer ikke lagret rangering; når elementet kommer tilbake i utvalget, kommer også rangeringen tilbake. JSON-eksportens eksisterende rådataeksport bevarer workRank automatisk. todos.sortOrder er helt uavhengig.
+dashboardRankChanges håndterer to tilfeller. A: alle over er rangert; flyttet element får mellomverdi eller +/-1000, normalt ett dokument. Luke under 0.001 eller ikke-endelig verdi normaliserer gruppens rangerte elementer inkludert det flyttede. B: en urangert ligger over; urangerte fra første urangert til og med flyttet element får stigende rang med steg 1000 etter rangert prefiks. Flyttet elements gamle verdi er ikke anker. Ved numerisk overflyt normaliseres det berørte prefikset. Elementer under forblir urangerte.
 
-**Medlem-begrensning:** Medlem kan se arbeidslisten, men dagens regler tillater ikke workRank-skriving. Håndtak og Fjern fra rangering skjules; Admin/Teamleder kan rangere både for seg selv og andre. Ingen regelendring i v1.20.0.
+writeWorkRanks(changes, personId) i firestore.js er generalisert: ett dokument bruker update, flere bruker én batch. Alle endringer valideres først, maks 500; større operasjoner avvises før noen skriving. Alle går gjennom workRankWriteArgs med FieldPath('workRank', personId) og writeMeta. Bare innlogget persons nøkkel og klientmetadata endres, aldri updatedAt, detailsUpdatedAt eller lastEditedBy. Ingen falsk konflikt ved detaljlagring, heller ikke på eldre oppgaver. Nullstill rekkefølge bruker FieldValue.delete i én batch for denne gruppens rangerte elementer, uten bekreftelsesdialog.
+
+renderDashboard fryses under både pending/aktiv dragging og lagring. Snapshotene oppdaterer fortsatt state og markerer ventende rendering; én ny render kjøres når interaksjonen er ferdig. Før lagring sjekkes gruppen mot fersk state. Endret gruppetilhørighet, sletting eller endret medlemssett avbryter med Oppgaven er endret. Se over rekkefølgen og prøv igjen. Feil ruller lokal rangering tilbake, henter berørte dokumenter på nytt og viser norsk toast.
+
+workRank beholdes ved fullføring, gjenåpning og review. ToDo-konvertering kopierer fortsatt fersk workRank i samme transaksjon; gjentakende forekomster arver den fortsatt ikke. JSON-eksport bevarer feltet automatisk. js/todos.js, js/timeline.js og firestore.rules er uendret. Medlem kan ikke rangere under dagens regler.
 
 ## Review-flyt
 Review gjelder bare lagrede oppgaver og er valgfritt. Direkte fullføring uten review er fortsatt mulig. Firetrinnsstepperen viser Ikke startet, I gang, Til review og Fullført; direkte fullføring merker ikke det hoppede review-steget som godkjent.

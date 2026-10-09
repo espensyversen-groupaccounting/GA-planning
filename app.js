@@ -3,7 +3,7 @@
 // ============================================================
 
 // Versjon – må matche APP_VERSION i service-worker.js
-const APP_VERSION = '1.20.0';
+const APP_VERSION = '1.21.0';
 
 // Service Worker oppdateringsstatus
 let swRegistration  = null;
@@ -1065,9 +1065,9 @@ function clearDashboardFilter() {
 }
 
 function renderDashboard() {
+  if (deferDashboardRankRender()) return;
   updateDashboardScopeButtons();
   renderDashboardReview();
-  renderWorklist();
   const tasks = scopedTasks();
   const todos = scopedTodos();
   const open = tasks.filter(t => !isDoneItem(t));
@@ -1343,10 +1343,11 @@ function dashboardItemHtml(entry, options = {}) {
       <span>${esc(dependencies)}</span>
     </div>` : '';
   return `
-    <div class="dashboard-item dashboard-item--${entry.type}" data-dashboard-item-id="${esc(entry.item.id)}" data-dashboard-item-type="${entry.type}">
+    <div class="dashboard-item dashboard-item--${entry.type}${options.ranking ? ' dashboard-rankable' : ''}" data-dashboard-item-id="${esc(entry.item.id)}" data-dashboard-item-type="${entry.type}">
       ${itemHtml}
       ${dashboardSubtaskLinesHtml(entry.triggerSubtasks)}
       ${blockedHtml}
+      ${options.ranking ? dashboardRankHandleHtml(entry) : ''}
     </div>`;
 }
 
@@ -1364,20 +1365,25 @@ function renderDashboardPrioritySection(containerId, entries, emptyMsg, options 
     { key: 'lav', label: 'Lav prioritet' },
   ];
 
+  const rankedSection = DASHBOARD_RANK_SECTIONS.includes(containerId);
+  const ranking = rankedSection && dashboardRankingAvailable();
   el.innerHTML = groups.map(group => {
     const groupEntries = entries
       .filter(entry => (entry.item.priority || 'medium') === group.key)
-      .sort((a, b) => compareTasksByUrgency(a.item, b.item));
+      .sort((a, b) => rankedSection && state.dashboardScope === 'mine'
+        ? compareDashboardRanks(a, b) : compareTasksByUrgency(a.item, b.item));
     if (!groupEntries.length) return '';
     return `
-      <div class="priority-group">
+      <div class="priority-group" data-rank-section="${containerId}" data-rank-priority="${group.key}">
         <div class="priority-group-title">
           <span class="priority-dot ${group.key}"></span>
           <span>${group.label}</span>
           <span class="priority-group-count">${groupEntries.length}</span>
+          ${ranking && groupEntries.some(entry => dashboardRankValue(entry) !== null)
+            ? '<button type="button" class="dashboard-rank-reset" data-dashboard-rank-reset title="Gå tilbake til sortering etter frist og hastegrad" aria-label="Gå tilbake til sortering etter frist og hastegrad">Nullstill rekkefølge</button>' : ''}
         </div>
         <div class="task-list-compact">
-          ${groupEntries.map(entry => dashboardItemHtml(entry, options)).join('')}
+          ${groupEntries.map(entry => dashboardItemHtml(entry, { ...options, ranking })).join('')}
         </div>
       </div>`;
   }).join('');
@@ -3743,7 +3749,7 @@ function updateAdminUpdateUI() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initTimeline();
-  initWorklist();
+  initDashboardRanking();
   document.addEventListener('click', event => {
     const button = event.target.closest('[data-review-action]');
     if (!button) return;

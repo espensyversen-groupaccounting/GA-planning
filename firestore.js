@@ -2,8 +2,8 @@
 // FIRESTORE.JS – Alle database-operasjoner
 // ============================================================
 
-const CLIENT_APP_VERSION = '1.20.0';
-const CLIENT_BUILD = 12000;
+const CLIENT_APP_VERSION = '1.21.0';
+const CLIENT_BUILD = 12100;
 const WRITE_SCHEMA_VERSION = 1;
 
 function writeMeta() {
@@ -591,7 +591,7 @@ function workRankWriteArgs(personId, rank) {
 
 function workRankRef(entry) {
   if (!['tasks', 'todos'].includes(entry.type) || !entry.id) {
-    throw new Error('Ugyldig element i arbeidslisten.');
+    throw new Error('Ugyldig element i rangeringen.');
   }
   return db.collection(entry.type).doc(entry.id);
 }
@@ -600,14 +600,15 @@ async function updateWorkRank(entry, personId, rank) {
   await workRankRef(entry).update(...workRankWriteArgs(personId, rank));
 }
 
-async function normalizeWorkRanks(entries, personId) {
-  if (entries.length > 500) {
-    throw new Error('Arbeidslisten har mer enn 500 elementer. Flyttingen kan ikke lagres uten å dele opp rangeringen.');
+async function writeWorkRanks(changes, personId) {
+  if (changes.length > 500) {
+    throw new Error('Gruppen har mer enn 500 rangeringer som må endres. Ingen endringer er lagret.');
   }
+  const writes = changes.map(change => ({ ref: workRankRef(change), args: workRankWriteArgs(personId, change.rank) }));
+  if (writes.length === 1) { await writes[0].ref.update(...writes[0].args); return; }
+  if (!writes.length) return;
   const batch = db.batch();
-  entries.forEach((entry, index) => {
-    batch.update(workRankRef(entry), ...workRankWriteArgs(personId, (index + 1) * 1000));
-  });
+  writes.forEach(write => batch.update(write.ref, ...write.args));
   await batch.commit();
 }
 

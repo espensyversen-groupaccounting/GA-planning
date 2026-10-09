@@ -1,5 +1,47 @@
 # Development Log
 
+## v1.21.0 - 2026-10-09
+
+### Rangering inne i dashboardets prioritetsgrupper
+- Arbeidsliste-seksjonen, personvelgeren, egen rulling, CSS og bruk av strawberry-worklist-collapsed er fjernet. Eksisterende workRank beholdes. js/worklist.js er skrevet om, med samme script-tag og APP_FILES-oppføring.
+- Mine: rangert først inne i hver prioritet i de fire tidsseksjonene, stigende etter rank og stabil tittel/type:id ved lik verdi; deretter eksisterende hastegrad. Team: identisk hastesortering som før. Rangsorteringen vises også i filtrert Mine, men håndtak/nullstilling krever Mine, canEdit og ingen filter.
+- Håndtak ligger i egen kolonne utenfor kortets status/avkryssing/sletting. Hele dashboard-item med deloppgavelinjer flyttes. Ingen nye inline-handlere. Dashboard-ToDo bruker fortsatt sortable:false.
+- Egen Pointer Events-implementasjon: mus straks, touch-hold 200 ms, tidlig bevegelse over 10 px avbryter, touch-action none på håndtaket. Plassholder begrenses til opprinnelig gruppe. Slipp utenfor lagrer, Escape/pointercancel/blur avbryter. Automatisk rulling i dashboardets rullecontainer eller dokumentet. Tastatur Enter/mellomrom, piler, Home/End og aria-live Plass N av M.
+- Tilfelle A skriver normalt ett dokument; liten luke normaliserer bare gruppens rangerte elementer. Tilfelle B rangerer urangerte over det flyttede sammen med selve elementet i synlig rekkefølge. Flyttets gamle rang utelates som beregningsanker. Elementene under forblir urangerte.
+- writeWorkRanks generaliserer lagringen med FieldPath og writeMeta, ett update eller én batch, maks 500. Ingen updatedAt/detailsUpdatedAt/lastEditedBy-endring. Nullstill rekkefølge sletter bare innlogget persons nøkkel i denne gruppen. Lagringsfeil tilbakestiller og henter faktisk data.
+- Hele renderDashboard utsettes under både dragging og lagring; snapshots oppdaterer state. Én ny rendering etterpå. Ferskt medlemssett og gruppetilhørighet sjekkes før skriving; endret/slettet element avbrytes.
+- Et element som bytter seksjon, beholder rangeringen og sorteres etter den i den nye gruppen. Medlem kan ikke rangere.
+- classifyDashboardItem, kopiering ved ToDo-konvertering, gjentakelsesgenerator, firestore.rules, testfiler, js/todos.js, tidslinjen, Oppgaver-siden, Review/datakvalitet og toppkortberegningen er uendret.
+- Endrede filer: app.js, firestore.js, js/worklist.js, index.html, styles.css, service-worker.js, CLAUDE.md, DEVELOPMENT_LOG.md. Versjon 1.21.0 / build 12100.
+
+### Tester
+Lokale automatiserte Playwright/Chrome-tester med syntetiske data og native Chrome-touchinput. Separat ekte Firebase SDK/emulator for skriving. Ingen manuell produksjonstest eller fysisk mobiltest.
+
+| Krav | Resultat |
+|---|---|
+| 1 | Bestått: Mine har håndtak i alle fire seksjoner. Team har ingen og identisk hastegradrekkefølge. |
+| 2 | Bestått: aktivt statistikkfilter skjuler håndtak og nullstilling. |
+| 3 | Bestått: urangert til toppen, ett dokument skrevet. Lagret workRank rendres etter ny lasting. |
+| 4 | Bestått: to urangerte over et flyttet ToDo og ToDo selv får rang i én batch, eksakt synlig rekkefølge; resten er urangert. |
+| 5 | Bestått: peker over annen prioritet flytter ikke plassholder ut av original gruppe. |
+| 6 | Bestått: deltaker ser oppgaven i Mine og kan rangere uten å endre hovedansvarligs rank. |
+| 7 | Bestått med ekte SDK/emulator: både eldre og moderne oppgave kan detaljlagres etter rangering med gammel forventet token; updatedAt/lastEditedBy beholdes. |
+| 8 | Bestått: snapshots under både dragging og lagring bygger ikke om DOM; endret tittel vises etterpå. Endret gruppe avviser lagring. |
+| 9 | Bestått: nullstilling fjerner bare egne rangeringer i gruppen, annen person beholdes, hastegrad kommer tilbake. |
+| 10 | Bestått: eksisterende v1.20-rangering ligger øverst. |
+| 11 | Bestått: kortklikk åpner oppgave/ToDo, ToDo-avkrysning kaller eksisterende handler. Slipp åpner ikke modal. |
+| 12 | Bestått: faktisk ToDo-panel-draging virker og endrer ikke workRank. Dashboard-draging endrer ikke sortOrder. Modul uendret. |
+| 13 | Bestått: Enter/Home/Enter lagrer, Escape avbryter, Plass 1 av 6 kunngjøres. |
+| 14 | Bestått: native Chrome touch-hold starter etter 200 ms; auto-rulling flytter nederste av 15 til toppen. Ingen horisontal overflow ved 390 px. |
+| 15 | Bestått: simulert avvisning tilbakestiller faktisk rekkefølge og gir norsk toast. |
+| 16 | Bestått: Medlem ser ingen håndtak. |
+| 17 | Bestått: ingen arbeidsliste eller personvelger, ingen pageerrors; fersk inkognito aktiverer SW 1.21.0 og cacher worklist.js med HTTP 200. |
+| 18 | Bestått: node --check på alle seks JavaScript-filer; uendrede regeltester 24/24. |
+
+- Ekstra: rangert element flyttet ned i urangert del bruker ikke sin gamle rang som anker; liten luke gir korrekt normalisering; 501 endringer avvises før skriving. Ekte blandet batch og FieldValue.delete bevarer andre personers rang og ToDo sortOrder.
+- Tidslinjens v1.19.2-regresjonstester består (gruppering/sortering, filtre, tooltip, mobilmarkør, åpning).
+- Desktop- og mobilskjermbilder gjennomgått. Lokal server/emulator stoppet. Ikke deployet; produksjonstest med to faktiske brukere og fysisk mobil anbefales ved utrulling.
+
 ## v1.20.0 - 2026-10-09
 
 ### Arbeidsliste med rangering per person

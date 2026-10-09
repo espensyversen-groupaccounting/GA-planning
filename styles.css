@@ -3608,41 +3608,19 @@ body.todo-is-dragging {
   left: 0;
   z-index: 2;
 }
-/* Per-person worklist: compact rows, bounded internal scrolling. */
-.worklist-header { gap: 12px; margin-bottom: 10px; align-items: center; }
-.worklist-toggle { display: flex; align-items: center; gap: 8px; border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; min-height: 40px; }
-.worklist-toggle .section-title { margin: 0; }
-.worklist-toggle[aria-expanded="false"] svg { transform: rotate(-90deg); }
-#worklist-person { max-width: 240px; min-width: 120px; height: 36px; }
-.worklist-scroll { max-height: 510px; overflow-y: auto; overscroll-behavior-y: auto; padding: 2px; }
-.worklist-scroll[hidden] { display: none; }
-.worklist-card { display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; min-height: 76px; margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface, #fff); flex: 0 0 auto; }
-.worklist-number { width: 24px; flex: 0 0 24px; text-align: center; font-weight: 700; color: var(--text-2); }
-.worklist-open { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; text-align: left; color: inherit; cursor: pointer; }
-.worklist-title { display: flex; align-items: flex-start; gap: 6px; font-size: 14px; font-weight: 600; line-height: 1.4; }
-.worklist-title svg { flex: 0 0 14px; margin-top: 3px; color: var(--text-2); }
-.worklist-title > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
-.worklist-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 5px; font-size: 12px; }
-.worklist-reason { display: block; margin-top: 4px; font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
-.worklist-tools { display: flex; align-items: center; flex: 0 0 auto; }
-.worklist-handle, .worklist-unrank { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 44px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-3); cursor: pointer; }
-.worklist-handle { cursor: grab; touch-action: none; }
-.worklist-handle:hover, .worklist-unrank:hover { background: var(--bg); color: var(--text-2); }
-.worklist-toggle:focus-visible, .worklist-open:focus-visible, .worklist-handle:focus-visible, .worklist-unrank:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
-.worklist-divider { margin: 12px 0 10px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-2); }
-.worklist-ranked { min-height: 44px; }
-.worklist-drop-empty { display: flex; justify-content: center; align-items: center; border: 1px dashed var(--border); border-radius: 4px; }
-.worklist-empty { padding: 10px; color: var(--text-3); font-size: 13px; }
-.worklist-placeholder { box-sizing: border-box; border: 2px dashed var(--coral); border-radius: 8px; margin-bottom: 8px; background: rgba(255,90,95,.06); }
-.worklist-dragging { z-index: 300; pointer-events: none; margin: 0; box-shadow: 0 12px 28px rgba(0,0,0,.18); opacity: .96; }
-.worklist-moving { outline: 2px solid var(--coral); outline-offset: -2px; }
-body.worklist-is-dragging { user-select: none; cursor: grabbing; }
+/* Dashboard ranking controls have their own column, outside card actions. */
+.dashboard-item.dashboard-rankable { display: grid; grid-template-columns: minmax(0, 1fr) 40px; column-gap: 6px; }
+.dashboard-rankable > :not(.dashboard-rank-handle) { grid-column: 1; min-width: 0; }
+.dashboard-rank-handle { grid-column: 2; grid-row: 1; align-self: center; width: 40px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 0; padding: 0; border-radius: 4px; background: transparent; color: var(--text-3); cursor: grab; touch-action: none; }
+.dashboard-rank-handle:hover { background: var(--surface); color: var(--text-2); }
+.dashboard-rank-handle:focus-visible, .dashboard-rank-reset:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+.dashboard-rank-reset { margin-left: auto; border: 0; padding: 6px 0 6px 8px; background: transparent; color: var(--text-2); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; }
+.dashboard-rank-placeholder { flex: 0 0 auto; box-sizing: border-box; border: 2px dashed var(--coral); border-radius: 8px; background: rgba(255,90,95,.06); }
+.dashboard-rank-dragging { z-index: 300; pointer-events: none; margin: 0; opacity: .96; box-shadow: 0 12px 28px rgba(0,0,0,.18); }
+.dashboard-rank-moving { outline: 2px solid var(--coral); outline-offset: 2px; }
+body.dashboard-is-ranking { user-select: none; cursor: grabbing; }
 @media (max-width: 767px) {
-  .worklist-header { flex-wrap: wrap; gap: 4px; }
-  #worklist-person { max-width: 100%; }
-  .worklist-scroll { max-height: 480px; }
-  .worklist-card { padding: 8px 6px; gap: 5px; }
-  .worklist-number { width: 18px; flex-basis: 18px; }
-  .worklist-tools { flex-direction: column; }
-  .worklist-handle, .worklist-unrank { width: 36px; height: 36px; }
+  .priority-group-title { flex-wrap: wrap; }
+  .dashboard-item.dashboard-rankable { grid-template-columns: minmax(0, 1fr) 36px; column-gap: 4px; }
+  .dashboard-rank-handle { width: 36px; }
 }
